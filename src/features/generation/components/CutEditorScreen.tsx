@@ -1,7 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Badge, Button, LayerRow } from "@/components/ui";
+import { Badge, Button, Field, LayerRow, Modal } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
 import type { GenerationJob } from "@/contracts/generation";
@@ -9,11 +10,38 @@ import {
   BALLOON_LABEL,
   isVectorTextLayer,
   toLayerRowProps,
+  type BalloonKind,
   type CutLayerTree,
   type Layer,
   type VectorTextLayer,
 } from "../types/layer";
+import { useEditor } from "../editor/useEditor";
+import { useMeasuredSize } from "../editor/useMeasuredSize";
 import { EpisodeHeader } from "./EpisodeHeader";
+
+/**
+ * konva 는 window 를 쓴다. 서버에서 그릴 수 없으므로 클라이언트에서만 불러온다.
+ * 페이지 나머지(패널·툴바)는 그대로 SSR 된다.
+ */
+const EditorCanvas = dynamic(
+  () => import("../editor/EditorCanvas").then((m) => m.EditorCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid aspect-square w-full max-w-[720px] place-items-center rounded-lg bg-canvas-grid text-caption text-ink-subtle">
+        캔버스 준비 중
+      </div>
+    ),
+  },
+);
+
+const SAVE_LABEL = {
+  idle: "",
+  dirty: "저장 대기 중",
+  saving: "저장 중",
+  saved: "저장됨",
+  error: "저장 실패 — 다음 변경에서 다시 시도해요",
+} as const;
 
 export interface CutEditorScreenProps {
   job: GenerationJob;
@@ -22,22 +50,19 @@ export interface CutEditorScreenProps {
   supportsInpainting?: boolean;
 }
 
-/**
- * PRD 3.2 — 레이어 기반 컷 편집기. 이번 목업은 정적 레이아웃까지다.
- *
- * 캔버스는 레이어 트리를 그려서 보여주기만 하고 끌거나 크기를 바꾸지 않는다.
- * 핸들·마스크 브러시·스냅 가이드는 react-konva 로 실제 인터랙션을 만들면서 정한다(디자인 가이드).
- */
+/** PRD 3.2 — 레이어 기반 컷 편집기. */
 export function CutEditorScreen({
   job,
-  tree,
+  tree: initialTree,
   supportsInpainting = false,
 }: CutEditorScreenProps) {
-  const [openCutId, setOpenCutId] = useState(tree.cutId);
-  const [selectedId, setSelectedId] = useState<string | null>("ly_balloon");
-  const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  const [openCutId, setOpenCutId] = useState(initialTree.cutId);
+  const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
+  const { ref: canvasBox, size } = useMeasuredSize<HTMLDivElement>();
 
-  const selected = tree.layers.find((l) => l.id === selectedId) ?? null;
+  const editor = useEditor({ initial: initialTree });
+  const { tree, selected, selectedId } = editor;
+
   // 위에 그려지는 레이어가 목록 맨 위로 오도록 뒤집는다. z 순서와 목록 순서가 반대다.
   const rows = [...tree.layers].reverse();
 
@@ -49,46 +74,97 @@ export function CutEditorScreen({
         episodeTitle="1화 · 퇴근 10분 전"
         current="editor"
         credits={12}
-        action={
-          <Button size="sm">게시물로 내보내기</Button>
-        }
+        action={<Button size="sm">게시물로 내보내기</Button>}
       />
 
-      <Toolbar />
+      <Toolbar
+        canUndo={editor.canUndo}
+        canRedo={editor.canRedo}
+        onUndo={editor.undo}
+        onRedo={editor.redo}
+        onAddText={() => editor.add(newTextLayer(tree, "text"))}
+        onAddBalloon={() => editor.add(newTextLayer(tree, "balloon"))}
+        onAddSfx={() => editor.add(newTextLayer(tree, "sfx"))}
+        saveLabel={SAVE_LABEL[editor.saveState]}
+        saveError={editor.saveState === "error"}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[132px_minmax(0,1fr)_320px]">
-        <CutStrip
-          cuts={job.cuts}
-          openCutId={openCutId}
-          onOpen={setOpenCutId}
-        />
+        <CutStrip cuts={job.cuts} openCutId={openCutId} onOpen={setOpenCutId} />
 
         <section
+          ref={canvasBox}
           aria-label="캔버스"
-          className="grid min-h-0 place-items-center rounded-xl border border-border bg-surface-sunken p-6"
+          className="grid min-h-[320px] place-items-center overflow-hidden rounded-xl border border-border bg-surface-sunken p-4"
         >
-          <Canvas tree={tree} selectedId={selectedId} hidden={hidden} />
+          {size > 0 && (
+            <EditorCanvas
+              tree={tree}
+              selectedId={selectedId}
+              size={size}
+              onSelect={editor.setSelectedId}
+              onBeginDrag={editor.beginDrag}
+              onPreviewBox={editor.previewBox}
+              onCommit={editor.commitDrag}
+            />
+          )}
         </section>
 
         <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto">
           <Panel title="레이어" caption="위에 있는 것이 앞에 그려져요.">
             <div role="listbox" aria-label="레이어" className="flex flex-col">
-              {rows.map((layer) => (
-                <LayerRow
-                  key={layer.id}
-                  {...toLayerRowProps(layer)}
-                  hidden={hidden[layer.id]}
-                  selected={layer.id === selectedId}
-                  onSelect={() => setSelectedId(layer.id)}
-                  onToggle={() =>
-                    setHidden((h) => ({ ...h, [layer.id]: !h[layer.id] }))
-                  }
-                />
-              ))}
+              {rows.map((layer, rowIndex) => {
+                const z = tree.layers.length - 1 - rowIndex;
+                return (
+                  <div key={layer.id} className="group flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                      <LayerRow
+                        {...toLayerRowProps(layer)}
+                        selected={layer.id === selectedId}
+                        onSelect={() => editor.setSelectedId(layer.id)}
+                        onToggle={() =>
+                          editor.update(layer.id, (l) => ({ ...l, hidden: !l.hidden }))
+                        }
+                      />
+                    </div>
+                    <OrderButtons
+                      canUp={z < tree.layers.length - 1}
+                      canDown={z > 0}
+                      onUp={() => editor.reorder(z, z + 1)}
+                      onDown={() => editor.reorder(z, z - 1)}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </Panel>
 
-          {selected && <LayerInspector layer={selected} />}
+          {selected && (
+            <LayerInspector
+              layer={selected}
+              onChangeText={(text) =>
+                editor.update(selected.id, (l) =>
+                  isVectorTextLayer(l) ? { ...l, text } : l,
+                )
+              }
+              onChangeBalloon={(balloon) =>
+                editor.update(selected.id, (l) =>
+                  isVectorTextLayer(l) ? { ...l, balloon } : l,
+                )
+              }
+              onChangeFontSize={(fontSize) =>
+                editor.update(selected.id, (l) =>
+                  isVectorTextLayer(l)
+                    ? { ...l, style: { ...l.style, fontSize } }
+                    : l,
+                )
+              }
+              onToggleLock={() =>
+                editor.update(selected.id, (l) => ({ ...l, locked: !l.locked }))
+              }
+              onDelete={() => setConfirmDelete(selected)}
+            />
+          )}
 
           <Panel
             title="부분만 다시 만들기"
@@ -112,39 +188,148 @@ export function CutEditorScreen({
           </Panel>
         </aside>
       </div>
+
+      <Modal
+        open={confirmDelete !== null}
+        onClose={() => setConfirmDelete(null)}
+        title="이 레이어를 지울까요?"
+        description={
+          confirmDelete
+            ? `"${confirmDelete.name}" 을 지웁니다. 실행 취소로 되돌릴 수 있어요.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+              그대로 두기
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (confirmDelete) editor.remove(confirmDelete.id);
+                setConfirmDelete(null);
+              }}
+            >
+              지우기
+            </Button>
+          </>
+        }
+      />
     </div>
   );
 }
 
-function Toolbar() {
+function Toolbar({
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  onAddText,
+  onAddBalloon,
+  onAddSfx,
+  saveLabel,
+  saveError,
+}: {
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onAddText: () => void;
+  onAddBalloon: () => void;
+  onAddSfx: () => void;
+  saveLabel: string;
+  saveError: boolean;
+}) {
   return (
     <div className="flex h-12 items-center gap-2 border-b border-border bg-surface-card px-4">
-      <ToolButton label="실행 취소">↶</ToolButton>
-      <ToolButton label="다시 실행">↷</ToolButton>
+      <ToolButton label="실행 취소" onClick={onUndo} disabled={!canUndo}>
+        ↶
+      </ToolButton>
+      <ToolButton label="다시 실행" onClick={onRedo} disabled={!canRedo}>
+        ↷
+      </ToolButton>
       <span className="mx-2 h-5 w-px bg-border" />
-      <ToolButton label="텍스트 추가">T</ToolButton>
-      <ToolButton label="말풍선 추가">◗</ToolButton>
-      <ToolButton label="효과음 추가">✺</ToolButton>
+      <ToolButton label="텍스트 추가" onClick={onAddText}>
+        T
+      </ToolButton>
+      <ToolButton label="말풍선 추가" onClick={onAddBalloon}>
+        ◗
+      </ToolButton>
+      <ToolButton label="효과음 추가" onClick={onAddSfx}>
+        ✺
+      </ToolButton>
 
       <span className="ml-auto flex items-center gap-3">
         {/* 자동 저장은 3초 디바운스다(PRD 성능). 저장 버튼을 따로 두지 않는다. */}
-        <span className="text-caption text-ink-subtle">방금 저장됨</span>
+        <span
+          aria-live="polite"
+          className={cn("text-caption", saveError ? "text-danger" : "text-ink-subtle")}
+        >
+          {saveLabel}
+        </span>
         <Badge tone="ai">AI 생성</Badge>
       </span>
     </div>
   );
 }
 
-function ToolButton({ label, children }: { label: string; children: React.ReactNode }) {
+function ToolButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      className="grid size-control-sm cursor-pointer place-items-center rounded-md text-label text-ink-muted hover:bg-surface-sunken hover:text-ink"
+      onClick={onClick}
+      disabled={disabled}
+      className="grid size-control-sm cursor-pointer place-items-center rounded-md text-label text-ink-muted hover:bg-surface-sunken hover:text-ink disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent"
     >
       {children}
     </button>
+  );
+}
+
+function OrderButtons({
+  canUp,
+  canDown,
+  onUp,
+  onDown,
+}: {
+  canUp: boolean;
+  canDown: boolean;
+  onUp: () => void;
+  onDown: () => void;
+}) {
+  return (
+    <span className="flex shrink-0 flex-col opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <button
+        type="button"
+        aria-label="앞으로"
+        disabled={!canUp}
+        onClick={onUp}
+        className="cursor-pointer px-1 text-[11px] text-ink-muted hover:text-ink disabled:opacity-30"
+      >
+        ▲
+      </button>
+      <button
+        type="button"
+        aria-label="뒤로"
+        disabled={!canDown}
+        onClick={onDown}
+        className="cursor-pointer px-1 text-[11px] text-ink-muted hover:text-ink disabled:opacity-30"
+      >
+        ▼
+      </button>
+    </span>
   );
 }
 
@@ -196,135 +381,148 @@ function CutStrip({
   );
 }
 
-/**
- * 레이어 트리를 원본 좌표 그대로 퍼센트로 환산해 그린다.
- * 캔버스 크기가 바뀌어도 레이어 위치 계산이 한 곳에만 있게 한다.
- */
-function Canvas({
-  tree,
-  selectedId,
-  hidden,
-}: {
-  tree: CutLayerTree;
-  selectedId: string | null;
-  hidden: Record<string, boolean>;
-}) {
-  const pct = (v: number, axis: "x" | "y") =>
-    `${(v / (axis === "x" ? tree.canvas.width : tree.canvas.height)) * 100}%`;
+/** 말풍선 고르기는 12종을 다 보여준다(PRD 3.2). 드롭다운에 숨기면 안 쓴다. */
+const BALLOON_ORDER: BalloonKind[] = [
+  "normal",
+  "thought",
+  "shout",
+  "whisper",
+  "narration_box",
+  "telepathy",
+  "broadcast",
+  "wobble",
+  "spike",
+  "cloud",
+  "chain",
+  "none",
+];
 
-  return (
-    <div
-      className="relative aspect-square w-full max-w-[600px] overflow-hidden rounded-lg bg-canvas-grid shadow-md"
-      style={{ containerType: "inline-size" }}
-    >
-      {tree.layers.map((layer) => {
-        if (hidden[layer.id]) return null;
-        const style: React.CSSProperties = {
-          left: pct(layer.box.x, "x"),
-          top: pct(layer.box.y, "y"),
-          width: pct(layer.box.width, "x"),
-          height: pct(layer.box.height, "y"),
-          transform: layer.box.rotation ? `rotate(${layer.box.rotation}deg)` : undefined,
-          opacity: layer.opacity,
-        };
-
-        return (
-          <div
-            key={layer.id}
-            style={style}
-            className={cn(
-              "absolute",
-              layer.id === selectedId &&
-                "outline-2 outline-offset-1 outline-brand outline-dashed",
-            )}
-          >
-            {isVectorTextLayer(layer) ? (
-              <VectorLayerView layer={layer} canvasWidth={tree.canvas.width} />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={layer.imageUrl}
-                alt={layer.name}
-                className="size-full object-cover"
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** 벡터 레이어는 이미지에 굽지 않으므로 캔버스에서도 DOM 으로 그린다. */
-function VectorLayerView({
+function LayerInspector({
   layer,
-  canvasWidth,
+  onChangeText,
+  onChangeBalloon,
+  onChangeFontSize,
+  onToggleLock,
+  onDelete,
 }: {
-  layer: VectorTextLayer;
-  canvasWidth: number;
+  layer: Layer;
+  onChangeText: (text: string) => void;
+  onChangeBalloon: (balloon: BalloonKind) => void;
+  onChangeFontSize: (size: number) => void;
+  onToggleLock: () => void;
+  onDelete: () => void;
 }) {
-  // 원본 픽셀 크기를 캔버스 폭 기준 컨테이너 단위로 환산한다. 줌해도 글자 비율이 유지된다.
-  const fontSize = `${(layer.style.fontSize / canvasWidth) * 100}cqw`;
+  const vector = isVectorTextLayer(layer) ? (layer as VectorTextLayer) : null;
 
-  const shape =
-    layer.balloon === "none"
-      ? ""
-      : layer.balloon === "thought"
-        ? "rounded-[50%] border border-ink bg-surface-card"
-        : layer.balloon === "whisper"
-          ? "rounded-xl border border-dashed border-ink bg-surface-card"
-          : layer.balloon === "narration_box"
-            ? "rounded-md border border-ink/30 bg-surface-card/90"
-            : "rounded-xl border-2 border-ink bg-surface-card";
-
-  return (
-    <div
-      className={cn("grid size-full place-items-center px-[6%]", shape)}
-      style={{
-        fontFamily: layer.style.fontFamily,
-        fontSize,
-        lineHeight: layer.style.lineHeight,
-        fontWeight: layer.style.bold ? 800 : 500,
-        textAlign: layer.style.align,
-        color: layer.style.color,
-        WebkitTextStroke: layer.style.strokeWidth
-          ? `${layer.style.strokeWidth / 10}px ${layer.style.strokeColor}`
-          : undefined,
-        paintOrder: "stroke fill",
-      }}
-    >
-      {layer.text}
-    </div>
-  );
-}
-
-function LayerInspector({ layer }: { layer: Layer }) {
   return (
     <Panel title={layer.name}>
-      <dl className="flex flex-col gap-2 text-label">
-        <Row label="종류">
-          {isVectorTextLayer(layer) ? "벡터 · 이미지에 굽지 않음" : "생성 이미지"}
-        </Row>
-        {isVectorTextLayer(layer) ? (
-          <>
-            <Row label="말풍선">{BALLOON_LABEL[layer.balloon]}</Row>
-            <Row label="글꼴">{layer.style.fontFamily}</Row>
-            <Row label="크기">{layer.style.fontSize}px</Row>
-            {layer.kind === "narration" && (
-              <Row label="시리즈 스타일">
-                {layer.overridesSeriesStyle ? "이 컷만 덮어씀" : "따름"}
-              </Row>
-            )}
-          </>
-        ) : (
-          <Row label="잠금">{layer.locked ? "잠김" : "풀림"}</Row>
-        )}
-        <Row label="위치">
-          {Math.round(layer.box.x)}, {Math.round(layer.box.y)}
-        </Row>
-      </dl>
+      {vector ? (
+        <div className="flex flex-col gap-3">
+          <Field
+            label="글"
+            multiline
+            rows={2}
+            value={vector.text}
+            onChange={onChangeText}
+            maxLength={120}
+          />
+
+          <div className="flex flex-col gap-2">
+            <span className="text-label font-semibold text-ink">말풍선</span>
+            <div className="flex flex-wrap gap-1">
+              {BALLOON_ORDER.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => onChangeBalloon(kind)}
+                  aria-pressed={vector.balloon === kind}
+                  className={cn(
+                    "h-control-sm cursor-pointer rounded-md px-2.5 text-caption font-semibold",
+                    vector.balloon === kind
+                      ? "bg-brand text-on-brand"
+                      : "bg-surface-sunken text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {BALLOON_LABEL[kind]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-3 text-label">
+            <span className="shrink-0 text-ink-muted">크기</span>
+            <input
+              type="range"
+              min={16}
+              max={96}
+              value={vector.style.fontSize}
+              onChange={(e) => onChangeFontSize(Number(e.target.value))}
+              className="h-control-sm min-w-0 flex-1 accent-brand"
+            />
+            <span className="w-10 shrink-0 text-right font-semibold tabular-nums">
+              {vector.style.fontSize}
+            </span>
+          </label>
+
+          <p className="text-caption text-ink-subtle">
+            벡터라 이미지에 굽지 않아요. 나중에 글자만 고칠 수 있어요.
+          </p>
+        </div>
+      ) : (
+        <dl className="flex flex-col gap-2 text-label">
+          <Row label="종류">생성 이미지</Row>
+          <Row label="크기">
+            {Math.round(layer.box.width)} × {Math.round(layer.box.height)}
+          </Row>
+        </dl>
+      )}
+
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" onClick={onToggleLock}>
+          {layer.locked ? "잠금 풀기" : "잠그기"}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onDelete} disabled={layer.locked}>
+          지우기
+        </Button>
+      </div>
     </Panel>
   );
+}
+
+/** 새 벡터 레이어. 캔버스 가운데에 놓아서 바로 보이게 한다. */
+function newTextLayer(
+  tree: CutLayerTree,
+  kind: "text" | "balloon" | "sfx",
+): VectorTextLayer {
+  const width = Math.round(tree.canvas.width * 0.44);
+  const height = Math.round(tree.canvas.height * 0.14);
+  const preset = {
+    text: { name: "텍스트", text: "여기에 글", balloon: "none" as const, size: 38 },
+    balloon: { name: "말풍선", text: "대사를 적어요", balloon: "normal" as const, size: 38 },
+    sfx: { name: "효과음", text: "쾅", balloon: "none" as const, size: 72 },
+  }[kind];
+
+  return {
+    id: `ly_${kind}_${Date.now().toString(36)}`,
+    name: preset.name,
+    kind,
+    box: {
+      x: Math.round((tree.canvas.width - width) / 2),
+      y: Math.round((tree.canvas.height - height) / 2),
+      width,
+      height,
+    },
+    text: preset.text,
+    balloon: preset.balloon,
+    style: {
+      fontFamily: "Gaegu",
+      fontSize: preset.size,
+      lineHeight: 1.4,
+      align: "center",
+      color: "#121820",
+      bold: kind === "sfx",
+    },
+  };
 }
 
 function Panel({
