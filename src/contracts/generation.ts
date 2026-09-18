@@ -9,6 +9,7 @@
  * - `GenerationJob.cuts[]` 에 `imageUrl`, `attempt`, `startedAt`, `finishedAt` 추가.
  *   진행률 화면이 완료된 컷 썸네일을 바로 보여주고, 재시도 횟수로 상한을 건다.
  * - `CREDIT_REASON_BY_INTENT` 추가. hold 금액이 intent 마다 다른데 초안에는 근거가 없었다.
+ *   (태일 확인: 0.5크레딧은 마스크 인페인팅만. 표정·배경 변경은 1크레딧.)
  * - `summarizeJob()` 추가. 태일 타임라인과 내 진행률 화면이 같은 셈을 두 번 쓰지 않게 한다.
  */
 
@@ -42,15 +43,21 @@ export const CUT_EDIT_INTENT_LABEL: Record<CutEditIntent, string> = {
 };
 
 /**
- * intent 마다 hold 할 금액의 근거. 컷을 통째로 다시 뽑으면 1크레딧,
- * 기존 결과를 살려 일부만 고치면 0.5크레딧이다(`CREDIT_COST`).
+ * intent 마다 hold 할 금액의 근거.
  *
- * 값 자체는 요금 정책이므로 태일과 PR 에서 한 번 확인한다.
+ * 0.5크레딧인 "부분 재생성"은 **마스크 인페인팅 하나뿐**이다(PRD 부록 D:
+ * "컷 내 마스크 영역만 프롬프트로 다시 생성하는 인페인팅").
+ *
+ * 표정만 변경·배경만 교체는 PRD 3.1.2 의 한 컷 모드 제한 수정 동작이지
+ * 부분 재생성이 아니다. 프롬프트를 좁힐 뿐 모델은 컷 한 장을 통째로 다시
+ * 생성하므로 원가가 1컷 생성과 같다. 0.5크레딧을 받으면 마진이 뒤집힌다.
+ *
+ * 단가 자체는 오픈 이슈 4(크레딧 단가 마진 재산정)에서 결제 오픈 전에 다시 본다.
  */
 export const CREDIT_REASON_BY_INTENT: Record<CutEditIntent, CreditSpendReason> = {
   regenerate: "cut_image",
-  keep_composition_change_expression: "partial_regenerate",
-  replace_background: "partial_regenerate",
+  keep_composition_change_expression: "cut_image",
+  replace_background: "cut_image",
   inpaint_mask: "partial_regenerate",
 };
 
