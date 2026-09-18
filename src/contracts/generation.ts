@@ -1,10 +1,18 @@
 /**
  * 생성 요청·결과 계약 — 오너: 웅싯(A).
  *
- * 태일이 올린 초안이다. 실제 파이프라인에 맞게 웅싯이 고치는 것을 전제로 하고,
+ * 태일이 올린 초안을 실제 파이프라인에 맞게 고친 것이다.
  * 태일은 이 타입을 화면(CutProgressGrid, 회차 타임라인)에서 읽기만 한다.
  * 바꿀 때는 PR 리뷰로 서로 확인한다.
+ *
+ * 초안에서 바뀐 것(전부 추가이고 기존 필드는 그대로다):
+ * - `GenerationJob.cuts[]` 에 `imageUrl`, `attempt`, `startedAt`, `finishedAt` 추가.
+ *   진행률 화면이 완료된 컷 썸네일을 바로 보여주고, 재시도 횟수로 상한을 건다.
+ * - `CREDIT_REASON_BY_INTENT` 추가. hold 금액이 intent 마다 다른데 초안에는 근거가 없었다.
+ * - `summarizeJob()` 추가. 태일 타임라인과 내 진행률 화면이 같은 셈을 두 번 쓰지 않게 한다.
  */
+
+import type { CreditSpendReason } from "./credit";
 
 /** 컷 하나의 생성 상태. 화면은 이 네 가지만 그린다. */
 export type CutStatus = "queued" | "running" | "done" | "failed";
@@ -25,6 +33,26 @@ export type CutEditIntent =
   | "keep_composition_change_expression"
   | "replace_background"
   | "inpaint_mask";
+
+export const CUT_EDIT_INTENT_LABEL: Record<CutEditIntent, string> = {
+  regenerate: "이 컷만 다시",
+  keep_composition_change_expression: "구도 유지하고 표정만 변경",
+  replace_background: "배경만 교체",
+  inpaint_mask: "선택 영역만 다시",
+};
+
+/**
+ * intent 마다 hold 할 금액의 근거. 컷을 통째로 다시 뽑으면 1크레딧,
+ * 기존 결과를 살려 일부만 고치면 0.5크레딧이다(`CREDIT_COST`).
+ *
+ * 값 자체는 요금 정책이므로 태일과 PR 에서 한 번 확인한다.
+ */
+export const CREDIT_REASON_BY_INTENT: Record<CutEditIntent, CreditSpendReason> = {
+  regenerate: "cut_image",
+  keep_composition_change_expression: "partial_regenerate",
+  replace_background: "partial_regenerate",
+  inpaint_mask: "partial_regenerate",
+};
 
 export interface CutGenerationRequest {
   cutId: string;
@@ -66,22 +94,60 @@ export interface ImageGenerator {
   supportsInpainting(): boolean;
 }
 
+export interface GenerationJobCut {
+  cutId: string;
+  index: number;
+  status: CutStatus;
+  progress?: number;
+  /** done 인 컷의 결과. 진행률 화면이 끝난 컷부터 썸네일로 보여준다. */
+  imageUrl?: string;
+  /** 실패한 컷만 개별 재시도한다. 성공한 컷은 건드리지 않는다. */
+  error?: string;
+  /** 이 컷에 쓴 크레딧의 hold. 실패 시 이 id 로 환불한다. */
+  holdId?: string;
+  /** 1부터. 자동 재시도 상한을 넘으면 사용자가 직접 누를 때만 다시 건다. */
+  attempt: number;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
 export interface GenerationJob {
   id: string;
   userId: string;
   episodeId: string;
   mode: GenerationMode;
   status: JobStatus;
-  cuts: Array<{
-    cutId: string;
-    index: number;
-    status: CutStatus;
-    progress?: number;
-    /** 실패한 컷만 개별 재시도한다. 성공한 컷은 건드리지 않는다. */
-    error?: string;
-    /** 이 컷에 쓴 크레딧의 hold. 실패 시 이 id 로 환불한다. */
-    holdId?: string;
-  }>;
+  cuts: GenerationJobCut[];
   createdAt: string;
   finishedAt?: string;
+}
+
+export interface JobSummary {
+  total: number;
+  done: number;
+  failed: number;
+  running: number;
+  queued: number;
+  /** 컷 단위 평균 진행률(%). running 컷의 부분 진행까지 센다. */
+  percent: number;
+}
+
+/** 진행률 화면과 회차 타임라인이 같은 수를 보게 한다. 실패한 컷은 완료로 세지 않는다. */
+export function summarizeJob(job: GenerationJob): JobSummary {
+  const total = job.cuts.length;
+  const count = (s: CutStatus) => job.cuts.filter((c) => c.status === s).length;
+  const earned = job.cuts.reduce((sum, c) => {
+    if (c.status === "done") return sum + 1;
+    if (c.status === "running") return sum + (c.progress ?? 0) / 100;
+    return sum;
+  }, 0);
+
+  return {
+    total,
+    done: count("done"),
+    failed: count("failed"),
+    running: count("running"),
+    queued: count("queued"),
+    percent: total === 0 ? 0 : Math.round((earned / total) * 100),
+  };
 }
