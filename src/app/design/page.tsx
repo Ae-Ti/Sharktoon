@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CreditSheet } from "@/features/platform/components/CreditSheet";
 import {
   AssetCard,
   Badge,
@@ -10,6 +11,7 @@ import {
   CutProgressGrid,
   EmptyState,
   Field,
+  Modal,
   LayerRow,
   StepProgress,
   Tabs,
@@ -31,6 +33,8 @@ export default function DesignPage() {
   const [tab, setTab] = useState(0);
   const [story, setStory] = useState("");
   const [hidden, setHidden] = useState<Record<number, boolean>>({});
+  const [modal, setModal] = useState(false);
+  const [sheet, setSheet] = useState(false);
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-12">
@@ -165,6 +169,42 @@ export default function DesignPage() {
             />
           ))}
         </div>
+      </Section>
+
+      <Section title="Modal · CreditSheet">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setModal(true)}>
+            확인 모달 열기
+          </Button>
+          <Button variant="secondary" onClick={() => setSheet(true)}>
+            크레딧 부족 시트 열기
+          </Button>
+        </div>
+        <Modal
+          open={modal}
+          onClose={() => setModal(false)}
+          title="이 시리즈를 지울까요?"
+          description="회차와 생성한 컷이 모두 사라져요. 되돌릴 수 없어요."
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>
+                그대로 둘게요
+              </Button>
+              <Button variant="danger" onClick={() => setModal(false)}>
+                삭제
+              </Button>
+            </>
+          }
+        />
+        <CreditSheet
+          open={sheet}
+          onClose={() => setSheet(false)}
+          required={6}
+          available={2}
+          canCheckIn
+          onCheckIn={() => setSheet(false)}
+          onOpenPlans={() => setSheet(false)}
+        />
       </Section>
 
       <Section title="EmptyState">

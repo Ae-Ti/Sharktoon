@@ -86,3 +86,13 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
 }
+
+/* <dialog> 의 backdrop 은 브라우저에 따라 :root 의 커스텀 프로퍼티를 물려받지 않는다.
+   그래서 overlay 토큰 값을 여기에 그대로 적는다. 토큰이 바뀌면 여기도 같이 바꾼다. */
+dialog::backdrop {
+  background: rgba(10, 16, 22, 0.55);
+}
+
+:root[data-theme="dark"] dialog::backdrop {
+  background: rgba(0, 0, 0, 0.66);
+}

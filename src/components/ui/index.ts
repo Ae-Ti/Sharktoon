@@ -13,3 +13,4 @@ export {
 export { AssetCard, type AssetCardProps } from "./AssetCard";
 export { LayerRow, type LayerRowProps } from "./LayerRow";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
+export { Modal, type ModalProps } from "./Modal";
