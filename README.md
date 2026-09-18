@@ -10,10 +10,13 @@ AI 인스타툰 연재 서비스. 가보자IT.
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
-npm run typecheck
-npm run build
+npm run dev:mock   # 목 데이터로 화면 보기 — 준비물 없음
+npm run dev:real   # 로컬 Supabase 로 실제 경로 — Docker 필요
+npm run check:repo # 저장소 동작 검증
+npm run typecheck && npm run lint && npm run build
 ```
+
+테스트 두 가지를 따로 돌리는 법은 [docs/테스트_실행법.md](docs/테스트_실행법.md).
 
 | 경로 | 내용 |
 |---|---|
@@ -36,6 +39,7 @@ npm run build
 | [PRD · 기능명세](docs/샥툰_PRD_기능명세_합본.md) | 기준 문서. 범위·일정·정책·데이터 모델 |
 | [디자인 가이드](docs/디자인_가이드.md) | 디자인 시스템과 와이어프레임 링크, 토큰 사용법 |
 | [접점 계약](src/contracts/README.md) | 두 사람의 코드가 만나는 타입 |
+| [테스트 실행법](docs/테스트_실행법.md) | 목 테스트와 실 테스트를 따로 돌리는 법 |
 
 ## 구조
 

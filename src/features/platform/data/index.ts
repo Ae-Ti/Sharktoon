@@ -1,4 +1,4 @@
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { dataSource } from "@/lib/supabase/env";
 import { mockRepository } from "./mock";
 import type { PlatformRepository } from "./types";
 
@@ -7,13 +7,13 @@ import type { PlatformRepository } from "./types";
  * 목 구현을 쓰는 동안에도 화면·라우팅·상태는 최종 형태로 만든다.
  */
 export async function getRepository(): Promise<PlatformRepository> {
-  if (!isSupabaseConfigured()) return mockRepository;
+  if (dataSource() === "mock") return mockRepository;
   const { supabaseRepository } = await import("./supabase");
   return supabaseRepository;
 }
 
 export function usingMockData(): boolean {
-  return !isSupabaseConfigured();
+  return dataSource() === "mock";
 }
 
 export * from "./types";
