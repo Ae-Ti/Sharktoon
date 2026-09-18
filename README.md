@@ -15,7 +15,18 @@ npm run typecheck
 npm run build
 ```
 
-`/design` 에서 공통 컴포넌트 11개를 볼 수 있다.
+| 경로 | 내용 |
+|---|---|
+| `/` | 로그인 |
+| `/onboarding/character` `/story` `/result` | 온보딩 3단계 |
+| `/home` `/assets` `/series/[id]` | 홈·에셋 라이브러리·회차 타임라인 |
+| `/episodes/[id]/storyboard` `/generate` `/editor` | 콘티·생성 진행률·컷 편집기 |
+| `/terms` `/privacy` | 약관·개인정보 처리방침 |
+| `/design` | 공통 컴포넌트 12개 |
+
+**Supabase 키가 없으면 목 데이터로 돈다.** 화면 위에 그렇다는 띠가 뜨고,
+`.env.local` 에 키를 채우면 같은 화면이 실제 데이터로 바뀐다
+(`src/features/platform/data/index.ts`).
 
 ## 문서
 
