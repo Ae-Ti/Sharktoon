@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+@import "../../design/tokens.css";
+
+/* 다크 테마는 prefers-color-scheme 이 아니라 <html data-theme="dark"> 로 켠다.
+   사용자가 앱에서 직접 고르는 값이고, 캡처·내보내기에서 고정해야 하기 때문이다. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* 테마에 따라 값이 바뀌는 토큰은 inline 으로 연결한다. 실제 값은 design/tokens.css 에 있다. */
+@theme inline {
+  --color-surface-page: var(--surface-page);
+  --color-surface-card: var(--surface-card);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-inverse: var(--surface-inverse);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-border: var(--border);
+  --color-border-control: var(--border-control);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-tint: var(--brand-tint);
+  --color-on-brand: var(--on-brand);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-success: var(--success);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-on-signal: var(--on-signal);
+  --color-overlay: var(--overlay);
+  --color-canvas-grid: var(--canvas-grid);
+  --color-skeleton: var(--skeleton);
+
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+}
+
+/* 테마와 무관하게 고정인 값.
+   간격은 Tailwind 기본 4px 스케일이 우리 space-* 와 정확히 같으므로 다시 정의하지 않는다
+   (p-4 = 16px = space-4). 터치 높이만 이름을 붙여 둔다: h-control-md. */
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  --spacing-control-sm: 36px;
+  --spacing-control-md: 44px;
+  --spacing-control-lg: 52px;
+
+  --text-display-lg: 32px;
+  --text-display-lg--line-height: 40px;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display: 26px;
+  --text-display--line-height: 34px;
+  --text-display--letter-spacing: -0.015em;
+  --text-title-lg: 20px;
+  --text-title-lg--line-height: 28px;
+  --text-title: 17px;
+  --text-title--line-height: 26px;
+  --text-body: 15px;
+  --text-body--line-height: 25px;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 21px;
+  --text-label: 13px;
+  --text-label--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-code: 13px;
+  --text-code--line-height: 20px;
+}
+
+body {
+  background: var(--surface-page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
