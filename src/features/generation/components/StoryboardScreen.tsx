@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Badge,
@@ -8,6 +8,7 @@ import {
   ChoiceCard,
   EmptyState,
   Field,
+  Modal,
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
@@ -21,12 +22,23 @@ import {
 } from "../types/storyboard";
 import { BALLOON_LABEL } from "../types/layer";
 import { MOCK_CHARACTERS } from "../mocks/storyboard";
+import {
+  generateStoryboardAction,
+  startGenerationAction,
+  type ActionResult,
+} from "../actions";
 import { EpisodeHeader } from "./EpisodeHeader";
 
 /** PRD 2.2 — 사연 기반 콘티 생성. 이미지 생성 전에 컷을 손보는 화면이다. */
 export function StoryboardScreen({ initial }: { initial: Storyboard }) {
   const router = useRouter();
   const [sb, setSb] = useState(initial);
+  const [story, setStory] = useState(initial.story);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [shortfall, setShortfall] = useState<{ required: number; available: number } | null>(
+    null,
+  );
+  const [pending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(
     initial.cuts[0]?.id ?? null,
   );
@@ -36,6 +48,43 @@ export function StoryboardScreen({ initial }: { initial: Storyboard }) {
   const isLast = selected != null && selected.index === sb.cuts.length;
   const ready = canGenerate(sb);
   const cost = sb.cuts.length * CREDIT_COST.cutImage;
+
+  /** 액션 결과를 화면 상태로 옮긴다. 크레딧 부족만 시트를 연다. */
+  function handle<T>(result: ActionResult<T>): T | null {
+    if (result.ok) {
+      setNotice(null);
+      return result.data;
+    }
+    if (result.kind === "credit") {
+      setShortfall({ required: result.required, available: result.available });
+      return null;
+    }
+    setNotice(result.message);
+    return null;
+  }
+
+  /** PRD 2.2 — 사연을 고쳐서 콘티를 다시 만든다. 크레딧을 쓰지 않는다. */
+  function regenerateStoryboard() {
+    startTransition(async () => {
+      const data = handle(
+        await generateStoryboardAction({
+          story,
+          episodeId: sb.episodeId,
+          seriesId: sb.seriesId,
+          cutCount: sb.cuts.length || 6,
+        }),
+      );
+      if (data) setSb(data.storyboard);
+    });
+  }
+
+  /** PRD 3.1.1 — 전체 생성을 큐에 등록하고 진행률 화면으로 넘긴다. */
+  function startGeneration() {
+    startTransition(async () => {
+      const job = handle(await startGenerationAction(sb));
+      if (job) router.push(`/episodes/${sb.episodeId}/generate?job=${job.id}`);
+    });
+  }
 
   function patchCut(id: string, patch: Partial<StoryboardCut>) {
     setSb((s) => ({
@@ -93,7 +142,8 @@ export function StoryboardScreen({ initial }: { initial: Storyboard }) {
             disabled={!ready}
             // 실제로는 CreditLedger.hold 가 먼저 가고, 모자라면 충전 시트가 열린다.
             title={ready ? undefined : "후킹과 CTA를 먼저 고르세요"}
-            onClick={() => router.push(`/episodes/${sb.episodeId}/generate`)}
+            loading={pending}
+            onClick={startGeneration}
           >
             이미지 생성
           </Button>
@@ -101,9 +151,20 @@ export function StoryboardScreen({ initial }: { initial: Storyboard }) {
       />
 
       <main className="mx-auto grid max-w-[1280px] grid-cols-1 gap-4 p-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <StorySidebar story={sb.story} cutCount={sb.cuts.length} />
+        <StorySidebar
+          story={story}
+          cutCount={sb.cuts.length}
+          pending={pending}
+          onChange={setStory}
+          onRegenerate={regenerateStoryboard}
+        />
 
         <section aria-label="컷 목록" className="flex flex-col gap-3">
+          {notice && (
+            <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
+              {notice}
+            </p>
+          )}
           {sb.cuts.length === 0 ? (
             <EmptyState
               title="컷이 하나도 없어요"
@@ -199,11 +260,43 @@ export function StoryboardScreen({ initial }: { initial: Storyboard }) {
           )}
         </aside>
       </main>
+
+      {/* 크레딧이 모자라면 버튼을 막는 대신 여기서 막고 충전으로 보낸다(credit.ts 주석). */}
+      <Modal
+        open={shortfall !== null}
+        onClose={() => setShortfall(null)}
+        title="크레딧이 모자라요"
+        description={
+          shortfall
+            ? `이 작업에 ${shortfall.required}크레딧이 필요한데 ${shortfall.available}크레딧 남았어요.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShortfall(null)}>
+              나중에
+            </Button>
+            <Button onClick={() => router.push("/home")}>출석하고 받기</Button>
+          </>
+        }
+      />
     </div>
   );
 }
 
-function StorySidebar({ story, cutCount }: { story: string; cutCount: number }) {
+function StorySidebar({
+  story,
+  cutCount,
+  pending,
+  onChange,
+  onRegenerate,
+}: {
+  story: string;
+  cutCount: number;
+  pending: boolean;
+  onChange: (value: string) => void;
+  onRegenerate: () => void;
+}) {
   return (
     <aside aria-label="사연" className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
@@ -212,11 +305,12 @@ function StorySidebar({ story, cutCount }: { story: string; cutCount: number }) 
           label="사연"
           multiline
           rows={7}
-          defaultValue={story}
+          value={story}
+          onChange={onChange}
           help={`이 사연에서 ${cutCount}컷을 만들었어요.`}
           maxLength={500}
         />
-        <Button variant="secondary" size="sm" block>
+        <Button variant="secondary" size="sm" block loading={pending} onClick={onRegenerate}>
           사연 고쳐서 다시 만들기
         </Button>
         <p className="text-caption text-ink-subtle">

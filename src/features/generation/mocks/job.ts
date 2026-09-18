@@ -7,7 +7,7 @@
 
 import type { GenerationJob } from "@/contracts/generation";
 import { mockCutImageUrl } from "./cutImage";
-import { MOCK_EPISODE_ID, MOCK_STORYBOARD } from "./storyboard";
+import { MOCK_EPISODE_ID, MOCK_SERIES_ID, MOCK_STORYBOARD } from "./storyboard";
 
 const CAPTION = MOCK_STORYBOARD.cuts.map((c) => c.scene.slice(0, 18));
 
@@ -15,6 +15,7 @@ export const MOCK_JOB: GenerationJob = {
   id: "job_001",
   userId: "u_001",
   episodeId: MOCK_EPISODE_ID,
+  seriesId: MOCK_SERIES_ID,
   mode: "agent",
   status: "running",
   createdAt: "2026-09-18T16:42:00+09:00",

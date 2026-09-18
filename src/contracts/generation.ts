@@ -10,6 +10,7 @@
  *   진행률 화면이 완료된 컷 썸네일을 바로 보여주고, 재시도 횟수로 상한을 건다.
  * - `CREDIT_REASON_BY_INTENT` 추가. hold 금액이 intent 마다 다른데 초안에는 근거가 없었다.
  *   (태일 확인: 0.5크레딧은 마스크 인페인팅만. 표정·배경 변경은 1크레딧.)
+ * - `GenerationJob.seriesId` 추가. 시리즈 규칙 주입이 잡 단위로 필요하다.
  * - `summarizeJob()` 추가. 태일 타임라인과 내 진행률 화면이 같은 셈을 두 번 쓰지 않게 한다.
  */
 
@@ -122,6 +123,8 @@ export interface GenerationJob {
   id: string;
   userId: string;
   episodeId: string;
+  /** 시리즈 규칙과 고정 캐릭터를 모든 생성 요청에 주입하려면 잡이 시리즈를 알아야 한다. */
+  seriesId: string;
   mode: GenerationMode;
   status: JobStatus;
   cuts: GenerationJobCut[];
