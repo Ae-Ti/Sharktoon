@@ -77,6 +77,16 @@ export interface CreditLedger {
   }): Promise<CreditBalance>;
 }
 
+/**
+ * Postgres 함수가 돌려주는 SQLSTATE. supabase/README.md 와 같이 본다.
+ * 이 코드로 분기하고, 메시지 문자열로 분기하지 않는다.
+ */
+export const CREDIT_SQLSTATE = {
+  insufficient: "SK001",
+  holdAlreadyResolved: "SK002",
+  alreadyCheckedInToday: "SK003",
+} as const;
+
 export class InsufficientCreditError extends Error {
   constructor(
     readonly required: number,
