@@ -9,12 +9,11 @@ export const metadata: Metadata = { title: "홈 · 샥툰" };
 
 export default async function Page() {
   const repo = await getRepository();
-  const [series, attendance] = await Promise.all([
+  const [series, attendance, resumable] = await Promise.all([
     repo.listSeries(),
     repo.getAttendance(),
+    repo.getResumable(),
   ]);
-
-  const draft = series.find((s) => s.episodeCount > 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,21 +61,33 @@ export default async function Page() {
         )}
       </section>
 
-      {draft && (
+      {resumable && (
         <section className="flex flex-col gap-3">
           <h2 className="text-title font-semibold">이어서 만들기</h2>
           <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface-card px-4 py-3">
             <span className="size-14 shrink-0 rounded-md bg-skeleton" />
             <span className="flex flex-1 flex-col gap-1">
               <span className="text-body font-semibold">
-                {draft.title} · {draft.episodeCount}화
+                {resumable.seriesTitle} · {resumable.number}화
               </span>
-              <span className="text-caption text-ink-muted">콘티까지 만들어 뒀어요</span>
+              <span className="text-caption text-ink-muted">
+                {resumable.status === "storyboard"
+                  ? "콘티까지 만들어 뒀어요"
+                  : resumable.status === "generating"
+                    ? "이미지를 만들고 있어요"
+                    : "아직 사연만 적어 뒀어요"}
+              </span>
             </span>
             <Badge>초안</Badge>
             {/* 크레딧을 쓰는 이동이므로 소모량을 누르기 전에 밝힌다. */}
-            <ButtonLink href="/episodes/ep_004/generate" size="sm" cost={6}>
-              이미지 만들기
+            <ButtonLink
+              href={`/episodes/${resumable.episodeId}/${
+                resumable.status === "draft" ? "storyboard" : "generate"
+              }`}
+              size="sm"
+              cost={resumable.status === "draft" ? undefined : resumable.cutCount}
+            >
+              {resumable.status === "draft" ? "콘티 만들기" : "이미지 만들기"}
             </ButtonLink>
           </div>
         </section>

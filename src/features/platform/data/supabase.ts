@@ -382,6 +382,28 @@ export const supabaseRepository: PlatformRepository = {
     };
   },
 
+  async getResumable() {
+    const db = await createClient();
+    const { data } = await db
+      .from("episodes")
+      .select("id, number, status, cut_count, series_id, series(title)")
+      .neq("status", "published")
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    const e = data?.[0];
+    if (!e) return null;
+    const series = e.series as unknown as { title: string } | null;
+    return {
+      seriesId: e.series_id,
+      seriesTitle: series?.title ?? "",
+      episodeId: e.id,
+      number: e.number,
+      status: e.status,
+      cutCount: e.cut_count,
+    };
+  },
+
   async getEpisodeContext(episodeId: string) {
     const db = await createClient();
     const { data } = await db

@@ -143,6 +143,14 @@ const SERIES: SeriesDetail[] = [
   },
 ];
 
+/**
+ * Date.now() 로 id 를 만들면 같은 밀리초에 두 개를 만들 때 충돌한다.
+ * 실제로 1화와 2화가 같은 id 를 받아 앞 회차의 사연이 덮어써졌다.
+ */
+function newId(prefix: string) {
+  return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
 const DEFAULT_RULE: SeriesRule = {
   stylePreset: "심플 라인",
   defaultCutCount: 6,
@@ -167,7 +175,12 @@ export const mockRepository: PlatformRepository = {
     return PROFILE;
   },
   async getCredit() {
-    return credit;
+    // delta 는 변화 직후 한 번만 보여준다. 계속 붙어 있으면 잔량과 헷갈린다.
+    const snapshot = credit;
+    if (credit.delta !== undefined) {
+      credit = { balance: credit.balance, held: credit.held };
+    }
+    return snapshot;
   },
   async getAttendance() {
     return attendance;
@@ -200,7 +213,7 @@ export const mockRepository: PlatformRepository = {
   },
   async createAsset(input: AssetInput) {
     const asset: Asset = {
-      id: `as_${Date.now()}`,
+      id: newId("as"),
       ...input,
       thumbUrl: null,
       usedIn: 0,
@@ -230,7 +243,7 @@ export const mockRepository: PlatformRepository = {
 
   async createSeries(input: SeriesInput) {
     const series: SeriesDetail = {
-      id: `sr_${Date.now()}`,
+      id: newId("sr"),
       title: input.title,
       description: input.description,
       isPublic: false,
@@ -269,7 +282,7 @@ export const mockRepository: PlatformRepository = {
     if (!s) throw new Error("없는 시리즈예요");
     const number = Math.max(0, ...s.episodes.map((e) => e.number)) + 1;
     const ep = {
-      id: `ep_${Date.now()}`,
+      id: newId("ep"),
       number,
       title: story.slice(0, 20) || null,
       status: "draft" as const,
@@ -279,6 +292,25 @@ export const mockRepository: PlatformRepository = {
     s.episodes.push(ep);
     s.episodeCount = s.episodes.length;
     return ep;
+  },
+
+  async getResumable() {
+    for (const s of SERIES) {
+      const ep = [...s.episodes]
+        .reverse()
+        .find((e) => e.status !== "published");
+      if (ep) {
+        return {
+          seriesId: s.id,
+          seriesTitle: s.title,
+          episodeId: ep.id,
+          number: ep.number,
+          status: ep.status,
+          cutCount: ep.cutCount,
+        };
+      }
+    }
+    return null;
   },
 
   async getEpisodeContext(episodeId: string) {
@@ -307,7 +339,7 @@ export const mockRepository: PlatformRepository = {
 
     if (!series) {
       series = {
-        id: `sr_${Date.now()}`,
+        id: newId("sr"),
         title: story.slice(0, 12) || "새 시리즈",
         description: null,
         isPublic: false,
@@ -322,7 +354,7 @@ export const mockRepository: PlatformRepository = {
 
     const number = Math.max(0, ...series.episodes.map((e) => e.number)) + 1;
     const ep = {
-      id: `ep_${Date.now()}`,
+      id: newId("ep"),
       number,
       title: null,
       status: "storyboard" as const,
@@ -340,7 +372,7 @@ export const mockRepository: PlatformRepository = {
     if (credit.balance < amount) {
       throw new InsufficientCreditError(amount, credit.balance);
     }
-    const id = `hold_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = newId("hold");
     HOLDS.set(id, { amount, reason, jobId, status: "held" });
     credit = {
       balance: credit.balance - amount,

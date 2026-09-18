@@ -102,6 +102,8 @@ export interface PlatformRepository {
    * 생성 파이프라인이 회차 하나를 만들 때 필요한 것 전부.
    * 콘티·생성 화면(웅싯)이 이걸 읽어 목 데이터를 대신한다.
    */
+  /** 아직 게시하지 않은 가장 최근 회차. 홈의 "이어서 만들기" 대상. */
+  getResumable(): Promise<Resumable | null>;
   getEpisodeContext(episodeId: string): Promise<EpisodeContext | null>;
   /** 온보딩에서 사연을 받아 시리즈와 1화를 연다. 시리즈가 없으면 같이 만든다. */
   startEpisode(input: {
@@ -121,6 +123,15 @@ export interface PlatformRepository {
 
   /** 운영자 전용. 관리자가 아니면 null 을 돌려준다. */
   getAdminOverview(): Promise<AdminOverview | null>;
+}
+
+export interface Resumable {
+  seriesId: string;
+  seriesTitle: string;
+  episodeId: string;
+  number: number;
+  status: EpisodeStatus;
+  cutCount: number;
 }
 
 /** 회차 하나를 생성하는 데 필요한 고정 컨텍스트. */

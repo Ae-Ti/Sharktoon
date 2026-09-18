@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export interface ModalProps {
@@ -35,6 +35,8 @@ export function Modal({
   size = "sm",
 }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  // 한 화면에 모달이 둘 이상 있을 수 있다. 고정 id 를 쓰면 중복된다.
+  const titleId = useId();
 
   useEffect(() => {
     const el = ref.current;
@@ -46,7 +48,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      aria-labelledby="sk-modal-title"
+      aria-labelledby={titleId}
       onCancel={(e) => {
         // ESC. dismissible 이 아니면 브라우저 기본 닫기를 막는다.
         if (!dismissible) {
@@ -78,7 +80,7 @@ export function Modal({
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <h2 id="sk-modal-title" className="text-title font-semibold">
+            <h2 id={titleId} className="text-title font-semibold">
               {title}
             </h2>
             {description && (

@@ -6,7 +6,11 @@ import { SideNav } from "@/features/platform/shell/SideNav";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const repo = await getRepository();
-  const credit = await repo.getCredit();
+  const [credit, series] = await Promise.all([
+    repo.getCredit(),
+    repo.listSeries(),
+  ]);
+  const seriesHref = series[0] ? `/series/${series[0].id}` : null;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -21,7 +25,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <Link href="/home" className="px-2.5 text-title-lg font-extrabold tracking-[-0.03em] text-ink">
             샥툰
           </Link>
-          <SideNav />
+          <SideNav seriesHref={seriesHref} />
           <div className="md:mt-auto md:px-2">
             <CreditPill balance={credit.balance} delta={credit.delta} />
           </div>

@@ -4,15 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
-const ITEMS = [
-  { href: "/home", label: "홈" },
-  { href: "/series/sr_villain", label: "시리즈", match: "/series" },
-  { href: "/assets", label: "에셋" },
-  { href: "/admin", label: "운영" },
-];
+export interface SideNavProps {
+  /** 가장 최근 시리즈. 없으면 시리즈 항목을 감춘다. */
+  seriesHref: string | null;
+}
 
-export function SideNav() {
+export function SideNav({ seriesHref }: SideNavProps) {
   const path = usePathname();
+
+  const ITEMS = [
+    { href: "/home", label: "홈", match: undefined as string | undefined },
+    ...(seriesHref
+      ? [{ href: seriesHref, label: "시리즈", match: "/series" }]
+      : []),
+    { href: "/assets", label: "에셋", match: undefined },
+    { href: "/admin", label: "운영", match: undefined },
+  ];
 
   return (
     <nav aria-label="주 메뉴" className="flex flex-col gap-0.5">
