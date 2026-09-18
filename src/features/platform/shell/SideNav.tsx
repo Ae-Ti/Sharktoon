@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/home", label: "홈" },
   { href: "/series/sr_villain", label: "시리즈", match: "/series" },
   { href: "/assets", label: "에셋" },
+  { href: "/admin", label: "운영" },
 ];
 
 export function SideNav() {

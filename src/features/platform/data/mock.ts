@@ -1,12 +1,15 @@
 import type {
+  AdminOverview,
   Asset,
+  AssetInput,
   AssetKind,
   AttendanceState,
   CreditState,
   PlatformRepository,
   Profile,
   SeriesDetail,
-
+  SeriesInput,
+  SeriesRule,
 } from "./types";
 
 /**
@@ -179,6 +182,108 @@ export const mockRepository: PlatformRepository = {
   async listAssets(kind) {
     return kind ? ASSETS.filter((a) => a.kind === kind) : ASSETS;
   },
+  async createAsset(input: AssetInput) {
+    const asset: Asset = {
+      id: `as_${Date.now()}`,
+      ...input,
+      thumbUrl: null,
+      usedIn: 0,
+      usedInEpisodes: [],
+    };
+    ASSETS.push(asset);
+    return asset;
+  },
+
+  async updateAsset(id, input) {
+    const i = ASSETS.findIndex((a) => a.id === id);
+    if (i < 0) throw new Error("없는 에셋이에요");
+    ASSETS[i] = { ...ASSETS[i], ...input };
+    return ASSETS[i];
+  },
+
+  async deleteAsset(id) {
+    const a = ASSETS.find((x) => x.id === id);
+    if (!a) throw new Error("없는 에셋이에요");
+    if (a.usedIn > 0) {
+      throw new Error(
+        `${a.usedIn}개 회차가 이 에셋을 쓰고 있어요. 먼저 회차에서 빼 주세요.`,
+      );
+    }
+    ASSETS.splice(ASSETS.indexOf(a), 1);
+  },
+
+  async createSeries(input: SeriesInput) {
+    const series: SeriesDetail = {
+      id: `sr_${Date.now()}`,
+      title: input.title,
+      description: input.description,
+      isPublic: false,
+      episodeCount: 0,
+      updatedAt: new Date().toISOString(),
+      rule: input.rule,
+      episodes: [],
+      assets: [],
+    };
+    SERIES.unshift(series);
+    return {
+      id: series.id,
+      title: series.title,
+      description: series.description,
+      isPublic: series.isPublic,
+      episodeCount: 0,
+      updatedAt: series.updatedAt,
+    };
+  },
+
+  async updateSeriesRule(seriesId: string, rule: SeriesRule) {
+    const s = SERIES.find((x) => x.id === seriesId);
+    if (!s) throw new Error("없는 시리즈예요");
+    s.rule = rule;
+    s.updatedAt = new Date().toISOString();
+  },
+
+  async setSeriesAssets(seriesId: string, assetIds: string[]) {
+    const s = SERIES.find((x) => x.id === seriesId);
+    if (!s) throw new Error("없는 시리즈예요");
+    s.assets = ASSETS.filter((a) => assetIds.includes(a.id));
+  },
+
+  async createEpisode(seriesId: string, story: string) {
+    const s = SERIES.find((x) => x.id === seriesId);
+    if (!s) throw new Error("없는 시리즈예요");
+    const number = Math.max(0, ...s.episodes.map((e) => e.number)) + 1;
+    const ep = {
+      id: `ep_${Date.now()}`,
+      number,
+      title: story.slice(0, 20) || null,
+      status: "draft" as const,
+      cutCount: s.rule.defaultCutCount,
+      publishedAt: null,
+    };
+    s.episodes.push(ep);
+    s.episodeCount = s.episodes.length;
+    return ep;
+  },
+
+  async getAdminOverview(): Promise<AdminOverview | null> {
+    // 목에서는 운영자라고 치고 그럴듯한 수를 보여준다.
+    return {
+      funnel: [
+        { step: "가입", users: 50 },
+        { step: "캐릭터 만듦", users: 41 },
+        { step: "사연 입력", users: 33 },
+        { step: "첫 화 완성", users: 26 },
+        { step: "첫 게시", users: 21 },
+      ],
+      generation: { holds: 184, refunded: 5, failureRate: 5 / 184 },
+      credit: { spent: 612, refunded: 5, granted: 740 },
+      recentRefunds: [
+        { id: 3, userId: "mock-user", amount: 1, createdAt: "2026-09-18T05:10:00Z" },
+        { id: 2, userId: "mock-user-2", amount: 6, createdAt: "2026-09-18T03:40:00Z" },
+      ],
+    };
+  },
+
   async countAssetsByKind() {
     return ASSETS.reduce(
       (acc, a) => ({ ...acc, [a.kind]: acc[a.kind] + 1 }),

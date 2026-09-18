@@ -20,6 +20,7 @@ npm run build
 | `/` | 로그인 |
 | `/onboarding/character` `/story` `/result` | 온보딩 3단계 |
 | `/home` `/assets` `/series/[id]` | 홈·에셋 라이브러리·회차 타임라인 |
+| `/admin` | 운영 — 첫 게시 완주율, 생성 실패율, 온보딩 깔때기, 환불 내역 |
 | `/episodes/[id]/storyboard` `/generate` `/editor` | 콘티·생성 진행률·컷 편집기 |
 | `/terms` `/privacy` | 약관·개인정보 처리방침 |
 | `/design` | 공통 컴포넌트 12개 |

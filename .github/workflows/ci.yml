@@ -57,3 +57,4 @@ jobs:
           done
           psql -v ON_ERROR_STOP=1 -f supabase/tests/01_ledger_test.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/02_series_rls_test.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/03_admin_test.sql

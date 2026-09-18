@@ -1,6 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import type { AssetKind } from "@/lib/supabase/database.types";
-import type { Asset, PlatformRepository, SeriesDetail } from "./types";
+import type {
+  AdminOverview,
+  Asset,
+  AssetInput,
+  PlatformRepository,
+  SeriesDetail,
+  SeriesInput,
+  SeriesRule,
+} from "./types";
 
 /**
  * Supabase 구현. 프로젝트 키가 채워지면 이 쪽이 쓰인다.
@@ -202,5 +210,212 @@ export const supabaseRepository: PlatformRepository = {
       (acc, a) => ({ ...acc, [a.kind]: acc[a.kind] + 1 }),
       { ...EMPTY_COUNT },
     );
+  },
+
+  async createAsset(input: AssetInput) {
+    const db = await createClient();
+    const { data: auth } = await db.auth.getUser();
+    if (!auth.user) throw new Error("로그인이 필요해요");
+
+    const { data, error } = await db
+      .from("assets")
+      .insert({ ...input, owner_id: auth.user.id })
+      .select("id, kind, name, description, tags")
+      .single();
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      kind: data.kind,
+      name: data.name,
+      description: data.description,
+      tags: data.tags,
+      thumbUrl: null,
+      usedIn: 0,
+      usedInEpisodes: [],
+    };
+  },
+
+  async updateAsset(id: string, input: AssetInput) {
+    const db = await createClient();
+    const { data, error } = await db
+      .from("assets")
+      .update(input)
+      .eq("id", id)
+      .select("id, kind, name, description, tags")
+      .single();
+    if (error) throw error;
+
+    const { count } = await db
+      .from("asset_references")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", id);
+
+    return {
+      id: data.id,
+      kind: data.kind,
+      name: data.name,
+      description: data.description,
+      tags: data.tags,
+      thumbUrl: null,
+      usedIn: count ?? 0,
+      usedInEpisodes: [],
+    };
+  },
+
+  async deleteAsset(id: string) {
+    const db = await createClient();
+    // 참조하는 회차가 있으면 지우지 않는다. 지난 회차의 일관성이 깨진다.
+    const { count } = await db
+      .from("asset_references")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", id);
+    if (count && count > 0) {
+      throw new Error(
+        `${count}개 회차가 이 에셋을 쓰고 있어요. 먼저 회차에서 빼 주세요.`,
+      );
+    }
+    const { error } = await db.from("assets").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  async createSeries(input: SeriesInput) {
+    const db = await createClient();
+    const { data: auth } = await db.auth.getUser();
+    if (!auth.user) throw new Error("로그인이 필요해요");
+
+    const { data, error } = await db
+      .from("series")
+      .insert({
+        owner_id: auth.user.id,
+        title: input.title,
+        description: input.description,
+      })
+      .select("id, title, description, is_public, updated_at")
+      .single();
+    if (error) throw error;
+
+    await db.from("series_rules").insert({
+      series_id: data.id,
+      style_preset: input.rule.stylePreset,
+      default_cut_count: input.rule.defaultCutCount,
+      aspect_ratio: input.rule.aspectRatio,
+      tone: input.rule.tone,
+      fixed_hashtags: input.rule.fixedHashtags,
+    });
+
+    return {
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      isPublic: data.is_public,
+      episodeCount: 0,
+      updatedAt: data.updated_at,
+    };
+  },
+
+  async updateSeriesRule(seriesId: string, rule: SeriesRule) {
+    const db = await createClient();
+    const { error } = await db
+      .from("series_rules")
+      .update({
+        style_preset: rule.stylePreset,
+        default_cut_count: rule.defaultCutCount,
+        aspect_ratio: rule.aspectRatio,
+        tone: rule.tone,
+        fixed_hashtags: rule.fixedHashtags,
+      })
+      .eq("series_id", seriesId);
+    if (error) throw error;
+  },
+
+  async setSeriesAssets(seriesId: string, assetIds: string[]) {
+    const db = await createClient();
+    await db.from("series_assets").delete().eq("series_id", seriesId);
+    if (assetIds.length === 0) return;
+    const { error } = await db
+      .from("series_assets")
+      .insert(assetIds.map((asset_id) => ({ series_id: seriesId, asset_id })));
+    if (error) throw error;
+  },
+
+  async createEpisode(seriesId: string, story: string) {
+    const db = await createClient();
+    const { data: auth } = await db.auth.getUser();
+    if (!auth.user) throw new Error("로그인이 필요해요");
+
+    const { data: last } = await db
+      .from("episodes")
+      .select("number")
+      .eq("series_id", seriesId)
+      .order("number", { ascending: false })
+      .limit(1);
+
+    const { data: rule } = await db
+      .from("series_rules")
+      .select("default_cut_count")
+      .eq("series_id", seriesId)
+      .single();
+
+    const number = (last?.[0]?.number ?? 0) + 1;
+    const { data, error } = await db
+      .from("episodes")
+      .insert({
+        series_id: seriesId,
+        owner_id: auth.user.id,
+        number,
+        story,
+        cut_count: rule?.default_cut_count ?? 6,
+      })
+      .select("id, number, title, status, cut_count, published_at")
+      .single();
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      number: data.number,
+      title: data.title,
+      status: data.status,
+      cutCount: data.cut_count,
+      publishedAt: data.published_at,
+    };
+  },
+
+  async getAdminOverview(): Promise<AdminOverview | null> {
+    const db = await createClient();
+    // 집계는 security definer 함수 안에서만 열린다. 운영자가 아니면 SK004 로 막힌다.
+    const [funnel, stats, refunds] = await Promise.all([
+      db.rpc("admin_funnel"),
+      db.rpc("admin_generation_stats"),
+      db.rpc("admin_recent_refunds", { p_limit: 20 }),
+    ]);
+    if (funnel.error || stats.error) return null;
+
+    const g = stats.data?.[0];
+    const holds = Number(g?.holds ?? 0);
+    const refunded = Number(g?.refunded ?? 0);
+
+    return {
+      funnel: (funnel.data ?? []).map((r) => ({
+        step: r.step,
+        users: Number(r.users),
+      })),
+      generation: {
+        holds,
+        refunded,
+        failureRate: holds === 0 ? 0 : refunded / holds,
+      },
+      credit: {
+        spent: Number(g?.spent ?? 0),
+        refunded: Number(g?.refunded_amount ?? 0),
+        granted: Number(g?.granted ?? 0),
+      },
+      recentRefunds: (refunds.data ?? []).map((r) => ({
+        id: Number(r.id),
+        userId: r.user_id,
+        amount: Number(r.amount),
+        createdAt: r.created_at,
+      })),
+    };
   },
 };

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Button, ButtonLink } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
+import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 import type { EpisodeStatus } from "@/features/platform/data/types";
 
 export const metadata: Metadata = { title: "시리즈 · 샥툰" };
@@ -49,7 +50,12 @@ export default async function Page({
             <Badge>에셋 {series.assets.length}</Badge>
           </div>
         </div>
-        <Button variant="secondary">생성 규칙 수정</Button>
+        <NewSeriesButton
+          seriesId={series.id}
+          initialTitle={series.title}
+          initialRule={series.rule}
+          label="생성 규칙 수정"
+        />
       </header>
 
       <section className="flex flex-col gap-3">

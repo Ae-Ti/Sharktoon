@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge, ButtonLink, EmptyState } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
+import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
 
@@ -55,12 +56,7 @@ export default async function Page() {
               </li>
             ))}
             <li>
-              <Link
-                href="/onboarding/story"
-                className="flex h-full min-h-49 items-center justify-center rounded-lg border border-dashed border-border-control text-label font-semibold text-ink-muted hover:text-ink"
-              >
-                + 새 시리즈
-              </Link>
+              <NewSeriesButton variant="card" />
             </li>
           </ul>
         )}

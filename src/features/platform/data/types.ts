@@ -85,4 +85,49 @@ export interface PlatformRepository {
   getSeries(id: string): Promise<SeriesDetail | null>;
   listAssets(kind?: AssetKind): Promise<Asset[]>;
   countAssetsByKind(): Promise<Record<AssetKind, number>>;
+
+  createAsset(input: AssetInput): Promise<Asset>;
+  updateAsset(id: string, input: AssetInput): Promise<Asset>;
+  /** 참조하는 회차가 있으면 막는다. 지난 회차의 일관성을 깨뜨리기 때문이다. */
+  deleteAsset(id: string): Promise<void>;
+
+  createSeries(input: SeriesInput): Promise<SeriesSummary>;
+  updateSeriesRule(seriesId: string, rule: SeriesRule): Promise<void>;
+  setSeriesAssets(seriesId: string, assetIds: string[]): Promise<void>;
+  /** 다음 번호로 회차를 하나 연다. 번호는 서버가 정한다. */
+  createEpisode(seriesId: string, story: string): Promise<EpisodeSummary>;
+
+  /** 운영자 전용. 관리자가 아니면 null 을 돌려준다. */
+  getAdminOverview(): Promise<AdminOverview | null>;
+}
+
+export interface AssetInput {
+  kind: AssetKind;
+  name: string;
+  description: string | null;
+  tags: string[];
+}
+
+export interface SeriesInput {
+  title: string;
+  description: string | null;
+  rule: SeriesRule;
+}
+
+export interface AdminOverview {
+  /** 첫 게시 완주 깔때기. 베타의 1차 지표가 이것이다. */
+  funnel: { step: string; users: number }[];
+  generation: {
+    holds: number;
+    refunded: number;
+    /** 환불된 hold 비율. 생성 실패는 반드시 환불되므로 실패율과 같다. */
+    failureRate: number;
+  };
+  credit: { spent: number; refunded: number; granted: number };
+  recentRefunds: {
+    id: number;
+    userId: string;
+    amount: number;
+    createdAt: string;
+  }[];
 }

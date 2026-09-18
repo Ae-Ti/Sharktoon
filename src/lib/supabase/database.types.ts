@@ -60,6 +60,7 @@ export interface Database {
         avatar_url: string | null;
         plan: PlanTier;
         keep_selfie_original: boolean;
+        is_admin: boolean;
         created_at: string;
         updated_at: string;
       }>;
@@ -152,6 +153,30 @@ export interface Database {
       credit_refund: {
         Args: { p_hold_id: string; p_reason?: string };
         Returns: number;
+      };
+      is_admin: { Args: Record<string, never>; Returns: boolean };
+      admin_funnel: {
+        Args: Record<string, never>;
+        Returns: { step: string; users: number }[];
+      };
+      admin_generation_stats: {
+        Args: Record<string, never>;
+        Returns: {
+          holds: number;
+          refunded: number;
+          spent: number;
+          refunded_amount: number;
+          granted: number;
+        }[];
+      };
+      admin_recent_refunds: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: number;
+          user_id: string;
+          amount: number;
+          created_at: string;
+        }[];
       };
       attendance_check_in: {
         Args: Record<string, never>;

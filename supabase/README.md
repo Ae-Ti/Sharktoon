@@ -10,6 +10,7 @@ CLI 를 쓰면 `supabase link` 후 `supabase db push` 한다.
 | `20260918000001_init.sql` | 확장, 열거형, `set_updated_at`, `profiles` |
 | `20260918000002_credits.sql` | 크레딧 원장·hold 함수·출석, 가입 트리거 |
 | `20260918000003_series_assets_episodes.sql` | 시리즈·생성 규칙·에셋·회차·참조 |
+| `20260918000004_admin.sql` | 운영자 플래그와 집계 함수(깔때기·생성 지표·환불 내역) |
 
 생성 파이프라인 테이블(`storyboards`, `cuts`, `layers`, `generation_jobs`)은 웅싯(A)이 다음 번호로 추가한다.
 
@@ -35,6 +36,7 @@ CLI 를 쓰면 `supabase link` 후 `supabase db push` 한다.
 | `SK001` | 크레딧 부족 | `InsufficientCreditError` 로 바꿔 충전 시트를 연다 |
 | `SK002` | 이미 정산되었거나 없는 hold | 재시도하지 않는다. 로그만 남긴다 |
 | `SK003` | 오늘 이미 출석함 | 버튼을 완료 상태로 바꾼다 |
+| `SK004` | 운영자 아님 | 관리자 화면이 빈 상태를 보여준다 |
 
 ## 로컬에서 검증하기
 
@@ -63,3 +65,15 @@ psql -f supabase/tests/02_series_rls_test.sql
 - 7일 연속 출석에 4크레딧(1+3)이 들어온다
 - 남의 비공개 시리즈는 안 보이고, 공개해도 **에셋은 보이지 않는다**
 - 남의 시리즈는 수정되지 않고, 캐릭터 태그는 5개를 넘길 수 없다
+- 운영자가 아니면 집계 함수가 SK004 로 막히고, 운영자로 올리면 깔때기·생성 지표·환불 내역이 나온다
+
+## 운영자 지정
+
+집계는 `profiles.is_admin` 이 true 인 계정에만 열린다. RLS 를 넘어 여러 사용자를 가로지르므로
+security definer 함수 안에서만 조회하고, 함수마다 먼저 권한을 확인한다.
+
+```sql
+update profiles set is_admin = true where id = '<운영자 uuid>';
+```
+
+첫 운영자는 대시보드에서 직접 넣는다. 화면에서 올릴 수 있게 만들면 그게 곧 권한 상승 경로가 된다.
