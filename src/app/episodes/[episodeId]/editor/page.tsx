@@ -1,8 +1,10 @@
 import { CutEditorScreen } from "@/features/generation/components/CutEditorScreen";
+import { titlesOf } from "@/features/generation/episodeTitle";
 import { getImageGenerator } from "@/features/generation/image";
 import { MOCK_JOB_COMPLETED } from "@/features/generation/mocks/job";
 import { MOCK_LAYER_TREE } from "@/features/generation/mocks/layers";
 import { getJob } from "@/features/generation/pipeline";
+import { loadEpisodeContext } from "@/features/platform/episode";
 
 export const metadata = { title: "컷 편집 — 샥툰" };
 
@@ -16,17 +18,18 @@ export default async function Page({
   const { episodeId } = await params;
   const { job: jobId } = await searchParams;
 
-  const live = jobId ? await getJob(jobId) : null;
+  const [context, live] = await Promise.all([
+    loadEpisodeContext(episodeId),
+    jobId ? getJob(jobId) : Promise.resolve(null),
+  ]);
 
-  // 레이어 트리는 아직 저장소가 없다. 생성 결과가 있으면 그 이미지를 배경에 얹는다.
-  const job = live ?? { ...MOCK_JOB_COMPLETED, episodeId };
-  const tree = MOCK_LAYER_TREE;
-
+  // 레이어 트리 저장소는 아직 없다. 컷 스트립만 실제 생성 결과를 쓴다.
   return (
     <CutEditorScreen
-      job={job}
-      tree={tree}
+      job={live ?? { ...MOCK_JOB_COMPLETED, episodeId }}
+      tree={MOCK_LAYER_TREE}
       supportsInpainting={getImageGenerator().supportsInpainting()}
+      {...titlesOf(context)}
     />
   );
 }

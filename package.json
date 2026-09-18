@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check:repo": "tsx scripts/repo-check.ts",
+    "check:generation": "tsx --conditions=react-server scripts/generation-check.ts",
     "dev:mock": "NEXT_PUBLIC_DATA_SOURCE=mock next dev",
     "dev:real": "NEXT_PUBLIC_DATA_SOURCE=supabase next dev",
     "db:start": "supabase start",

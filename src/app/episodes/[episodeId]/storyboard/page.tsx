@@ -1,5 +1,7 @@
 import { StoryboardScreen } from "@/features/generation/components/StoryboardScreen";
+import { titlesOf } from "@/features/generation/episodeTitle";
 import { MOCK_STORYBOARD } from "@/features/generation/mocks/storyboard";
+import { loadEpisodeContext } from "@/features/platform/episode";
 
 export const metadata = { title: "콘티 — 샥툰" };
 
@@ -9,6 +11,15 @@ export default async function Page({
   params: Promise<{ episodeId: string }>;
 }) {
   const { episodeId } = await params;
-  // 목 데이터다. API 가 붙으면 episodeId 로 콘티를 읽어 그대로 넘긴다.
-  return <StoryboardScreen initial={{ ...MOCK_STORYBOARD, episodeId }} />;
+  const context = await loadEpisodeContext(episodeId);
+
+  // 콘티 저장소가 붙기 전까지는 목 콘티에 회차의 사연만 얹는다.
+  const initial = {
+    ...MOCK_STORYBOARD,
+    episodeId,
+    seriesId: context?.seriesId ?? MOCK_STORYBOARD.seriesId,
+    story: context?.story ?? MOCK_STORYBOARD.story,
+  };
+
+  return <StoryboardScreen initial={initial} {...titlesOf(context)} />;
 }

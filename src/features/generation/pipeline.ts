@@ -17,8 +17,7 @@ import {
   type GenerationJob,
   type GenerationMode,
 } from "@/contracts/generation";
-import type { HoldId } from "@/contracts/credit";
-import { getCreditLedger } from "./credit";
+import { getRepository } from "@/features/platform/data";
 import { getImageGenerator } from "./image";
 import { createMemoryQueue } from "./queue/memory";
 import type { JobQueue } from "./queue/types";
@@ -33,7 +32,7 @@ async function generateOneCut({
   job: GenerationJob;
   cut: GenerationJob["cuts"][number];
 }) {
-  const ledger = await getCreditLedger();
+  const repo = await getRepository();
   const generator = getImageGenerator();
 
   const context = jobContext.get(job.id);
@@ -45,12 +44,7 @@ async function generateOneCut({
 
   // 생성 요청 직전에 잡는다. 모자라면 여기서 InsufficientCreditError 가 나고
   // 화면은 그걸 받아 충전 시트를 연다(버튼을 disabled 로 막지 않는다).
-  const holdId: HoldId = await ledger.hold({
-    userId: job.userId,
-    amount,
-    reason,
-    jobId: job.id,
-  });
+  const holdId = await repo.holdCredit({ amount, reason, jobId: job.id });
 
   try {
     const result = await generator.generateCut({
@@ -63,11 +57,11 @@ async function generateOneCut({
       assetRefs: context?.assetRefs ?? [],
       seriesRule: context?.seriesRule ?? {},
     });
-    await ledger.commit(holdId);
+    await repo.commitCredit(holdId);
     return { imageUrl: result.imageUrl };
   } catch (e) {
     // 실패한 요청의 크레딧은 자동 환불한다(PRD 3.1.1 예외).
-    await ledger.refund(holdId, e instanceof Error ? e.message : "생성 실패");
+    await repo.refundCredit(holdId, e instanceof Error ? e.message : "생성 실패");
     throw e;
   }
 }

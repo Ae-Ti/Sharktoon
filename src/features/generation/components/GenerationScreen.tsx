@@ -50,6 +50,8 @@ export interface GenerationScreenProps {
   supportsInpainting?: boolean;
   /** 실제 모델 대신 목 생성기로 돌고 있는지. */
   usingMock?: boolean;
+  seriesTitle: string;
+  episodeTitle: string;
 }
 
 /** PRD 3.1 — 콘티 기반 이미지 생성. 컷 단위 진행과 실패 재시도가 이 화면의 일이다. */
@@ -57,6 +59,8 @@ export function GenerationScreen({
   initial,
   supportsInpainting = false,
   usingMock = false,
+  seriesTitle,
+  episodeTitle,
 }: GenerationScreenProps) {
   const router = useRouter();
   const { job, live } = useJobPolling(initial);
@@ -98,8 +102,8 @@ export function GenerationScreen({
     <div className="min-h-dvh bg-surface-page">
       <EpisodeHeader
         episodeId={job.episodeId}
-        seriesTitle="퇴근길 기록"
-        episodeTitle="1화 · 퇴근 10분 전"
+        seriesTitle={seriesTitle}
+        episodeTitle={episodeTitle}
         current="generate"
         credits={12}
         action={

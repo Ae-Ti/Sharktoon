@@ -48,6 +48,8 @@ export interface CutEditorScreenProps {
   tree: CutLayerTree;
   /** ImageGenerator.supportsInpainting(). 꺼져 있으면 부분 재생성 UI 를 아예 감춘다. */
   supportsInpainting?: boolean;
+  seriesTitle: string;
+  episodeTitle: string;
 }
 
 /** PRD 3.2 — 레이어 기반 컷 편집기. */
@@ -55,6 +57,8 @@ export function CutEditorScreen({
   job,
   tree: initialTree,
   supportsInpainting = false,
+  seriesTitle,
+  episodeTitle,
 }: CutEditorScreenProps) {
   const [openCutId, setOpenCutId] = useState(initialTree.cutId);
   const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
@@ -70,8 +74,8 @@ export function CutEditorScreen({
     <div className="flex min-h-dvh flex-col bg-surface-page">
       <EpisodeHeader
         episodeId={job.episodeId}
-        seriesTitle="퇴근길 기록"
-        episodeTitle="1화 · 퇴근 10분 전"
+        seriesTitle={seriesTitle}
+        episodeTitle={episodeTitle}
         current="editor"
         credits={12}
         action={<Button size="sm">게시물로 내보내기</Button>}

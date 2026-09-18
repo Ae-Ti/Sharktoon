@@ -30,7 +30,18 @@ import {
 import { EpisodeHeader } from "./EpisodeHeader";
 
 /** PRD 2.2 — 사연 기반 콘티 생성. 이미지 생성 전에 컷을 손보는 화면이다. */
-export function StoryboardScreen({ initial }: { initial: Storyboard }) {
+export interface StoryboardScreenProps {
+  initial: Storyboard;
+  /** 회차 컨텍스트(태일). 없으면 목으로 보고 있는 중이다. */
+  seriesTitle: string;
+  episodeTitle: string;
+}
+
+export function StoryboardScreen({
+  initial,
+  seriesTitle,
+  episodeTitle,
+}: StoryboardScreenProps) {
   const router = useRouter();
   const [sb, setSb] = useState(initial);
   const [story, setStory] = useState(initial.story);
@@ -131,8 +142,8 @@ export function StoryboardScreen({ initial }: { initial: Storyboard }) {
     <div className="min-h-dvh bg-surface-page">
       <EpisodeHeader
         episodeId={sb.episodeId}
-        seriesTitle="퇴근길 기록"
-        episodeTitle="1화 · 퇴근 10분 전"
+        seriesTitle={seriesTitle}
+        episodeTitle={episodeTitle}
         current="storyboard"
         credits={12}
         action={

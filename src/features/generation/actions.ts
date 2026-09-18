@@ -11,6 +11,8 @@ import {
   retryFailedCuts,
   startGeneration,
 } from "./pipeline";
+import { loadEpisodeContext } from "@/features/platform/episode";
+import type { EpisodeContext } from "@/features/platform/episode";
 import type { Storyboard } from "./types/storyboard";
 
 /** 화면이 받는 결과. 실패 사유를 문구 하나로 뭉개지 않는다 — 처리가 다르다. */
@@ -28,14 +30,21 @@ export async function generateStoryboardAction(input: {
   episodeId: string;
   seriesId: string;
   cutCount: number;
-  seriesRule?: string;
-  fixedCharacters?: string[];
 }): Promise<ActionResult<{ storyboard: Storyboard; usedMock: boolean }>> {
   if (input.story.trim().length < 10) {
     return { ok: false, kind: "error", message: "사연을 조금 더 적어주세요. 한 문장이면 충분해요." };
   }
 
-  const result = await generateStoryboard(input);
+  // 시리즈 규칙과 고정 캐릭터는 화면이 아니라 서버가 읽는다.
+  // 클라이언트가 보낸 값을 그대로 프롬프트에 넣으면 규칙을 우회할 수 있다.
+  const context = await loadEpisodeContext(input.episodeId);
+
+  const result = await generateStoryboard({
+    ...input,
+    cutCount: context?.cutCount ?? input.cutCount,
+    seriesRule: context ? describeRule(context) : undefined,
+    fixedCharacters: characterNames(context),
+  });
 
   if (!result.ok) {
     if ("safety" in result) {
@@ -52,11 +61,21 @@ export async function startGenerationAction(
   storyboard: Storyboard,
 ): Promise<ActionResult<GenerationJob>> {
   try {
+    const context = await loadEpisodeContext(storyboard.episodeId);
+
     const result = await startGeneration({
       // 인증이 붙기 전까지의 대역. 태일의 세션에서 받아오도록 바꾼다.
       userId: "u_local",
       storyboard,
       mode: "agent",
+      // 캐릭터 시트는 모든 생성 호출에 고정 레퍼런스로 들어간다.
+      characterSheetRefs: context?.assets
+        .filter((a) => a.kind === "character" && a.thumbUrl)
+        .map((a) => a.thumbUrl!) ?? [],
+      assetRefs: context?.assets
+        .filter((a) => a.kind !== "character" && a.thumbUrl)
+        .map((a) => a.thumbUrl!) ?? [],
+      seriesRule: context ? { ...context.rule } : {},
     });
 
     if (!result.ok) {
@@ -118,4 +137,21 @@ function toCreditOrError(e: unknown): ActionResult<never> {
     kind: "error",
     message: e instanceof Error ? e.message : "처리하지 못했어요",
   };
+}
+
+/** 시리즈 규칙을 프롬프트 한 줄로 만든다. 모델이 읽을 값이라 사람 말로 적는다. */
+function describeRule(context: EpisodeContext): string {
+  const { stylePreset, aspectRatio, tone } = context.rule;
+  return [
+    `그림체 ${stylePreset}`,
+    `비율 ${aspectRatio}`,
+    tone ? `말투 ${tone}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** 고정 캐릭터 이름. 사연에 안 나와도 이 이름을 쓰게 한다. */
+function characterNames(context: EpisodeContext | null): string[] {
+  return context?.assets.filter((a) => a.kind === "character").map((a) => a.name) ?? [];
 }
