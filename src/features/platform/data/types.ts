@@ -1,5 +1,6 @@
 /** 화면이 쓰는 도메인 타입. DB 행과 1:1 이 아니라 화면에 필요한 모양이다. */
 
+import type { CreditSpendReason } from "@/contracts/credit";
 import type { AssetKind, EpisodeStatus, PlanTier } from "@/lib/supabase/database.types";
 
 export type { AssetKind, EpisodeStatus, PlanTier };
@@ -97,8 +98,43 @@ export interface PlatformRepository {
   /** 다음 번호로 회차를 하나 연다. 번호는 서버가 정한다. */
   createEpisode(seriesId: string, story: string): Promise<EpisodeSummary>;
 
+  /**
+   * 생성 파이프라인이 회차 하나를 만들 때 필요한 것 전부.
+   * 콘티·생성 화면(웅싯)이 이걸 읽어 목 데이터를 대신한다.
+   */
+  getEpisodeContext(episodeId: string): Promise<EpisodeContext | null>;
+  /** 온보딩에서 사연을 받아 시리즈와 1화를 연다. 시리즈가 없으면 같이 만든다. */
+  startEpisode(input: {
+    story: string;
+    cutCount: number;
+    seriesId?: string;
+  }): Promise<{ episodeId: string; seriesId: string }>;
+
+  /** 크레딧 3단. 생성 요청 직전 hold, 성공 commit, 실패 refund. */
+  holdCredit(input: {
+    amount: number;
+    reason: CreditSpendReason;
+    jobId: string;
+  }): Promise<string>;
+  commitCredit(holdId: string): Promise<void>;
+  refundCredit(holdId: string, reason: string): Promise<number>;
+
   /** 운영자 전용. 관리자가 아니면 null 을 돌려준다. */
   getAdminOverview(): Promise<AdminOverview | null>;
+}
+
+/** 회차 하나를 생성하는 데 필요한 고정 컨텍스트. */
+export interface EpisodeContext {
+  episodeId: string;
+  seriesId: string;
+  seriesTitle: string;
+  number: number;
+  /** 사용자가 입력한 사연 원문. 콘티 생성의 입력. */
+  story: string;
+  cutCount: number;
+  rule: SeriesRule;
+  /** 모든 생성 호출에 고정 레퍼런스로 들어갈 에셋. */
+  assets: Asset[];
 }
 
 export interface AssetInput {

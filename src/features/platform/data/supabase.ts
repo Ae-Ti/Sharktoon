@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createCreditLedger } from "@/features/platform/credit/ledger";
 import type { AssetKind } from "@/lib/supabase/database.types";
 import type {
   AdminOverview,
@@ -379,6 +380,118 @@ export const supabaseRepository: PlatformRepository = {
       cutCount: data.cut_count,
       publishedAt: data.published_at,
     };
+  },
+
+  async getEpisodeContext(episodeId: string) {
+    const db = await createClient();
+    const { data } = await db
+      .from("episodes")
+      .select("id, series_id, number, story, cut_count, series(title, series_rules(*))")
+      .eq("id", episodeId)
+      .single();
+    if (!data) return null;
+
+    const series = data.series as unknown as {
+      title: string;
+      series_rules: {
+        style_preset: string;
+        default_cut_count: number;
+        aspect_ratio: "1:1" | "4:5";
+        tone: string | null;
+        fixed_hashtags: string[];
+      }[];
+    } | null;
+    const rule = series?.series_rules?.[0];
+
+    const { data: links } = await db
+      .from("series_assets")
+      .select("assets(id, kind, name, description, tags)")
+      .eq("series_id", data.series_id);
+
+    const assets = ((links ?? []) as unknown as { assets: Asset | null }[])
+      .map((l) => l.assets)
+      .filter((a): a is Asset => Boolean(a))
+      .map((a) => ({ ...a, thumbUrl: null, usedIn: 0, usedInEpisodes: [] }));
+
+    return {
+      episodeId: data.id,
+      seriesId: data.series_id,
+      seriesTitle: series?.title ?? "",
+      number: data.number,
+      story: data.story ?? "",
+      cutCount: data.cut_count,
+      rule: {
+        stylePreset: rule?.style_preset ?? "심플 라인",
+        defaultCutCount: rule?.default_cut_count ?? 6,
+        aspectRatio: rule?.aspect_ratio ?? "4:5",
+        tone: rule?.tone ?? null,
+        fixedHashtags: rule?.fixed_hashtags ?? [],
+      },
+      assets,
+    };
+  },
+
+  async startEpisode({ story, cutCount, seriesId }) {
+    const db = await createClient();
+    const { data: auth } = await db.auth.getUser();
+    if (!auth.user) throw new Error("로그인이 필요해요");
+
+    let sid = seriesId;
+    if (!sid) {
+      // 온보딩에는 아직 시리즈가 없다. 첫 화를 담을 곳을 같이 만든다.
+      const { data: created, error } = await db
+        .from("series")
+        .insert({ owner_id: auth.user.id, title: story.slice(0, 12) || "새 시리즈" })
+        .select("id")
+        .single();
+      if (error) throw error;
+      sid = created.id;
+      await db.from("series_rules").insert({
+        series_id: sid,
+        default_cut_count: cutCount,
+      });
+    }
+
+    const { data: last } = await db
+      .from("episodes")
+      .select("number")
+      .eq("series_id", sid)
+      .order("number", { ascending: false })
+      .limit(1);
+
+    const { data, error } = await db
+      .from("episodes")
+      .insert({
+        series_id: sid,
+        owner_id: auth.user.id,
+        number: (last?.[0]?.number ?? 0) + 1,
+        story,
+        cut_count: cutCount,
+        status: "storyboard",
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    return { episodeId: data.id, seriesId: sid as string };
+  },
+
+  async holdCredit({ amount, reason, jobId }) {
+    return createCreditLedger().hold({ userId: "", amount, reason, jobId });
+  },
+
+  async commitCredit(holdId: string) {
+    await createCreditLedger().commit(holdId as never);
+  },
+
+  async refundCredit(holdId: string, reason: string) {
+    await createCreditLedger().refund(holdId as never, reason);
+    const { data } = await (await createClient())
+      .from("credit_holds")
+      .select("amount")
+      .eq("id", holdId)
+      .single();
+    return data?.amount ?? 0;
   },
 
   async getAdminOverview(): Promise<AdminOverview | null> {

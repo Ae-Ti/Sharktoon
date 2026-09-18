@@ -1,3 +1,4 @@
+import { InsufficientCreditError } from "@/contracts/credit";
 import type {
   AdminOverview,
   Asset,
@@ -142,8 +143,23 @@ const SERIES: SeriesDetail[] = [
   },
 ];
 
+const DEFAULT_RULE: SeriesRule = {
+  stylePreset: "심플 라인",
+  defaultCutCount: 6,
+  aspectRatio: "4:5",
+  tone: null,
+  fixedHashtags: [],
+};
+
 /** 모듈 수준 상태. 새로고침하면 초기화된다. 목이라 그걸로 충분하다. */
 let credit: CreditState = { balance: 11, held: 0 };
+const STORIES: Record<string, string> = {
+  ep_001: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다",
+};
+const HOLDS = new Map<
+  string,
+  { amount: number; reason: string; jobId: string; status: string }
+>();
 let attendance: AttendanceState = { checkedInToday: false, streak: 6 };
 
 export const mockRepository: PlatformRepository = {
@@ -263,6 +279,94 @@ export const mockRepository: PlatformRepository = {
     s.episodes.push(ep);
     s.episodeCount = s.episodes.length;
     return ep;
+  },
+
+  async getEpisodeContext(episodeId: string) {
+    for (const s of SERIES) {
+      const ep = s.episodes.find((e) => e.id === episodeId);
+      if (!ep) continue;
+      return {
+        episodeId: ep.id,
+        seriesId: s.id,
+        seriesTitle: s.title,
+        number: ep.number,
+        story: STORIES[ep.id] ?? "",
+        cutCount: ep.cutCount,
+        rule: s.rule,
+        assets: s.assets,
+      };
+    }
+    return null;
+  },
+
+  async startEpisode({ story, cutCount, seriesId }) {
+    // 온보딩에서는 아직 시리즈가 없다. 첫 화를 담을 곳을 같이 만든다.
+    let series = seriesId
+      ? SERIES.find((s) => s.id === seriesId)
+      : SERIES.find((s) => s.episodes.length === 0);
+
+    if (!series) {
+      series = {
+        id: `sr_${Date.now()}`,
+        title: story.slice(0, 12) || "새 시리즈",
+        description: null,
+        isPublic: false,
+        episodeCount: 0,
+        updatedAt: new Date().toISOString(),
+        rule: { ...DEFAULT_RULE, defaultCutCount: cutCount },
+        episodes: [],
+        assets: [],
+      };
+      SERIES.unshift(series);
+    }
+
+    const number = Math.max(0, ...series.episodes.map((e) => e.number)) + 1;
+    const ep = {
+      id: `ep_${Date.now()}`,
+      number,
+      title: null,
+      status: "storyboard" as const,
+      cutCount,
+      publishedAt: null,
+    };
+    series.episodes.push(ep);
+    series.episodeCount = series.episodes.length;
+    STORIES[ep.id] = story;
+
+    return { episodeId: ep.id, seriesId: series.id };
+  },
+
+  async holdCredit({ amount, reason, jobId }) {
+    if (credit.balance < amount) {
+      throw new InsufficientCreditError(amount, credit.balance);
+    }
+    const id = `hold_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    HOLDS.set(id, { amount, reason, jobId, status: "held" });
+    credit = {
+      balance: credit.balance - amount,
+      held: credit.held + amount,
+      delta: -amount,
+    };
+    return id;
+  },
+
+  async commitCredit(holdId: string) {
+    const h = HOLDS.get(holdId);
+    if (!h || h.status !== "held") throw new Error("이미 정산된 hold 예요");
+    h.status = "committed";
+    credit = { ...credit, held: credit.held - h.amount, delta: undefined };
+  },
+
+  async refundCredit(holdId: string) {
+    const h = HOLDS.get(holdId);
+    if (!h || h.status !== "held") throw new Error("이미 정산된 hold 예요");
+    h.status = "refunded";
+    credit = {
+      balance: credit.balance + h.amount,
+      held: credit.held - h.amount,
+      delta: h.amount,
+    };
+    return h.amount;
   },
 
   async getAdminOverview(): Promise<AdminOverview | null> {

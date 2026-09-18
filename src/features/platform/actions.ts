@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getRepository } from "./data";
+import {
+  InsufficientCreditError,
+  type CreditSpendReason,
+} from "@/contracts/credit";
 import type { AssetInput, SeriesInput, SeriesRule } from "./data/types";
 
 /** 출석 체크. 하루 1크레딧, 7일 연속이면 3크레딧을 더 준다. */
@@ -95,6 +99,80 @@ export async function createEpisodeAction(
     const ep = await repo.createEpisode(seriesId, story);
     revalidatePath(`/series/${seriesId}`);
     return { ok: true, id: ep.id };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * 온보딩에서 받은 사연으로 시리즈와 1화를 연다.
+ * 여기서 만들어진 episodeId 로 콘티·생성 화면이 컨텍스트를 읽는다.
+ */
+export async function startEpisodeAction(input: {
+  story: string;
+  cutCount: number;
+  seriesId?: string;
+}): Promise<{ ok: true; episodeId: string; seriesId: string } | Fail> {
+  try {
+    const repo = await getRepository();
+    const r = await repo.startEpisode(input);
+    revalidatePath("/home");
+    return { ok: true, ...r };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * 생성 요청 직전에 부른다 — 오너: 태일(B), 호출: 웅싯(A).
+ * 부족하면 code "insufficient" 로 돌아온다. 버튼을 막지 말고 충전 시트를 연다.
+ */
+export async function holdCreditAction(input: {
+  amount: number;
+  reason: CreditSpendReason;
+  jobId: string;
+}): Promise<
+  | { ok: true; holdId: string }
+  | { ok: false; code: "insufficient"; required: number; available: number }
+  | Fail
+> {
+  try {
+    const repo = await getRepository();
+    const holdId = await repo.holdCredit(input);
+    return { ok: true, holdId };
+  } catch (e) {
+    if (e instanceof InsufficientCreditError) {
+      return {
+        ok: false,
+        code: "insufficient",
+        required: e.required,
+        available: e.available,
+      };
+    }
+    return fail(e);
+  }
+}
+
+/** 생성이 성공했을 때. 차감이 확정된다. */
+export async function commitCreditAction(holdId: string): Promise<Result> {
+  try {
+    const repo = await getRepository();
+    await repo.commitCredit(holdId);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 생성이 실패했을 때. 자동 환불이고 사용자에게 보이게 알린다. */
+export async function refundCreditAction(
+  holdId: string,
+  reason: string,
+): Promise<{ ok: true; amount: number } | Fail> {
+  try {
+    const repo = await getRepository();
+    const amount = await repo.refundCredit(holdId, reason);
+    return { ok: true, amount };
   } catch (e) {
     return fail(e);
   }

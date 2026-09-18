@@ -1,6 +1,9 @@
 "use client";
 
-import { ButtonLink, Field } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Button, Field } from "@/components/ui";
+import { startEpisodeAction } from "@/features/platform/actions";
 import { cn } from "@/lib/cn";
 import { useOnboarding } from "@/features/platform/onboarding/OnboardingContext";
 
@@ -14,6 +17,19 @@ const CUT_COUNTS = [4, 6, 8] as const;
 
 export default function Page() {
   const { story, cutCount, set, skip } = useOnboarding();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  /** 사연을 회차로 저장하고 콘티 화면으로 넘긴다. 콘티 생성은 크레딧을 쓰지 않는다. */
+  function begin(text: string) {
+    setError(null);
+    start(async () => {
+      const r = await startEpisodeAction({ story: text, cutCount });
+      if (r.ok) router.push(`/episodes/${r.episodeId}/storyboard`);
+      else setError(r.message);
+    });
+  }
 
   return (
     <>
@@ -78,20 +94,28 @@ export default function Page() {
       <div className="flex-1" />
 
       <div className="flex flex-col gap-2">
-        <ButtonLink href="/episodes/ep_001/storyboard" size="lg" block>
+        {error && <p className="text-body-sm text-danger">{error}</p>}
+        <Button
+          size="lg"
+          block
+          loading={pending}
+          disabled={!story.trim()}
+          onClick={() => begin(story.trim())}
+        >
           콘티 만들기
-        </ButtonLink>
-        <ButtonLink
-          href="/episodes/ep_001/storyboard"
+        </Button>
+        <Button
           variant="ghost"
           block
+          disabled={pending}
           onClick={() => {
             set("story", EXAMPLES[0].text);
             skip("story");
+            begin(EXAMPLES[0].text);
           }}
         >
           예시 사연으로 해볼래요
-        </ButtonLink>
+        </Button>
       </div>
     </>
   );
