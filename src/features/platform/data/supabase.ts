@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createCreditLedger } from "@/features/platform/credit/ledger";
+import { createServiceClient } from "@/lib/supabase/service";
+import { resolveImages } from "./images";
 import type { AssetKind } from "@/lib/supabase/database.types";
 import type {
   AdminOverview,
@@ -28,7 +30,77 @@ function episodeLabel(number: number, status: string) {
   return status === "published" ? `${number}화` : `${number}화 초안`;
 }
 
+type AssetRow = {
+  id: string;
+  kind: AssetKind;
+  name: string;
+  description: string | null;
+  tags: string[];
+  reference_paths: string[];
+};
+
+/** 에셋 행 → 화면 모양. 레퍼런스 경로는 서명 URL 로 바꾼다(소유자 경로만). */
+async function toAssets(
+  ownerId: string,
+  rows: AssetRow[],
+  usage: (id: string) => string[] = () => [],
+): Promise<Asset[]> {
+  const urls = await resolveImages(
+    "assets",
+    ownerId,
+    rows.flatMap((r) => r.reference_paths ?? []),
+  );
+  return rows.map((r) => {
+    const referenceUrls = (r.reference_paths ?? [])
+      .map((p) => urls.get(p))
+      .filter((u): u is string => Boolean(u));
+    const used = usage(r.id);
+    return {
+      id: r.id,
+      kind: r.kind,
+      name: r.name,
+      description: r.description,
+      tags: r.tags,
+      thumbUrl: referenceUrls[0] ?? null,
+      referenceUrls,
+      usedIn: used.length,
+      usedInEpisodes: used,
+    };
+  });
+}
+
+type RuleRow = {
+  style_preset: string;
+  default_cut_count: number;
+  aspect_ratio: "1:1" | "4:5";
+  tone: string | null;
+  fixed_hashtags: string[];
+};
+
+/**
+ * series_rules 는 series 와 1:1(기본 키가 series_id)이라 PostgREST 가 배열이 아니라
+ * 객체로 준다. 예전 코드는 `[0]` 으로 읽어서 실제 저장소에서는 규칙이 늘 기본값으로
+ * 보였다(2026-10-02 실 테스트: 파스텔을 골랐는데 심플 라인). 둘 다 받는다.
+ */
+function oneRule(value: unknown): RuleRow | undefined {
+  if (Array.isArray(value)) return value[0] as RuleRow | undefined;
+  return (value as RuleRow | null) ?? undefined;
+}
+
+async function requireUserId(): Promise<string> {
+  const db = await createClient();
+  const { data } = await db.auth.getUser();
+  if (!data.user) throw new Error("로그인이 필요해요");
+  return data.user.id;
+}
+
 export const supabaseRepository: PlatformRepository = {
+  async currentUserId() {
+    const db = await createClient();
+    const { data } = await db.auth.getUser();
+    return data.user?.id ?? null;
+  },
+
   async getProfile() {
     const db = await createClient();
     const { data: auth } = await db.auth.getUser();
@@ -116,15 +188,7 @@ export const supabaseRepository: PlatformRepository = {
       .single();
     if (!data) return null;
 
-    const rule = (data.series_rules as unknown as
-      | {
-          style_preset: string;
-          default_cut_count: number;
-          aspect_ratio: "1:1" | "4:5";
-          tone: string | null;
-          fixed_hashtags: string[];
-        }[]
-      | null)?.[0];
+    const rule = oneRule(data.series_rules);
 
     const episodes = ((data.episodes ?? []) as unknown as {
       id: string;
@@ -146,12 +210,16 @@ export const supabaseRepository: PlatformRepository = {
 
     const { data: links } = await db
       .from("series_assets")
-      .select("assets(*)")
+      .select("assets(id, kind, name, description, tags, reference_paths)")
       .eq("series_id", id);
 
-    const assets = ((links ?? []) as unknown as { assets: Record<string, never> }[])
-      .map((l) => l.assets)
-      .filter(Boolean) as unknown as Asset[];
+    const ownerId = await requireUserId();
+    const assets = await toAssets(
+      ownerId,
+      ((links ?? []) as unknown as { assets: AssetRow | null }[])
+        .map((l) => l.assets)
+        .filter((a): a is AssetRow => Boolean(a)),
+    );
 
     return {
       id: data.id,
@@ -161,7 +229,7 @@ export const supabaseRepository: PlatformRepository = {
       updatedAt: data.updated_at,
       episodeCount: episodes.length,
       rule: {
-        stylePreset: rule?.style_preset ?? "simple_line",
+        stylePreset: rule?.style_preset ?? "심플 라인",
         defaultCutCount: rule?.default_cut_count ?? 6,
         aspectRatio: rule?.aspect_ratio ?? "4:5",
         tone: rule?.tone ?? null,
@@ -174,34 +242,31 @@ export const supabaseRepository: PlatformRepository = {
 
   async listAssets(kind) {
     const db = await createClient();
+    const ownerId = await requireUserId();
     let q = db
       .from("assets")
       .select("id, kind, name, description, tags, reference_paths, asset_references(episodes(number, status))");
     if (kind) q = q.eq("kind", kind);
     const { data } = await q.order("created_at", { ascending: true });
+    const rows = data ?? [];
 
-    return (data ?? []).map((a) => {
-      const refs = (a.asset_references as unknown as
-        | { episodes: { number: number; status: string } | null }[]
-        | null) ?? [];
-      const labels = refs
-        .map((r) => r.episodes)
-        .filter((e): e is { number: number; status: string } => Boolean(e))
-        .sort((x, y) => x.number - y.number)
-        .map((e) => episodeLabel(e.number, e.status));
+    const labelsOf = new Map(
+      rows.map((a) => {
+        const refs = (a.asset_references as unknown as
+          | { episodes: { number: number; status: string } | null }[]
+          | null) ?? [];
+        return [
+          a.id,
+          refs
+            .map((r) => r.episodes)
+            .filter((e): e is { number: number; status: string } => Boolean(e))
+            .sort((x, y) => x.number - y.number)
+            .map((e) => episodeLabel(e.number, e.status)),
+        ] as const;
+      }),
+    );
 
-      return {
-        id: a.id,
-        kind: a.kind,
-        name: a.name,
-        description: a.description,
-        tags: a.tags,
-        // 원본은 서명 URL 로만 노출한다. 목록에서는 경로만 알고 화면에서 발급받는다.
-        thumbUrl: null,
-        usedIn: labels.length,
-        usedInEpisodes: labels,
-      };
-    });
+    return toAssets(ownerId, rows, (id) => labelsOf.get(id) ?? []);
   },
 
   async countAssetsByKind() {
@@ -221,20 +286,12 @@ export const supabaseRepository: PlatformRepository = {
     const { data, error } = await db
       .from("assets")
       .insert({ ...input, owner_id: auth.user.id })
-      .select("id, kind, name, description, tags")
+      .select("id, kind, name, description, tags, reference_paths")
       .single();
     if (error) throw error;
 
-    return {
-      id: data.id,
-      kind: data.kind,
-      name: data.name,
-      description: data.description,
-      tags: data.tags,
-      thumbUrl: null,
-      usedIn: 0,
-      usedInEpisodes: [],
-    };
+    const [asset] = await toAssets(auth.user.id, [data]);
+    return asset;
   },
 
   async updateAsset(id: string, input: AssetInput) {
@@ -243,25 +300,20 @@ export const supabaseRepository: PlatformRepository = {
       .from("assets")
       .update(input)
       .eq("id", id)
-      .select("id, kind, name, description, tags")
+      .select("id, kind, name, description, tags, reference_paths, asset_references(episodes(number, status))")
       .single();
     if (error) throw error;
 
-    const { count } = await db
-      .from("asset_references")
-      .select("*", { count: "exact", head: true })
-      .eq("asset_id", id);
+    const labels = ((data.asset_references as unknown as
+      | { episodes: { number: number; status: string } | null }[]
+      | null) ?? [])
+      .map((r) => r.episodes)
+      .filter((e): e is { number: number; status: string } => Boolean(e))
+      .sort((x, y) => x.number - y.number)
+      .map((e) => episodeLabel(e.number, e.status));
 
-    return {
-      id: data.id,
-      kind: data.kind,
-      name: data.name,
-      description: data.description,
-      tags: data.tags,
-      thumbUrl: null,
-      usedIn: count ?? 0,
-      usedInEpisodes: [],
-    };
+    const [asset] = await toAssets(await requireUserId(), [data], () => labels);
+    return asset;
   },
 
   async deleteAsset(id: string) {
@@ -277,6 +329,42 @@ export const supabaseRepository: PlatformRepository = {
       );
     }
     const { error } = await db.from("assets").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  async setAssetReferences(assetId: string, refs: string[]) {
+    const db = await createClient();
+    const { error } = await db
+      .from("assets")
+      .update({ reference_paths: refs })
+      .eq("id", assetId);
+    if (error) throw error;
+  },
+
+  async addAssetReference(assetId: string, ref: string) {
+    const db = await createClient();
+    const { data, error } = await db
+      .from("assets")
+      .select("reference_paths")
+      .eq("id", assetId)
+      .single();
+    if (error) throw error;
+    const { error: updateError } = await db
+      .from("assets")
+      .update({ reference_paths: [ref, ...(data.reference_paths ?? [])].slice(0, 8) })
+      .eq("id", assetId);
+    if (updateError) throw updateError;
+  },
+
+  async recordAssetReferences(episodeId: string, assetIds: string[]) {
+    if (assetIds.length === 0) return;
+    const db = await createClient();
+    const { error } = await db
+      .from("asset_references")
+      .upsert(
+        assetIds.map((asset_id) => ({ episode_id: episodeId, asset_id })),
+        { onConflict: "episode_id,asset_id", ignoreDuplicates: true },
+      );
     if (error) throw error;
   },
 
@@ -413,27 +501,20 @@ export const supabaseRepository: PlatformRepository = {
       .single();
     if (!data) return null;
 
-    const series = data.series as unknown as {
-      title: string;
-      series_rules: {
-        style_preset: string;
-        default_cut_count: number;
-        aspect_ratio: "1:1" | "4:5";
-        tone: string | null;
-        fixed_hashtags: string[];
-      }[];
-    } | null;
-    const rule = series?.series_rules?.[0];
+    const series = data.series as unknown as { title: string; series_rules: unknown } | null;
+    const rule = oneRule(series?.series_rules);
 
     const { data: links } = await db
       .from("series_assets")
-      .select("assets(id, kind, name, description, tags)")
+      .select("assets(id, kind, name, description, tags, reference_paths)")
       .eq("series_id", data.series_id);
 
-    const assets = ((links ?? []) as unknown as { assets: Asset | null }[])
-      .map((l) => l.assets)
-      .filter((a): a is Asset => Boolean(a))
-      .map((a) => ({ ...a, thumbUrl: null, usedIn: 0, usedInEpisodes: [] }));
+    const assets = await toAssets(
+      await requireUserId(),
+      ((links ?? []) as unknown as { assets: AssetRow | null }[])
+        .map((l) => l.assets)
+        .filter((a): a is AssetRow => Boolean(a)),
+    );
 
     return {
       episodeId: data.id,
@@ -453,7 +534,7 @@ export const supabaseRepository: PlatformRepository = {
     };
   },
 
-  async startEpisode({ story, cutCount, seriesId }) {
+  async startEpisode({ story, cutCount, seriesId, stylePreset, characterAssetId }) {
     const db = await createClient();
     const { data: auth } = await db.auth.getUser();
     if (!auth.user) throw new Error("로그인이 필요해요");
@@ -468,10 +549,23 @@ export const supabaseRepository: PlatformRepository = {
         .single();
       if (error) throw error;
       sid = created.id;
-      await db.from("series_rules").insert({
+      const { error: ruleError } = await db.from("series_rules").insert({
         series_id: sid,
         default_cut_count: cutCount,
+        style_preset: stylePreset ?? "심플 라인",
       });
+      if (ruleError) throw ruleError;
+    }
+
+    if (characterAssetId) {
+      // 온보딩에서 만든 캐릭터는 이 시리즈의 고정 에셋이 된다. 2화부터 자동으로 붙는다.
+      const { error: linkError } = await db
+        .from("series_assets")
+        .upsert(
+          { series_id: sid as string, asset_id: characterAssetId },
+          { onConflict: "series_id,asset_id", ignoreDuplicates: true },
+        );
+      if (linkError) throw linkError;
     }
 
     const { data: last } = await db
@@ -498,8 +592,8 @@ export const supabaseRepository: PlatformRepository = {
     return { episodeId: data.id, seriesId: sid as string };
   },
 
-  async holdCredit({ amount, reason, jobId }) {
-    return createCreditLedger().hold({ userId: "", amount, reason, jobId });
+  async holdCredit({ userId, amount, reason, jobId }) {
+    return createCreditLedger().hold({ userId, amount, reason, jobId });
   },
 
   async commitCredit(holdId: string) {
@@ -507,13 +601,20 @@ export const supabaseRepository: PlatformRepository = {
   },
 
   async refundCredit(holdId: string, reason: string) {
-    await createCreditLedger().refund(holdId as never, reason);
-    const { data } = await (await createClient())
+    return createCreditLedger().refund(holdId as never, reason);
+  },
+
+  async refundOpenHolds(jobId: string, reason: string) {
+    const ledger = createCreditLedger();
+    const { data, error } = await createServiceClient()
       .from("credit_holds")
-      .select("amount")
-      .eq("id", holdId)
-      .single();
-    return data?.amount ?? 0;
+      .select("id")
+      .eq("job_id", jobId)
+      .eq("status", "held");
+    if (error) throw error;
+    let total = 0;
+    for (const h of data ?? []) total += await ledger.refund(h.id as never, reason);
+    return total;
   },
 
   async getAdminOverview(): Promise<AdminOverview | null> {

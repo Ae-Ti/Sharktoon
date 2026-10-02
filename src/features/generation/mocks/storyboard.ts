@@ -22,6 +22,7 @@ export const MOCK_STORYBOARD: Storyboard = {
   episodeId: MOCK_EPISODE_ID,
   seriesId: MOCK_SERIES_ID,
   status: "draft",
+  characters: Object.entries(MOCK_CHARACTERS).map(([key, name]) => ({ key, name })),
   story:
     "퇴근 10분 전에 팀장님이 내일 아침까지 해달라며 일을 넘겼다. 화가 났지만 아무 말도 못 하고 집에 왔는데, 문 열자마자 강아지가 꼬리를 흔들며 달려와서 그냥 울어버렸다.",
   cuts: [

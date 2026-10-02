@@ -21,7 +21,22 @@ export interface JobQueue {
   requeue(jobId: string, cutId: string): Promise<void>;
   /** 화면이 폴링하는 현재 상태. Realtime 이 붙으면 이 값을 푸시로 바꾼다. */
   get(jobId: string): Promise<GenerationJob | null>;
+  /** 저장소에서 읽은 잡을 다시 올린다(서버 재시작 뒤). 돌리지는 않는다. */
+  restore(job: GenerationJob): Promise<void>;
+  /** 이 사용자의 아직 안 끝난 잡 수. 사용자별 동시 생성 3화 제한에 쓴다. */
+  countActive(userId: string): Promise<number>;
 }
+
+/**
+ * 큐가 잡 상태를 바깥에 알리는 자리. 진행률 틱마다 부르지 않고
+ * 등록·컷 종료·잡 종료처럼 상태가 실제로 바뀔 때만 부른다. 저장소에 사본을 남기는 데 쓴다.
+ */
+export interface QueueHooks {
+  onChange?: (job: GenerationJob, event: "submit" | "cut" | "settle") => void;
+}
+
+/** 사용자별 동시 생성 상한(PRD 비기능 요구사항 "사용자별 동시 생성은 3화로 제한한다"). */
+export const MAX_ACTIVE_JOBS_PER_USER = 3;
 
 /**
  * 동시 생성 상한. PRD 비기능 요구사항의 "사용자별 동시 생성은 3화로 제한한다"와

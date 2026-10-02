@@ -1,6 +1,9 @@
+import { notFound } from "next/navigation";
 import { StoryboardScreen } from "@/features/generation/components/StoryboardScreen";
+import { getGenerationStore } from "@/features/generation/data";
 import { titlesOf } from "@/features/generation/episodeTitle";
-import { MOCK_STORYBOARD } from "@/features/generation/mocks/storyboard";
+import { isAnthropicConfigured } from "@/features/generation/llm";
+import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
 
 export const metadata = { title: "콘티 — 샥툰" };
@@ -12,14 +15,25 @@ export default async function Page({
 }) {
   const { episodeId } = await params;
   const context = await loadEpisodeContext(episodeId);
+  if (!context) notFound();
 
-  // 콘티 저장소가 붙기 전까지는 목 콘티에 회차의 사연만 얹는다.
-  const initial = {
-    ...MOCK_STORYBOARD,
-    episodeId,
-    seriesId: context?.seriesId ?? MOCK_STORYBOARD.seriesId,
-    story: context?.story ?? MOCK_STORYBOARD.story,
-  };
+  const [saved, credit] = await Promise.all([
+    (await getGenerationStore()).getStoryboard(episodeId),
+    (await getRepository()).getCredit(),
+  ]);
 
-  return <StoryboardScreen initial={initial} {...titlesOf(context)} />;
+  return (
+    <StoryboardScreen
+      // 콘티가 아직 없으면 화면이 열리자마자 만든다. 페이지를 30초 붙잡아 두지 않는다.
+      initial={saved?.storyboard ?? null}
+      usedMock={saved?.usedMock ?? !isAnthropicConfigured()}
+      episodeId={episodeId}
+      story={context.story}
+      fixedCharacters={context.assets.filter((a) => a.kind === "character").map((a) => a.name)}
+      stylePreset={context.rule.stylePreset}
+      aspectRatio={context.rule.aspectRatio}
+      credits={credit.balance}
+      {...titlesOf(context)}
+    />
+  );
 }

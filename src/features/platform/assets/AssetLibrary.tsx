@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { cn } from "@/lib/cn";
 import { AssetCard, Badge, Button, EmptyState, Modal, Tabs } from "@/components/ui";
 import { deleteAssetAction } from "@/features/platform/actions";
 import type { Asset, AssetKind } from "@/features/platform/data/types";
@@ -70,6 +71,12 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
                     kind={LABEL[a.kind]}
                     kindTone={a.kind === "character" ? "brand" : "neutral"}
                     usedIn={a.usedIn}
+                    thumb={
+                      a.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.thumbUrl} alt="" className="size-full object-cover" />
+                      ) : undefined
+                    }
                     onClick={() => setPickedId(a.id)}
                   />
                 </li>
@@ -80,11 +87,28 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
 
         {picked && (
           <aside className="flex w-full shrink-0 flex-col gap-4 rounded-lg border border-border bg-surface-card p-5 lg:w-80">
-            <div className="grid h-45 place-items-center rounded-md bg-skeleton px-4 text-center text-caption text-ink-subtle">
-              {picked.kind === "character"
-                ? "캐릭터 시트 · 정면 / 측면 / 표정 4종 / 전신"
-                : "레퍼런스 이미지"}
-            </div>
+            {picked.referenceUrls.length > 0 ? (
+              <div className="grid grid-cols-4 gap-1.5">
+                {picked.referenceUrls.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={url}
+                    src={url}
+                    alt={`레퍼런스 ${i + 1}`}
+                    className={cn(
+                      "aspect-square w-full rounded-md border border-border object-cover",
+                      i === 0 && "col-span-2 row-span-2",
+                    )}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid h-45 place-items-center rounded-md bg-skeleton px-4 text-center text-caption text-ink-subtle">
+                {picked.kind === "character"
+                  ? "캐릭터 시트 · 정면 / 측면 / 표정 4종 / 전신"
+                  : "레퍼런스 이미지"}
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <h2 className="text-title font-semibold">{picked.name}</h2>
               {picked.description && (

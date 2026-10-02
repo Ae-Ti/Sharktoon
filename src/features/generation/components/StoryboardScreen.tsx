@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Badge,
@@ -16,32 +16,143 @@ import {
   CAMERA_LABEL,
   EMOTION_LABEL,
   canGenerate,
+  characterName,
   reindexCuts,
   type Storyboard,
   type StoryboardCut,
 } from "../types/storyboard";
 import { BALLOON_LABEL } from "../types/layer";
-import { MOCK_CHARACTERS } from "../mocks/storyboard";
 import {
   generateStoryboardAction,
+  saveStoryboardAction,
   startGenerationAction,
   type ActionResult,
 } from "../actions";
 import { EpisodeHeader } from "./EpisodeHeader";
 
+/** 콘티 편집은 이만큼 멈추면 저장한다. 생성 버튼을 누르면 그 자리에서 한 번 더 저장된다. */
+const AUTOSAVE_MS = 1500;
+
 /** PRD 2.2 — 사연 기반 콘티 생성. 이미지 생성 전에 컷을 손보는 화면이다. */
 export interface StoryboardScreenProps {
-  initial: Storyboard;
-  /** 회차 컨텍스트(태일). 없으면 목으로 보고 있는 중이다. */
+  /** 저장된 콘티. 없으면 열자마자 만든다. */
+  initial: Storyboard | null;
+  /** 모델 없이 만든 목 콘티인지. 화면 위에 알린다. */
+  usedMock: boolean;
+  episodeId: string;
+  /** 회차에 저장된 사연 원문. */
+  story: string;
+  /** 시리즈 고정 캐릭터 이름. 모든 컷에 자동으로 붙는다. */
+  fixedCharacters: string[];
+  stylePreset: string;
+  aspectRatio: string;
+  credits: number;
   seriesTitle: string;
   episodeTitle: string;
 }
 
-export function StoryboardScreen({
+export function StoryboardScreen(props: StoryboardScreenProps) {
+  const [sb, setSb] = useState(props.initial);
+  const [usedMock, setUsedMock] = useState(props.usedMock);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState(props.story);
+  const [attempt, setAttempt] = useState(0);
+  const started = useRef(-1);
+
+  // 콘티가 없으면 바로 만든다. 콘티 생성은 크레딧을 쓰지 않는다.
+  // 사연이 비었거나 막히면 이 자리에서 고쳐 다시 만든다(attempt 가 오르면 다시 돈다).
+  useEffect(() => {
+    if (sb || started.current === attempt) return;
+    started.current = attempt;
+    void generateStoryboardAction({
+      episodeId: props.episodeId,
+      story: attempt === 0 ? undefined : draft,
+    }).then((r) => {
+      if (r.ok) {
+        setSb(r.data.storyboard);
+        setUsedMock(r.data.usedMock);
+      } else {
+        setError(r.message);
+      }
+    });
+  }, [sb, props.episodeId, attempt, draft]);
+
+  if (!sb) {
+    return (
+      <div className="min-h-dvh bg-surface-page">
+        <EpisodeHeader
+          episodeId={props.episodeId}
+          seriesTitle={props.seriesTitle}
+          episodeTitle={props.episodeTitle}
+          current="storyboard"
+          credits={props.credits}
+        />
+        <main className="mx-auto flex max-w-[720px] flex-col items-center gap-4 p-10 text-center">
+          {error ? (
+            <div className="flex w-full flex-col gap-3 text-left">
+              <p className="text-body text-danger">{error}</p>
+              <Field
+                label="사연"
+                multiline
+                rows={5}
+                value={draft}
+                onChange={setDraft}
+                placeholder="어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다"
+                maxLength={500}
+              />
+              <Button
+                disabled={draft.trim().length < 10}
+                onClick={() => {
+                  setError(null);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                이 사연으로 콘티 만들기
+              </Button>
+            </div>
+          ) : (
+            <>
+              <span
+                aria-hidden
+                className="size-8 animate-spin rounded-full border-4 border-brand border-r-transparent"
+              />
+              <p className="text-body font-semibold text-ink">사연으로 콘티를 짜고 있어요</p>
+              {draft && <p className="max-w-md text-body-sm text-ink-muted">“{draft}”</p>}
+              <p className="text-caption text-ink-subtle">30초 안쪽이면 돼요. 크레딧은 쓰지 않아요.</p>
+            </>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <StoryboardEditor
+      {...props}
+      initial={sb}
+      usedMock={usedMock}
+      onReplaced={(next, mock) => {
+        setSb(next);
+        setUsedMock(mock);
+      }}
+    />
+  );
+}
+
+function StoryboardEditor({
   initial,
+  usedMock,
+  fixedCharacters,
+  stylePreset,
+  aspectRatio,
+  credits,
   seriesTitle,
   episodeTitle,
-}: StoryboardScreenProps) {
+  onReplaced,
+}: Omit<StoryboardScreenProps, "initial"> & {
+  initial: Storyboard;
+  onReplaced: (sb: Storyboard, usedMock: boolean) => void;
+}) {
   const router = useRouter();
   const [sb, setSb] = useState(initial);
   const [story, setStory] = useState(initial.story);
@@ -74,18 +185,33 @@ export function StoryboardScreen({
     return null;
   }
 
+  // 편집 자동 저장. 순서·추가·삭제·대사·후킹·CTA 를 고칠 때마다 1.5초 뒤 보낸다.
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  /** 서버에 있는 것과 같으면 보내지 않는다. 열자마자 "저장 대기 중"이 뜨지 않게. */
+  const lastSaved = useRef(JSON.stringify(initial));
+  useEffect(() => {
+    const body = JSON.stringify(sb);
+    if (body === lastSaved.current) return;
+    const timer = setTimeout(async () => {
+      setSaveNote("저장 중");
+      const r = await saveStoryboardAction(sb);
+      if (r.ok) lastSaved.current = body;
+      setSaveNote(r.ok ? "저장됨" : r.message);
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [sb]);
+
   /** PRD 2.2 — 사연을 고쳐서 콘티를 다시 만든다. 크레딧을 쓰지 않는다. */
   function regenerateStoryboard() {
     startTransition(async () => {
       const data = handle(
-        await generateStoryboardAction({
-          story,
-          episodeId: sb.episodeId,
-          seriesId: sb.seriesId,
-          cutCount: sb.cuts.length || 6,
-        }),
+        await generateStoryboardAction({ episodeId: sb.episodeId, story }),
       );
-      if (data) setSb(data.storyboard);
+      if (data) {
+        lastSaved.current = JSON.stringify(data.storyboard);
+        setSb(data.storyboard);
+        onReplaced(data.storyboard, data.usedMock);
+      }
     });
   }
 
@@ -124,7 +250,7 @@ export function StoryboardScreen({
     setSb((s) => {
       const at = s.cuts.findIndex((c) => c.id === id);
       const fresh: StoryboardCut = {
-        id: `cut_new_${Date.now()}`,
+        id: `cut_${crypto.randomUUID().slice(0, 12)}`,
         index: 0,
         scene: "",
         characterIds: [],
@@ -145,7 +271,7 @@ export function StoryboardScreen({
         seriesTitle={seriesTitle}
         episodeTitle={episodeTitle}
         current="storyboard"
-        credits={12}
+        credits={credits}
         action={
           <Button
             size="sm"
@@ -168,9 +294,22 @@ export function StoryboardScreen({
           pending={pending}
           onChange={setStory}
           onRegenerate={regenerateStoryboard}
+          fixedCharacters={fixedCharacters}
+          stylePreset={stylePreset}
+          aspectRatio={aspectRatio}
         />
 
         <section aria-label="컷 목록" className="flex flex-col gap-3">
+          {usedMock && (
+            <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
+              모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
+            </p>
+          )}
+          {saveNote && (
+            <p aria-live="polite" className="text-right text-caption text-ink-subtle">
+              {saveNote}
+            </p>
+          )}
           {notice && (
             <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
               {notice}
@@ -187,6 +326,7 @@ export function StoryboardScreen({
               <CutCard
                 key={cut.id}
                 cut={cut}
+                nameOf={(key) => characterName(sb, key)}
                 total={sb.cuts.length}
                 selected={cut.id === selectedId}
                 hookText={
@@ -220,7 +360,7 @@ export function StoryboardScreen({
           {isFirst && (
             <OptionPanel
               title="1컷 후킹"
-              caption="첫 컷에서 멈추면 나머지 다섯 컷은 아무도 안 봅니다."
+              caption={`첫 컷에서 멈추면 나머지 ${sb.cuts.length - 1}컷은 아무도 안 봅니다.`}
             >
               {sb.hookOptions.map((o) => (
                 <ChoiceCard
@@ -257,7 +397,7 @@ export function StoryboardScreen({
                 <Row label="감정">{EMOTION_LABEL[selected.emotion]}</Row>
                 <Row label="카메라">{CAMERA_LABEL[selected.camera]}</Row>
                 <Row label="등장인물">
-                  {selected.characterIds.map((id) => MOCK_CHARACTERS[id]).join(", ") ||
+                  {selected.characterIds.map((id) => characterName(sb, id)).join(", ") ||
                     "없음"}
                 </Row>
               </dl>
@@ -301,12 +441,18 @@ function StorySidebar({
   pending,
   onChange,
   onRegenerate,
+  fixedCharacters,
+  stylePreset,
+  aspectRatio,
 }: {
   story: string;
   cutCount: number;
   pending: boolean;
   onChange: (value: string) => void;
   onRegenerate: () => void;
+  fixedCharacters: string[];
+  stylePreset: string;
+  aspectRatio: string;
 }) {
   return (
     <aside aria-label="사연" className="flex flex-col gap-4">
@@ -336,13 +482,14 @@ function StorySidebar({
           않아도 돼요.
         </p>
         <div className="flex flex-wrap gap-1">
-          {Object.values(MOCK_CHARACTERS).map((name) => (
+          {fixedCharacters.map((name) => (
             <Badge key={name} tone="brand">
               {name}
             </Badge>
           ))}
-          <Badge>손그림 파스텔</Badge>
-          <Badge>1:1</Badge>
+          {fixedCharacters.length === 0 && <Badge>기본 캐릭터</Badge>}
+          <Badge>{stylePreset}</Badge>
+          <Badge>{aspectRatio}</Badge>
         </div>
       </div>
     </aside>
@@ -351,6 +498,7 @@ function StorySidebar({
 
 function CutCard({
   cut,
+  nameOf,
   total,
   selected,
   hookText,
@@ -363,6 +511,7 @@ function CutCard({
   onChangeNarration,
 }: {
   cut: StoryboardCut;
+  nameOf: (key: string | null) => string;
   total: number;
   selected: boolean;
   hookText?: string;
@@ -426,7 +575,7 @@ function CutCard({
           {cut.dialogue.map((line) => (
             <li key={line.id} className="flex items-start gap-2">
               <span className="mt-1 shrink-0 text-caption font-semibold text-ink-subtle">
-                {line.speakerId ? MOCK_CHARACTERS[line.speakerId] : "효과음"}
+                {nameOf(line.speakerId)}
                 <span className="ml-1 font-normal">· {BALLOON_LABEL[line.balloon]}</span>
               </span>
               <input

@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 grant usage on schema public to authenticated;
-grant select, insert, update, delete on all tables in schema public to authenticated;
+-- 테이블 권한은 00_auth_stub 의 Supabase 기본값을 그대로 쓴다. 여기서 넓히면 마이그레이션의 revoke 가 가려진다.
 grant usage on schema auth to authenticated;
 grant select on auth.users to authenticated;
 

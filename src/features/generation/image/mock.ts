@@ -5,12 +5,16 @@
  * 파이프라인·큐·환불·화면은 이 구현으로 전부 완성할 수 있다.
  */
 
-import type {
-  CutGenerationRequest,
-  CutGenerationResult,
-  ImageGenerator,
+import {
+  CHARACTER_SHEET_LABEL,
+  CHARACTER_SHEET_VIEWS,
+  type CharacterSheetRequest,
+  type CharacterSheetResult,
+  type CutGenerationRequest,
+  type CutGenerationResult,
+  type ImageGenerator,
 } from "@/contracts/generation";
-import { mockCutImageUrl } from "../mocks/cutImage";
+import { mockCutImageUrl, mockSheetImageUrl } from "../mocks/cutImage";
 
 /** 실제 모델이 컷 하나에 쓰는 시간대. 화면의 진행률이 그럴듯하게 보이는 정도. */
 const MIN_MS = 1200;
@@ -22,7 +26,9 @@ const MAX_MS = 2600;
  */
 const FAIL_CUTS = (process.env.SHARKTOON_MOCK_FAIL_CUTS ?? "4")
   .split(",")
-  .map((s) => Number(s.trim()))
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .map(Number)
   .filter((n) => Number.isFinite(n));
 
 export class MockImageGenerator implements ImageGenerator {
@@ -32,15 +38,32 @@ export class MockImageGenerator implements ImageGenerator {
   async generateCut(req: CutGenerationRequest): Promise<CutGenerationResult> {
     await sleep(MIN_MS + Math.random() * (MAX_MS - MIN_MS));
 
-    const cutNumber = cutNumberOf(req.cutId);
-    if (cutNumber != null && FAIL_CUTS.includes(cutNumber) && !this.failedOnce.has(req.cutId)) {
+    if (FAIL_CUTS.includes(req.index) && !this.failedOnce.has(req.cutId)) {
       this.failedOnce.add(req.cutId);
       throw new Error("안전 필터에 걸려 이미지를 못 만들었어요");
     }
 
+    const height = req.seriesRule.aspectRatio === "4:5" ? 1350 : 1080;
     return {
       cutId: req.cutId,
-      imageUrl: mockCutImageUrl(cutNumber ?? 1, req.prompt.slice(0, 18)),
+      imageUrl: mockCutImageUrl(req.index, req.prompt.slice(0, 18), height),
+      metadata: {
+        model: "mock-image-generator",
+        generatedAt: new Date().toISOString(),
+        aiGenerated: true,
+      },
+    };
+  }
+
+  async generateCharacterSheet(req: CharacterSheetRequest): Promise<CharacterSheetResult> {
+    await sleep(MIN_MS);
+    // 이름에서 색을 뽑아 캐릭터마다 다르되 매번 같게 보이게 한다.
+    const hue = [...req.name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
+    return {
+      views: CHARACTER_SHEET_VIEWS.map((view) => ({
+        view,
+        imageUrl: mockSheetImageUrl(CHARACTER_SHEET_LABEL[view], req.name, hue),
+      })),
       metadata: {
         model: "mock-image-generator",
         generatedAt: new Date().toISOString(),
@@ -53,12 +76,6 @@ export class MockImageGenerator implements ImageGenerator {
   supportsInpainting(): boolean {
     return false;
   }
-}
-
-/** cut_3 → 3. 목 이미지의 번호와 실패 컷 판정에만 쓴다. */
-function cutNumberOf(cutId: string): number | null {
-  const m = /(\d+)$/.exec(cutId);
-  return m ? Number(m[1]) : null;
 }
 
 function sleep(ms: number): Promise<void> {

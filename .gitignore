@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 키 자리만 있는 예시 파일은 공유한다. 문서의 `cp .env.example .env.local` 이 이걸 쓴다.
+!.env.example
 
 # vercel
 .vercel

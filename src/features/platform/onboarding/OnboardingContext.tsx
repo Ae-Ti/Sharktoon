@@ -11,12 +11,23 @@ import {
 export type CharacterMethod = "selfie" | "tags" | "default";
 export type StylePreset = "simple_line" | "pastel" | "bold_line";
 
+/** 시리즈 규칙에는 화면에 보이는 이름 그대로 저장한다(시리즈 설정 화면과 같은 값). */
+export const STYLE_LABEL: Record<StylePreset, string> = {
+  simple_line: "심플 라인",
+  pastel: "파스텔",
+  bold_line: "굵은 선",
+};
+
 export interface OnboardingState {
   method: CharacterMethod;
   style: StylePreset;
   tags: string;
   story: string;
   cutCount: 4 | 6 | 8;
+  /** 고른 셀카. 서버에 올리기 전까지 브라우저에만 있다. */
+  selfie: File | null;
+  /** 만들어진 캐릭터 에셋. 사연 단계에서 새 시리즈에 붙인다. */
+  characterAssetId: string | null;
   /** 건너뛰기로 지나온 단계. 진행 바는 건너뛴 단계도 완료로 센다. */
   skipped: Set<string>;
 }
@@ -40,6 +51,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     tags: "",
     story: "",
     cutCount: 6,
+    selfie: null,
+    characterAssetId: null,
     skipped: new Set(),
   });
 

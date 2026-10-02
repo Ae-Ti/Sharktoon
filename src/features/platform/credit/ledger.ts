@@ -1,4 +1,7 @@
+import "server-only";
+
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   CREDIT_SQLSTATE,
   InsufficientCreditError,
@@ -11,6 +14,10 @@ import {
  *
  * 웅싯은 생성 요청 직전에 hold, 성공하면 commit, 실패하면 refund 만 부르면 된다.
  * 잔량 계산과 거래 기록은 전부 DB 함수 안에서 한 트랜잭션으로 끝난다.
+ *
+ * hold·commit·refund 는 **서비스 롤로만** 부른다(마이그레이션 0005). 사용자 토큰으로
+ * 열어 두면 생성 중인 hold 를 브라우저에서 직접 환불할 수 있다. 그래서 누구의
+ * 크레딧인지는 세션이 아니라 인자(userId)로 받고, 그 값은 서버가 세션에서 꺼내 넣는다.
  */
 
 type PgError = { code?: string; message?: string };
@@ -35,9 +42,10 @@ export function createCreditLedger(): CreditLedger {
       };
     },
 
-    async hold({ amount, reason, jobId }) {
-      const db = await createClient();
+    async hold({ userId, amount, reason, jobId }) {
+      const db = createServiceClient();
       const { data, error } = await db.rpc("credit_hold", {
+        p_user_id: userId,
         p_amount: amount,
         p_reason: reason,
         p_job_id: jobId,
@@ -47,6 +55,7 @@ export function createCreditLedger(): CreditLedger {
         const { data: acc } = await db
           .from("credit_accounts")
           .select("balance")
+          .eq("user_id", userId)
           .single();
         throw new InsufficientCreditError(amount, acc?.balance ?? 0);
       }
@@ -56,19 +65,20 @@ export function createCreditLedger(): CreditLedger {
     },
 
     async commit(holdId) {
-      const db = await createClient();
+      const db = createServiceClient();
       const { error } = await db.rpc("credit_commit", { p_hold_id: holdId });
       // 이미 정산된 hold 는 재시도해도 소용없다. 삼키지 말고 올린다.
       if (error) throw error;
     },
 
     async refund(holdId, reason) {
-      const db = await createClient();
-      const { error } = await db.rpc("credit_refund", {
+      const db = createServiceClient();
+      const { data, error } = await db.rpc("credit_refund", {
         p_hold_id: holdId,
         p_reason: reason,
       });
       if (error) throw error;
+      return Number(data ?? 0);
     },
 
     async grant() {

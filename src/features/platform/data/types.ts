@@ -35,6 +35,11 @@ export interface Asset {
   tags: string[];
   /** 서명 URL. 없으면 화면이 자리표시자를 그린다. */
   thumbUrl: string | null;
+  /**
+   * 레퍼런스 이미지 전부(캐릭터는 시트 7장). 서명 URL 이다.
+   * 생성 요청에 고정 레퍼런스로 실린다(PRD 2.1).
+   */
+  referenceUrls: string[];
   /** 이 에셋을 참조하는 회차 수. 바꿨을 때의 파급. */
   usedIn: number;
   /** 영향받는 회차 라벨. 상세 패널에서 보여준다. */
@@ -78,6 +83,8 @@ export interface SeriesDetail extends SeriesSummary {
  * 있으면 Supabase 구현이 들어온다. 화면 코드는 어느 쪽인지 모른다.
  */
 export interface PlatformRepository {
+  /** 로그인한 사용자 id. 생성 워커가 크레딧 주인을 이 값으로 정한다. */
+  currentUserId(): Promise<string | null>;
   getProfile(): Promise<Profile | null>;
   getCredit(): Promise<CreditState>;
   getAttendance(): Promise<AttendanceState>;
@@ -91,6 +98,15 @@ export interface PlatformRepository {
   updateAsset(id: string, input: AssetInput): Promise<Asset>;
   /** 참조하는 회차가 있으면 막는다. 지난 회차의 일관성을 깨뜨리기 때문이다. */
   deleteAsset(id: string): Promise<void>;
+  /**
+   * 업로드한 레퍼런스(또는 생성한 캐릭터 시트)를 에셋에 붙인다. 서버만 부른다 —
+   * 값은 Storage 경로(목에서는 data URI)이고, 화면이 보낸 문자열을 그대로 넣지 않는다.
+   */
+  setAssetReferences(assetId: string, refs: string[]): Promise<void>;
+  /** 레퍼런스 하나를 맨 앞에 더한다(대표 이미지가 된다). 8장까지만 남긴다. */
+  addAssetReference(assetId: string, ref: string): Promise<void>;
+  /** 회차가 실제로 쓴 에셋을 남긴다. 에셋을 바꿀 때 영향받는 회차를 이걸로 찾는다. */
+  recordAssetReferences(episodeId: string, assetIds: string[]): Promise<void>;
 
   createSeries(input: SeriesInput): Promise<SeriesSummary>;
   updateSeriesRule(seriesId: string, rule: SeriesRule): Promise<void>;
@@ -110,16 +126,29 @@ export interface PlatformRepository {
     story: string;
     cutCount: number;
     seriesId?: string;
+    /** 온보딩에서 고른 그림체. 새 시리즈를 만들 때만 쓴다. */
+    stylePreset?: string;
+    /** 온보딩에서 만든 캐릭터. 새 시리즈의 고정 에셋으로 붙인다. */
+    characterAssetId?: string;
   }): Promise<{ episodeId: string; seriesId: string }>;
 
-  /** 크레딧 3단. 생성 요청 직전 hold, 성공 commit, 실패 refund. */
+  /**
+   * 크레딧 3단. 생성 요청 직전 hold, 성공 commit, 실패 refund.
+   * 생성 워커만 부른다. 화면에 서버 액션으로 열지 않는다 — 열면 사용자가 자기 hold 를 환불한다.
+   */
   holdCredit(input: {
+    userId: string;
     amount: number;
     reason: CreditSpendReason;
     jobId: string;
   }): Promise<string>;
   commitCredit(holdId: string): Promise<void>;
   refundCredit(holdId: string, reason: string): Promise<number>;
+  /**
+   * 잡에 걸린 채 정산되지 않은 hold 를 전부 환불한다. 서버가 재시작돼 워커가 사라진
+   * 잡을 다시 올릴 때 쓴다. 돌려준 크레딧 합계를 돌려준다.
+   */
+  refundOpenHolds(jobId: string, reason: string): Promise<number>;
 
   /** 운영자 전용. 관리자가 아니면 null 을 돌려준다. */
   getAdminOverview(): Promise<AdminOverview | null>;

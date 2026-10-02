@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge, ButtonLink, EmptyState } from "@/components/ui";
-import { getRepository } from "@/features/platform/data";
+import { getRepository, type EpisodeStatus } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
+
+/** 회차 상태 → 이어서 갈 곳. 크레딧을 쓰는 버튼은 그 화면 안에서 소모량을 밝힌다. */
+const RESUME: Record<EpisodeStatus, { note: string; label: string; path: string }> = {
+  draft: { note: "아직 사연만 적어 뒀어요", label: "콘티 만들기", path: "storyboard" },
+  storyboard: { note: "콘티까지 만들어 뒀어요", label: "콘티 이어서", path: "storyboard" },
+  generating: { note: "이미지를 만들고 있어요", label: "진행 보기", path: "generate" },
+  ready: { note: "컷이 다 나왔어요. 올리기만 하면 돼요", label: "게시 준비", path: "publish" },
+  published: { note: "게시했어요", label: "보기", path: "publish" },
+};
 
 export default async function Page() {
   const repo = await getRepository();
@@ -70,24 +79,14 @@ export default async function Page() {
               <span className="text-body font-semibold">
                 {resumable.seriesTitle} · {resumable.number}화
               </span>
-              <span className="text-caption text-ink-muted">
-                {resumable.status === "storyboard"
-                  ? "콘티까지 만들어 뒀어요"
-                  : resumable.status === "generating"
-                    ? "이미지를 만들고 있어요"
-                    : "아직 사연만 적어 뒀어요"}
-              </span>
+              <span className="text-caption text-ink-muted">{RESUME[resumable.status].note}</span>
             </span>
             <Badge>초안</Badge>
-            {/* 크레딧을 쓰는 이동이므로 소모량을 누르기 전에 밝힌다. */}
             <ButtonLink
-              href={`/episodes/${resumable.episodeId}/${
-                resumable.status === "draft" ? "storyboard" : "generate"
-              }`}
+              href={`/episodes/${resumable.episodeId}/${RESUME[resumable.status].path}`}
               size="sm"
-              cost={resumable.status === "draft" ? undefined : resumable.cutCount}
             >
-              {resumable.status === "draft" ? "콘티 만들기" : "이미지 만들기"}
+              {RESUME[resumable.status].label}
             </ButtonLink>
           </div>
         </section>

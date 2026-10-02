@@ -1,11 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
-import { Badge, Button, Field, LayerRow, Modal } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
+import { Badge, Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
-import type { GenerationJob } from "@/contracts/generation";
+import { saveLayerTreeAction } from "../actions";
+import { DEFAULT_TOON_FONT, TOON_FONTS, ensureToonFont } from "../editor/fonts";
 import {
   BALLOON_LABEL,
   isVectorTextLayer,
@@ -43,9 +45,17 @@ const SAVE_LABEL = {
   error: "저장 실패 — 다음 변경에서 다시 시도해요",
 } as const;
 
+export interface EditorStripCut {
+  cutId: string;
+  index: number;
+  imageUrl: string | null;
+}
+
 export interface CutEditorScreenProps {
-  job: GenerationJob;
+  episodeId: string;
+  cuts: EditorStripCut[];
   tree: CutLayerTree;
+  credits: number;
   /** ImageGenerator.supportsInpainting(). 꺼져 있으면 부분 재생성 UI 를 아예 감춘다. */
   supportsInpainting?: boolean;
   seriesTitle: string;
@@ -54,17 +64,27 @@ export interface CutEditorScreenProps {
 
 /** PRD 3.2 — 레이어 기반 컷 편집기. */
 export function CutEditorScreen({
-  job,
+  episodeId,
+  cuts,
   tree: initialTree,
+  credits,
   supportsInpainting = false,
   seriesTitle,
   episodeTitle,
 }: CutEditorScreenProps) {
-  const [openCutId, setOpenCutId] = useState(initialTree.cutId);
+  const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
   const { ref: canvasBox, size } = useMeasuredSize<HTMLDivElement>();
 
-  const editor = useEditor({ initial: initialTree });
+  // 자동 저장. 실패하면 던져서 툴바에 "저장 실패"가 뜨게 한다.
+  const save = useCallback(
+    async (tree: CutLayerTree) => {
+      const r = await saveLayerTreeAction({ episodeId, tree });
+      if (!r.ok) throw new Error(r.message);
+    },
+    [episodeId],
+  );
+  const editor = useEditor({ initial: initialTree, save });
   const { tree, selected, selectedId } = editor;
 
   // 위에 그려지는 레이어가 목록 맨 위로 오도록 뒤집는다. z 순서와 목록 순서가 반대다.
@@ -73,12 +93,16 @@ export function CutEditorScreen({
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page">
       <EpisodeHeader
-        episodeId={job.episodeId}
+        episodeId={episodeId}
         seriesTitle={seriesTitle}
         episodeTitle={episodeTitle}
         current="editor"
-        credits={12}
-        action={<Button size="sm">게시물로 내보내기</Button>}
+        credits={credits}
+        action={
+          <ButtonLink href={`/episodes/${episodeId}/publish`} size="sm">
+            게시물로 내보내기
+          </ButtonLink>
+        }
       />
 
       <Toolbar
@@ -94,7 +118,12 @@ export function CutEditorScreen({
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[132px_minmax(0,1fr)_320px]">
-        <CutStrip cuts={job.cuts} openCutId={openCutId} onOpen={setOpenCutId} />
+        <CutStrip
+          cuts={cuts}
+          openCutId={initialTree.cutId}
+          // 페이지가 그 컷의 트리를 읽어 새로 그린다. 떠나는 컷은 useEditor 가 바로 저장한다.
+          onOpen={(cutId) => router.push(`/episodes/${episodeId}/editor?cut=${cutId}`)}
+        />
 
         <section
           ref={canvasBox}
@@ -109,6 +138,7 @@ export function CutEditorScreen({
               onSelect={editor.setSelectedId}
               onBeginDrag={editor.beginDrag}
               onPreviewBox={editor.previewBox}
+              onPreviewTail={editor.previewTail}
               onCommit={editor.commitDrag}
             />
           )}
@@ -153,9 +183,25 @@ export function CutEditorScreen({
               }
               onChangeBalloon={(balloon) =>
                 editor.update(selected.id, (l) =>
-                  isVectorTextLayer(l) ? { ...l, balloon } : l,
+                  isVectorTextLayer(l)
+                    ? {
+                        ...l,
+                        balloon,
+                        // 꼬리가 없던 레이어를 말풍선으로 바꾸면 아래쪽에 꼬리를 하나 달아 준다.
+                        tail: l.tail ?? {
+                          x: l.box.x + l.box.width / 2,
+                          y: l.box.y + l.box.height + 100,
+                        },
+                      }
+                    : l,
                 )
               }
+              onChangeFont={(fontFamily) => {
+                void ensureToonFont(fontFamily);
+                editor.update(selected.id, (l) =>
+                  isVectorTextLayer(l) ? { ...l, style: { ...l.style, fontFamily } } : l,
+                );
+              }}
               onChangeFontSize={(fontSize) =>
                 editor.update(selected.id, (l) =>
                   isVectorTextLayer(l)
@@ -342,7 +388,7 @@ function CutStrip({
   openCutId,
   onOpen,
 }: {
-  cuts: GenerationJob["cuts"];
+  cuts: EditorStripCut[];
   openCutId: string;
   onOpen: (cutId: string) => void;
 }) {
@@ -353,7 +399,7 @@ function CutStrip({
     >
       {cuts.map((cut) => {
         const open = cut.cutId === openCutId;
-        const ready = cut.status === "done" && cut.imageUrl;
+        const ready = Boolean(cut.imageUrl);
         return (
           <button
             key={cut.cutId}
@@ -369,10 +415,10 @@ function CutStrip({
           >
             {ready ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cut.imageUrl} alt={`${cut.index}컷`} className="size-full object-cover" />
+              <img src={cut.imageUrl!} alt={`${cut.index}컷`} className="size-full object-cover" />
             ) : (
               <span className="grid size-full place-items-center text-caption text-ink-subtle">
-                {cut.status === "failed" ? "실패" : "생성 중"}
+                아직 없음
               </span>
             )}
             <span className="absolute top-1 left-1.5 text-[11px] font-bold text-ink-inverse mix-blend-difference">
@@ -406,12 +452,14 @@ function LayerInspector({
   onChangeText,
   onChangeBalloon,
   onChangeFontSize,
+  onChangeFont,
   onToggleLock,
   onDelete,
 }: {
   layer: Layer;
   onChangeText: (text: string) => void;
   onChangeBalloon: (balloon: BalloonKind) => void;
+  onChangeFont: (family: string) => void;
   onChangeFontSize: (size: number) => void;
   onToggleLock: () => void;
   onDelete: () => void;
@@ -452,6 +500,25 @@ function LayerInspector({
               ))}
             </div>
           </div>
+
+          <label className="flex items-center gap-3 text-label">
+            <span className="shrink-0 text-ink-muted">글꼴</span>
+            <select
+              value={vector.style.fontFamily}
+              onChange={(e) => onChangeFont(e.target.value)}
+              className="h-control-sm min-w-0 flex-1 rounded-md border border-border-control bg-surface-card px-2 text-label text-ink"
+            >
+              {(["손글씨", "둥근", "굵은", "고딕", "명조", "장식"] as const).map((tone) => (
+                <optgroup key={tone} label={tone}>
+                  {TOON_FONTS.filter((f) => f.tone === tone).map((f) => (
+                    <option key={f.family} value={f.family}>
+                      {f.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
 
           <label className="flex items-center gap-3 text-label">
             <span className="shrink-0 text-ink-muted">크기</span>
@@ -507,7 +574,7 @@ function newTextLayer(
   }[kind];
 
   return {
-    id: `ly_${kind}_${Date.now().toString(36)}`,
+    id: `ly_${kind}_${crypto.randomUUID().slice(0, 8)}`,
     name: preset.name,
     kind,
     box: {
@@ -518,8 +585,12 @@ function newTextLayer(
     },
     text: preset.text,
     balloon: preset.balloon,
+    tail:
+      kind === "balloon"
+        ? { x: Math.round(tree.canvas.width / 2), y: Math.round((tree.canvas.height + height) / 2 + 100) }
+        : undefined,
     style: {
-      fontFamily: "Gaegu",
+      fontFamily: DEFAULT_TOON_FONT,
       fontSize: preset.size,
       lineHeight: 1.4,
       align: "center",

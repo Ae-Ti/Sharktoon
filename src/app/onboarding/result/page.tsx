@@ -1,8 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, ButtonLink } from "@/components/ui";
+import { getGenerationStore } from "@/features/generation/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
-
-const ROLES = ["후킹", "전개", "전개", "전환", "감정", "CTA"];
 
 /**
  * 온보딩 4단계 — 첫 화 결과.
@@ -19,9 +19,18 @@ export default async function Page({
   const ctx = await loadEpisodeContext(episode);
   if (!ctx) notFound();
 
-  const cuts = Array.from({ length: ctx.cutCount }, (_, i) => ({
-    no: i + 1,
-    role: ROLES[i] ?? "전개",
+  const store = await getGenerationStore();
+  const [saved, records] = await Promise.all([
+    store.getStoryboard(ctx.episodeId),
+    store.listCuts(ctx.episodeId),
+  ]);
+  // 콘티 순서대로. 1컷은 후킹, 마지막 컷은 CTA 다.
+  const sbCuts = saved?.storyboard.cuts ?? [];
+  const cuts = sbCuts.map((c, i) => ({
+    id: c.id,
+    no: c.index,
+    role: i === 0 ? "후킹" : i === sbCuts.length - 1 ? "CTA" : "전개",
+    imageUrl: records.find((r) => r.cutId === c.id)?.imageUrl ?? null,
   }));
 
   return (
@@ -37,18 +46,27 @@ export default async function Page({
 
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
         {cuts.map((c) => (
-          <a
-            key={c.no}
-            href={`/episodes/${ctx.episodeId}/editor?cut=${c.no}`}
+          <Link
+            key={c.id}
+            href={`/episodes/${ctx.episodeId}/editor?cut=${c.id}`}
             className="flex w-44 shrink-0 flex-col gap-1.5"
           >
-            <span className="grid h-55 place-items-center rounded-lg border border-border bg-skeleton text-caption text-ink-subtle">
-              {c.no}컷 · {c.role}
-            </span>
+            {c.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={c.imageUrl}
+                alt={`${c.no}컷 · ${c.role}`}
+                className={`${ctx.rule.aspectRatio === "4:5" ? "aspect-[4/5]" : "aspect-square"} w-full rounded-lg border border-border object-cover`}
+              />
+            ) : (
+              <span className="grid aspect-square place-items-center rounded-lg border border-border bg-skeleton text-caption text-ink-subtle">
+                {c.no}컷 · 아직 없음
+              </span>
+            )}
             <span className="text-caption text-ink-muted">
-              {c.no} / {cuts.length}
+              {c.no} / {cuts.length} · {c.role}
             </span>
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -76,8 +94,11 @@ export default async function Page({
       <div className="flex-1" />
 
       <div className="flex flex-col gap-2">
-        <ButtonLink href={`/episodes/${ctx.episodeId}/editor`} size="lg" block>
+        <ButtonLink href={`/episodes/${ctx.episodeId}/publish`} size="lg" block>
           게시 준비하기
+        </ButtonLink>
+        <ButtonLink href={`/episodes/${ctx.episodeId}/editor`} variant="secondary" block>
+          대사 먼저 다듬기
         </ButtonLink>
         <ButtonLink href={`/series/${ctx.seriesId}`} variant="ghost" block>
           시리즈에서 보기

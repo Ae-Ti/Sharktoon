@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button, ChoiceCard, Field, Modal } from "@/components/ui";
-import { saveAssetAction } from "@/features/platform/actions";
+import { saveAssetAction, uploadAssetReferenceAction } from "@/features/platform/actions";
 import type { Asset, AssetKind } from "@/features/platform/data/types";
 
 const KINDS: { id: AssetKind; title: string; description: string }[] = [
@@ -34,6 +34,7 @@ export function AssetFormModal({
   const [name, setName] = useState(asset?.name ?? "");
   const [description, setDescription] = useState(asset?.description ?? "");
   const [tags, setTags] = useState(asset?.tags.join(", ") ?? "");
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -62,8 +63,21 @@ export function AssetFormModal({
         description: description.trim() || null,
         tags: tagList,
       });
-      if (r.ok) onClose();
-      else setError(r.message);
+      if (!r.ok) {
+        setError(r.message);
+        return;
+      }
+      if (file) {
+        const form = new FormData();
+        form.set("assetId", r.id);
+        form.set("file", file);
+        const up = await uploadAssetReferenceAction(form);
+        if (!up.ok) {
+          setError(`저장은 됐지만 이미지를 못 올렸어요. ${up.message}`);
+          return;
+        }
+      }
+      onClose();
     });
   }
 
@@ -125,6 +139,21 @@ export function AssetFormModal({
         help="쉼표로 구분해 5개까지."
         optional
       />
+
+      <label className="flex flex-col gap-1.5 text-label">
+        <span className="font-semibold text-ink">
+          레퍼런스 이미지 <span className="font-normal text-ink-subtle">(선택)</span>
+        </span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="text-body-sm text-ink-muted file:mr-3 file:h-control-sm file:cursor-pointer file:rounded-md file:border-0 file:bg-surface-sunken file:px-3 file:text-label file:font-semibold file:text-ink"
+        />
+        <span className="text-caption text-ink-muted">
+          생성할 때 고정 레퍼런스로 들어가요. 대표 이미지가 돼요. PNG·JPG, 10MB 까지.
+        </span>
+      </label>
 
       {error && <p className="text-body-sm text-danger">{error}</p>}
     </Modal>

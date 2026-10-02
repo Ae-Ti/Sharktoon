@@ -26,6 +26,8 @@ jobs:
 
       - name: 저장소 동작 검증
         run: npm run check:repo
+      - name: 생성 영역 동작 검증
+        run: npm run check:generation
 
       - name: 빌드
         run: npm run build
@@ -61,3 +63,4 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/01_ledger_test.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/02_series_rls_test.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/03_admin_test.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/04_generation_test.sql

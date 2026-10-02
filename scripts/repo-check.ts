@@ -61,7 +61,7 @@ async function main() {
 
   // --- 크레딧 원장
   const b0 = (await r.getCredit()).balance;
-  const h1 = await r.holdCredit({ amount: 6, reason: "cut_image", jobId: "j1" });
+  const h1 = await r.holdCredit({ userId: "mock-user", amount: 6, reason: "cut_image", jobId: "j1" });
   const b1 = await r.getCredit();
   ok(b1.balance === b0 - 6 && b1.held === 6, "hold: 잔량 감소·예약 증가");
 
@@ -70,7 +70,7 @@ async function main() {
   ok(b2.balance === b0 - 6 && b2.held === 0, "commit: 예약만 해제");
   ok(b2.delta === undefined, "commit 후 delta 비움");
 
-  const h2 = await r.holdCredit({ amount: 1, reason: "cut_image", jobId: "j2" });
+  const h2 = await r.holdCredit({ userId: "mock-user", amount: 1, reason: "cut_image", jobId: "j2" });
   const amt = await r.refundCredit(h2, "실패");
   const b3 = await r.getCredit();
   ok(amt === 1 && b3.balance === b0 - 6 && b3.held === 0, "refund: 잔량 복구");
@@ -78,7 +78,7 @@ async function main() {
   try { await r.commitCredit(h2); ok(false, "정산된 hold 재정산 차단"); }
   catch { ok(true, "정산된 hold 재정산 차단"); }
 
-  try { await r.holdCredit({ amount: 9999, reason: "cut_image", jobId: "j3" }); ok(false, "잔량 초과 차단"); }
+  try { await r.holdCredit({ userId: "mock-user", amount: 9999, reason: "cut_image", jobId: "j3" }); ok(false, "잔량 초과 차단"); }
   catch (e) { ok(e instanceof InsufficientCreditError, "잔량 초과 차단"); }
 
   // --- 출석

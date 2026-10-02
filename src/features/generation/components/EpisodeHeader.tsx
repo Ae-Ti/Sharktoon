@@ -5,12 +5,13 @@ import type { ReactNode } from "react";
 import { Badge, CreditPill } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
-export type GenerationStep = "storyboard" | "generate" | "editor";
+export type GenerationStep = "storyboard" | "generate" | "editor" | "publish";
 
 const STEPS: Array<{ key: GenerationStep; label: string; path: string }> = [
   { key: "storyboard", label: "콘티", path: "storyboard" },
   { key: "generate", label: "생성", path: "generate" },
   { key: "editor", label: "편집", path: "editor" },
+  { key: "publish", label: "게시", path: "publish" },
 ];
 
 export interface EpisodeHeaderProps {
@@ -37,10 +38,11 @@ export function EpisodeHeader({
 }: EpisodeHeaderProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface-card">
-      <div className="flex h-14 items-center gap-4 px-4">
+      <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
+          {/* "/" 는 로그인 화면이다. 로그인한 사람의 처음은 홈이다. */}
           <Link
-            href="/"
+            href="/home"
             className="text-title font-extrabold tracking-[-0.03em] text-ink"
           >
             샥툰

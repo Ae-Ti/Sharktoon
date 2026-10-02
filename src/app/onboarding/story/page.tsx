@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { Button, Field } from "@/components/ui";
 import { startEpisodeAction } from "@/features/platform/actions";
 import { cn } from "@/lib/cn";
-import { useOnboarding } from "@/features/platform/onboarding/OnboardingContext";
+import { STYLE_LABEL, useOnboarding } from "@/features/platform/onboarding/OnboardingContext";
 
 const EXAMPLES = [
   { chip: "회사 빌런", text: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다" },
@@ -16,7 +16,7 @@ const EXAMPLES = [
 const CUT_COUNTS = [4, 6, 8] as const;
 
 export default function Page() {
-  const { story, cutCount, set, skip } = useOnboarding();
+  const { story, cutCount, style, characterAssetId, set, skip } = useOnboarding();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,12 @@ export default function Page() {
   function begin(text: string) {
     setError(null);
     start(async () => {
-      const r = await startEpisodeAction({ story: text, cutCount });
+      const r = await startEpisodeAction({
+        story: text,
+        cutCount,
+        stylePreset: STYLE_LABEL[style],
+        characterAssetId: characterAssetId ?? undefined,
+      });
       if (r.ok) router.push(`/episodes/${r.episodeId}/storyboard`);
       else setError(r.message);
     });

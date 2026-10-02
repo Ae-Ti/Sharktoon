@@ -7,8 +7,6 @@
 
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { StoryboardResponseSchema, type StoryboardResponse } from "./schema";
 import {
   STORYBOARD_SYSTEM,
@@ -18,9 +16,9 @@ import {
 import { screenText } from "../safety/rules";
 import { ALLOWED, blocked, type SafetyVerdict } from "../safety/types";
 import type { Storyboard, StoryboardCut } from "../types/storyboard";
-import { MOCK_STORYBOARD } from "../mocks/storyboard";
+import { mockStoryboard } from "./mock";
+import { isAnthropicConfigured, parseStructured } from "../llm";
 
-const MODEL = "claude-opus-5";
 
 /** 콘티 생성은 크레딧을 쓰지 않는다(PRD 3.1 비즈니스 규칙). 실패해도 환불 처리가 없다. */
 export interface GenerateStoryboardInput extends StoryboardPromptInput {
@@ -33,9 +31,7 @@ export type GenerateStoryboardResult =
   | { ok: false; safety: SafetyVerdict }
   | { ok: false; error: string };
 
-export function isAnthropicConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
-}
+export { isAnthropicConfigured };
 
 export async function generateStoryboard(
   input: GenerateStoryboardInput,
@@ -48,58 +44,21 @@ export async function generateStoryboard(
     return {
       ok: true,
       usedMock: true,
-      storyboard: {
-        ...MOCK_STORYBOARD,
-        episodeId: input.episodeId,
-        seriesId: input.seriesId,
-        story: input.story,
-        updatedAt: new Date().toISOString(),
-      },
+      storyboard: mockStoryboard(input),
     };
   }
 
-  const client = new Anthropic();
-
-  let parsed: StoryboardResponse | null;
-  try {
-    const response = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      // 콘티는 30초 안에 나와야 한다(PRD 비기능 요구사항). 깊게 생각할 일이 아니다.
-      output_config: {
-        effort: "medium",
-        format: zodOutputFormat(StoryboardResponseSchema),
-      },
-      system: [
-        {
-          type: "text",
-          text: STORYBOARD_SYSTEM,
-          // 시스템 프롬프트는 요청마다 같다. 사연만 뒤에서 바뀐다.
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: buildStoryboardUserMessage(input) }],
-    });
-
-    if (response.stop_reason === "refusal") {
-      return { ok: false, safety: blocked("explicit", "model") };
-    }
-    parsed = response.parsed_output;
-  } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) {
-      return { ok: false, error: "지금 요청이 많아요. 잠시 뒤에 다시 시도해 주세요." };
-    }
-    if (e instanceof Anthropic.APIError) {
-      return { ok: false, error: "콘티를 만들지 못했어요. 잠시 뒤에 다시 시도해 주세요." };
-    }
-    throw e;
+  const result = await parseStructured({
+    schema: StoryboardResponseSchema,
+    system: STORYBOARD_SYSTEM,
+    user: buildStoryboardUserMessage(input),
+  });
+  if (!result.ok) {
+    return result.reason === "refusal"
+      ? { ok: false, safety: blocked("explicit", "model") }
+      : { ok: false, error: result.message };
   }
-
-  if (!parsed) {
-    // 스키마 검증 실패. 모델이 모양을 어겼다는 뜻이라 재시도해도 같을 수 있다.
-    return { ok: false, error: "콘티 형식이 어긋났어요. 사연을 조금 더 자세히 적어주세요." };
-  }
+  const parsed: StoryboardResponse = result.data;
 
   // 2차 필터. 규칙을 통과했지만 모델이 막은 경우다.
   if (!parsed.safety.allowed) {
@@ -149,6 +108,7 @@ function toStoryboard(
     seriesId: input.seriesId,
     status: "draft",
     story: input.story,
+    characters: res.characters.map((c) => ({ key: c.key, name: c.name })),
     cuts,
     hookOptions: res.hooks.map((h) => ({ id: seq("hook"), text: h.text, rationale: h.rationale })),
     // 사용자가 직접 고르게 둔다. 기본 선택을 넣으면 그대로 넘어가 버린다.
@@ -165,10 +125,11 @@ function toStoryboard(
   };
 }
 
-/** 한 응답 안에서만 유일하면 된다. DB 에 넣을 때 진짜 id 로 바뀐다. */
+/** 한 콘티 안에서 유일하면 된다. 컷 id 가 그대로 저장 키(cuts.cut_id)가 되므로 난수를 섞는다. */
 function idSequence() {
+  const salt = crypto.randomUUID().slice(0, 6);
   let n = 0;
-  return (prefix: string) => `${prefix}_${(++n).toString(36)}${Date.now().toString(36)}`;
+  return (prefix: string) => `${prefix}_${salt}${(++n).toString(36)}`;
 }
 
 export { ALLOWED };

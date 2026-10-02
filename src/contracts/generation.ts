@@ -12,6 +12,12 @@
  *   (태일 확인: 0.5크레딧은 마스크 인페인팅만. 표정·배경 변경은 1크레딧.)
  * - `GenerationJob.seriesId` 추가. 시리즈 규칙 주입이 잡 단위로 필요하다.
  * - `summarizeJob()` 추가. 태일 타임라인과 내 진행률 화면이 같은 셈을 두 번 쓰지 않게 한다.
+ *
+ * 2026-10-02 (태일, 생성 결과 저장을 붙이며):
+ * - `CutGenerationRequest.index` — 생성기가 컷 순서를 id 문자열에서 추측하지 않게.
+ * - `GenerationJobCut.imageRef` — Storage 경로. `imageUrl` 은 그걸 서명한 보기용 URL 이다.
+ * - `GenerationJobCut.refunded` — 실패한 컷 중 실제로 환불된 것. hold 전에 막힌 컷은 환불할 게 없다.
+ * - `ImageGenerator.generateCharacterSheet()` — 셀카·태그 → 캐릭터 시트(PRD 1.1).
  */
 
 import type { CreditSpendReason } from "./credit";
@@ -64,6 +70,8 @@ export const CREDIT_REASON_BY_INTENT: Record<CutEditIntent, CreditSpendReason> =
 
 export interface CutGenerationRequest {
   cutId: string;
+  /** 1부터. 컷 순서. */
+  index: number;
   episodeId: string;
   seriesId: string;
   intent: CutEditIntent;
@@ -92,12 +100,52 @@ export interface CutGenerationResult {
   };
 }
 
+/** 캐릭터 시트 입력. 셀카 1장, 특징 태그 5개 이하, 텍스트 설명 중 하나(PRD 1.1). */
+export interface CharacterSheetRequest {
+  name: string;
+  /** 셀카 이미지 URL. 시트를 만든 뒤 원본은 기본 삭제한다. */
+  selfieUrl?: string;
+  tags?: string[];
+  description?: string;
+  /** 그림체 프리셋 이름. */
+  style: string;
+}
+
+/** 정면, 측면, 표정 4종, 전신 — 7장(PRD 1.1). 모든 생성 호출에 고정 레퍼런스로 실린다. */
+export const CHARACTER_SHEET_VIEWS = [
+  "front",
+  "side",
+  "expression_joy",
+  "expression_sad",
+  "expression_angry",
+  "expression_surprised",
+  "full_body",
+] as const;
+
+export type CharacterSheetView = (typeof CHARACTER_SHEET_VIEWS)[number];
+
+export const CHARACTER_SHEET_LABEL: Record<CharacterSheetView, string> = {
+  front: "정면",
+  side: "측면",
+  expression_joy: "기쁨",
+  expression_sad: "슬픔",
+  expression_angry: "분노",
+  expression_surprised: "놀람",
+  full_body: "전신",
+};
+
+export interface CharacterSheetResult {
+  views: { view: CharacterSheetView; imageUrl: string }[];
+  metadata: CutGenerationResult["metadata"];
+}
+
 /**
  * 이미지 생성 API 는 이 인터페이스 뒤로 숨긴다.
  * 1차 모델 선정(오픈 이슈 1)이 끝나기 전에도 화면을 만들 수 있고, 나중에 교체할 수 있다.
  */
 export interface ImageGenerator {
   generateCut(req: CutGenerationRequest): Promise<CutGenerationResult>;
+  generateCharacterSheet(req: CharacterSheetRequest): Promise<CharacterSheetResult>;
   /** 모델이 지원하지 않으면 false. 부분 재생성 UI 노출 여부를 여기서 판단한다. */
   supportsInpainting(): boolean;
 }
@@ -107,8 +155,12 @@ export interface GenerationJobCut {
   index: number;
   status: CutStatus;
   progress?: number;
-  /** done 인 컷의 결과. 진행률 화면이 끝난 컷부터 썸네일로 보여준다. */
+  /** done 인 컷의 결과. 진행률 화면이 끝난 컷부터 썸네일로 보여준다. 서명 URL 이라 만료된다. */
   imageUrl?: string;
+  /** 저장된 이미지의 ref(Storage 경로, 목에서는 data URI). 저장하는 쪽은 이 값만 믿는다. */
+  imageRef?: string;
+  /** 실패했을 때 쓴 크레딧을 돌려줬는지. 크레딧을 잡기 전에 막힌 컷은 false 다. */
+  refunded?: boolean;
   /** 실패한 컷만 개별 재시도한다. 성공한 컷은 건드리지 않는다. */
   error?: string;
   /** 이 컷에 쓴 크레딧의 hold. 실패 시 이 id 로 환불한다. */

@@ -66,8 +66,8 @@ export interface CreditLedger {
   /** 생성이 성공했을 때. 실제 차감이 확정된다. */
   commit(holdId: HoldId): Promise<void>;
 
-  /** 생성이 실패했을 때. 자동 환불이고, 사용자에게 보이게 알린다. */
-  refund(holdId: HoldId, reason: string): Promise<void>;
+  /** 생성이 실패했을 때. 자동 환불이고, 사용자에게 보이게 알린다. 돌려준 크레딧을 돌려준다. */
+  refund(holdId: HoldId, reason: string): Promise<number>;
 
   /** 출석·가입 보너스·구독 지급·크레딧 팩. */
   grant(input: {

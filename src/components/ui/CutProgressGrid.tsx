@@ -5,6 +5,8 @@ import { Button } from "./Button";
 import type { CutStatus } from "@/contracts/generation";
 
 export interface CutProgressItem {
+  /** 실패한 컷에 쓴 크레딧을 돌려줬는지. 크레딧을 잡기 전에 막힌 컷은 false 다. */
+  refunded?: boolean;
   status: CutStatus;
   /** running 인 컷에만 준다. 대기 중 컷에 0% 막대를 그리면 멈춘 것처럼 보인다. */
   progress?: number;
@@ -80,7 +82,9 @@ export function CutProgressGrid({
               <strong className="font-semibold text-danger">
                 {failed}개 컷을 못 만들었어요.
               </strong>{" "}
-              쓴 크레딧은 돌려드렸어요.
+              {cuts.some((c) => c.status === "failed" && c.refunded)
+                ? "쓴 크레딧은 돌려드렸어요."
+                : "크레딧은 쓰지 않았어요."}
             </>
           ) : (
             "먼저 끝난 컷부터 편집기에서 손볼 수 있어요."

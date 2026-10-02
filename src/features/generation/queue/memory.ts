@@ -12,7 +12,7 @@ import {
   type GenerationJobCut,
   type JobStatus,
 } from "@/contracts/generation";
-import { CUT_CONCURRENCY, type JobQueue } from "./types";
+import { CUT_CONCURRENCY, type JobQueue, type QueueHooks } from "./types";
 
 export interface CutWorkerInput {
   job: GenerationJob;
@@ -21,12 +21,13 @@ export interface CutWorkerInput {
 
 export interface CutWorkerResult {
   imageUrl: string;
+  imageRef?: string;
 }
 
 /** 컷 하나를 실제로 만드는 일. 파이프라인이 크레딧까지 묶어서 넘긴다. */
 export type CutWorker = (input: CutWorkerInput) => Promise<CutWorkerResult>;
 
-export function createMemoryQueue(worker: CutWorker): JobQueue {
+export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): JobQueue {
   const jobs = new Map<string, GenerationJob>();
   /** 잡마다 아직 안 끝난 컷 대기열. */
   const pending = new Map<string, string[]>();
@@ -41,6 +42,11 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
     });
   }
 
+  function emit(jobId: string, event: "submit" | "cut" | "settle") {
+    const job = jobs.get(jobId);
+    if (job) hooks.onChange?.(job, event);
+  }
+
   /** 컷 상태에서 잡 상태를 다시 센다. 두 곳에서 따로 세면 어긋난다. */
   function settleJob(jobId: string) {
     const job = jobs.get(jobId);
@@ -51,6 +57,7 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
     const status: JobStatus =
       s.failed === 0 ? "succeeded" : s.done === 0 ? "failed" : "partially_failed";
     jobs.set(jobId, { ...job, status, finishedAt: new Date().toISOString() });
+    emit(jobId, "settle");
   }
 
   function pump(jobId: string) {
@@ -85,11 +92,13 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
     }, 400);
 
     try {
-      const { imageUrl } = await worker({ job, cut });
+      const { imageUrl, imageRef } = await worker({ job, cut });
       patchCut(jobId, cutId, {
         status: "done",
         progress: 100,
         imageUrl,
+        imageRef,
+        refunded: undefined,
         finishedAt: new Date().toISOString(),
       });
     } catch (e) {
@@ -97,11 +106,14 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
         status: "failed",
         progress: undefined,
         error: e instanceof Error ? e.message : "이미지를 못 만들었어요",
+        // 크레딧을 잡기 전에 막혔으면(잔량 부족) 돌려줄 것이 없다. 워커가 알려준다.
+        refunded: (e as { refunded?: boolean } | null)?.refunded === true,
         finishedAt: new Date().toISOString(),
       });
     } finally {
       clearInterval(ticker);
       running.set(jobId, Math.max(0, (running.get(jobId) ?? 1) - 1));
+      emit(jobId, "cut");
       settleJob(jobId);
       pump(jobId);
     }
@@ -112,6 +124,7 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
       jobs.set(job.id, { ...job, status: "running" });
       pending.set(job.id, job.cuts.filter((c) => c.status === "queued").map((c) => c.cutId));
       running.set(job.id, 0);
+      emit(job.id, "submit");
       pump(job.id);
     },
 
@@ -126,18 +139,41 @@ export function createMemoryQueue(worker: CutWorker): JobQueue {
         finishedAt: undefined,
         cuts: job.cuts.map((c) =>
           c.cutId === cutId
-            ? { ...c, status: "queued", error: undefined, attempt: c.attempt + 1 }
+            ? { ...c, status: "queued", error: undefined, refunded: undefined, attempt: c.attempt + 1 }
             : c,
         ),
       });
       const queued = pending.get(jobId);
       if (queued) queued.push(cutId);
       else pending.set(jobId, [cutId]);
+      emit(jobId, "submit");
       pump(jobId);
     },
 
     async get(jobId) {
       return jobs.get(jobId) ?? null;
+    },
+
+    async restore(job) {
+      if (jobs.has(job.id)) return;
+      // 서버가 재시작되면 돌던 컷은 주인을 잃는다. 실패로 돌려 사용자가 다시 누르게 한다.
+      // 크레딧은 hold 가 남아 있을 수 있다 — 정산 배치(운영)가 오래된 hold 를 환불한다.
+      jobs.set(job.id, {
+        ...job,
+        cuts: job.cuts.map((c) =>
+          c.status === "queued" || c.status === "running"
+            ? { ...c, status: "failed", error: "서버가 다시 시작돼 멈췄어요. 다시 눌러 주세요." }
+            : c,
+        ),
+      });
+      running.set(job.id, 0);
+      settleJob(job.id);
+    },
+
+    async countActive(userId) {
+      return [...jobs.values()].filter(
+        (j) => j.userId === userId && (j.status === "queued" || j.status === "running"),
+      ).length;
     },
   };
 }

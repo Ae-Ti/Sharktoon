@@ -98,6 +98,12 @@ export interface CtaOption extends CopyOption {
 
 export type StoryboardStatus = "draft" | "confirmed" | "generating" | "generated";
 
+/** 콘티의 등장인물. 컷의 characterIds 와 대사의 speakerId 가 이 key 를 가리킨다. */
+export interface StoryboardCharacter {
+  key: string;
+  name: string;
+}
+
 export interface Storyboard {
   id: string;
   episodeId: string;
@@ -105,6 +111,7 @@ export interface Storyboard {
   status: StoryboardStatus;
   /** 사용자가 넣은 사연 원문. 한 줄부터 한 문단까지. */
   story: string;
+  characters: StoryboardCharacter[];
   cuts: StoryboardCut[];
   /** 첫 컷 후킹 3안과 선택값. 고르기 전에는 selected 가 null 이다. */
   hookOptions: CopyOption[];
@@ -113,6 +120,12 @@ export interface Storyboard {
   selectedCtaId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 화자 key → 표시 이름. 모르는 key 는 key 그대로 보여준다(모델이 지어낸 값이 드러나게). */
+export function characterName(storyboard: Pick<Storyboard, "characters">, key: string | null): string {
+  if (!key) return "효과음";
+  return storyboard.characters.find((c) => c.key === key)?.name ?? key;
 }
 
 /** 컷을 옮긴 뒤 index 를 1부터 다시 매긴다. 원본은 건드리지 않는다. */

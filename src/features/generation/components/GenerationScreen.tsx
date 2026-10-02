@@ -26,7 +26,8 @@ import {
   retryFailedCutsAction,
   type ActionResult,
 } from "../actions";
-import { MAX_AUTO_ATTEMPTS } from "../mocks/job";
+/** 이보다 많이 시도한 컷은 표시해 준다. 같은 컷이 계속 실패하면 장면을 고치는 게 낫다. */
+const MAX_AUTO_ATTEMPTS = 2;
 import { EpisodeHeader } from "./EpisodeHeader";
 import { useJobPolling } from "./useJobPolling";
 
@@ -46,6 +47,9 @@ const INTENT_RESULT: Record<CutEditIntent, string> = {
 
 export interface GenerationScreenProps {
   initial: GenerationJob;
+  initialBalance: number;
+  /** 1화면 끝난 뒤 온보딩의 "첫 화 결과"로 보낸다. */
+  episodeNumber: number;
   /** ImageGenerator.supportsInpainting() 의 값. 오픈 이슈 3 결과에 따라 꺼진다. */
   supportsInpainting?: boolean;
   /** 실제 모델 대신 목 생성기로 돌고 있는지. */
@@ -57,13 +61,15 @@ export interface GenerationScreenProps {
 /** PRD 3.1 — 콘티 기반 이미지 생성. 컷 단위 진행과 실패 재시도가 이 화면의 일이다. */
 export function GenerationScreen({
   initial,
+  initialBalance,
+  episodeNumber,
   supportsInpainting = false,
   usingMock = false,
   seriesTitle,
   episodeTitle,
 }: GenerationScreenProps) {
   const router = useRouter();
-  const { job, live } = useJobPolling(initial);
+  const { job, live, balance, refresh } = useJobPolling(initial, initialBalance);
   const [tab, setTab] = useState(0);
   const [pickedCut, setPickedCut] = useState(initial.cuts[0]?.cutId ?? "");
   const [intent, setIntent] = useState<CutEditIntent>("regenerate");
@@ -75,11 +81,15 @@ export function GenerationScreen({
   const s = summarizeJob(job);
   const doneCuts = job.cuts.filter((c) => c.status === "done");
   const failedCuts = job.cuts.filter((c) => c.status === "failed");
+  const refundedCount = failedCuts.filter((c) => c.refunded).length;
+  const allDone = !live && doneCuts.length === job.cuts.length;
 
   /** 액션 결과를 화면 상태로 옮긴다. 크레딧 부족만 시트를 연다. */
   function handle<T>(result: ActionResult<T>) {
     if (result.ok) {
       setNotice(null);
+      // 끝난 잡은 폴링이 멈춰 있다. 다시 돌린 뒤 한 번 받아 오면 폴링이 다시 시작된다.
+      void refresh();
       return;
     }
     if (result.kind === "credit") {
@@ -105,12 +115,12 @@ export function GenerationScreen({
         seriesTitle={seriesTitle}
         episodeTitle={episodeTitle}
         current="generate"
-        credits={12}
+        credits={balance}
         action={
           <Button
             size="sm"
             disabled={doneCuts.length === 0}
-            onClick={() => router.push(`/episodes/${job.episodeId}/editor?job=${job.id}`)}
+            onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}
           >
             편집기로
           </Button>
@@ -141,15 +151,36 @@ export function GenerationScreen({
           {tab === 0 ? (
             <>
               <CutProgressGrid
-                cuts={job.cuts.map((c) => ({ status: c.status, progress: c.progress }))}
+                cuts={job.cuts.map((c) => ({ status: c.status, progress: c.progress, refunded: c.refunded }))}
                 title={live ? `이미지 만드는 중 · ${s.percent}%` : "생성 끝"}
                 onRetry={() =>
-                  startTransition(async () => handle(await retryFailedCutsAction(job.id)))
+                  startTransition(async () =>
+                    handle(await retryFailedCutsAction({ episodeId: job.episodeId, jobId: job.id })),
+                  )
                 }
               />
-              <p className="text-caption text-ink-subtle">
-                이 화면을 닫아도 생성은 계속돼요. 끝나면 알려드릴게요.
-              </p>
+              {allDone ? (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-tint px-4 py-3">
+                  <span className="flex-1 text-body font-semibold text-brand-ink">
+                    {job.cuts.length}컷이 다 나왔어요.
+                  </span>
+                  {episodeNumber === 1 && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => router.push(`/onboarding/result?episode=${job.episodeId}`)}
+                    >
+                      첫 화 결과 보기
+                    </Button>
+                  )}
+                  <Button onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}>
+                    대사 다듬으러 가기
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-caption text-ink-subtle">
+                  이 화면을 닫아도 생성은 계속돼요. 홈의 &ldquo;이어서 만들기&rdquo;에서 다시 볼 수 있어요.
+                </p>
+              )}
             </>
           ) : (
             <div className="flex flex-col gap-4">
@@ -216,6 +247,7 @@ export function GenerationScreen({
                   startTransition(async () => {
                     handle(
                       await regenerateCutAction({
+                        episodeId: job.episodeId,
                         jobId: job.id,
                         cutId: pickedCut,
                         intent,
@@ -256,6 +288,7 @@ export function GenerationScreen({
                       startTransition(async () =>
                         handle(
                           await regenerateCutAction({
+                            episodeId: job.episodeId,
                             jobId: job.id,
                             cutId: c.cutId,
                             intent: "regenerate",
@@ -270,7 +303,9 @@ export function GenerationScreen({
               ))}
             </ul>
             <p className="text-caption text-ink-muted">
-              쓴 크레딧 {failedCuts.length}개는 이미 돌려드렸어요. 다시 만들 때 새로 차감돼요.
+              {refundedCount > 0
+                ? `실패한 컷에 쓴 크레딧 ${refundedCount}개는 돌려드렸어요. 다시 만들 때 새로 차감돼요.`
+                : "실패한 컷에는 크레딧을 쓰지 않았어요. 다시 만들 때 차감돼요."}
             </p>
           </section>
         )}
@@ -285,7 +320,7 @@ export function GenerationScreen({
                 key={c.cutId}
                 cut={c}
                 onOpen={() =>
-                  router.push(`/episodes/${job.episodeId}/editor?job=${job.id}&cut=${c.cutId}`)
+                  router.push(`/episodes/${job.episodeId}/editor?cut=${c.cutId}`)
                 }
               />
             ))}

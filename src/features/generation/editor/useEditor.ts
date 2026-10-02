@@ -64,8 +64,32 @@ export function useEditor({ initial, save }: UseEditorOptions) {
       setHistory((h) =>
         preview(
           h,
-          mapLayer(id, (l) => ({ ...l, box: { ...l.box, ...box } }), h.present),
+          mapLayer(
+            id,
+            (l) => {
+              const next = { ...l, box: { ...l.box, ...box } };
+              // 말풍선을 옮기면 꼬리 끝도 같이 옮긴다. 꼬리만 남아 엉뚱한 곳을 가리키지 않게.
+              if ("tail" in l && l.tail) {
+                const dx = next.box.x - l.box.x;
+                const dy = next.box.y - l.box.y;
+                return { ...next, tail: { x: l.tail.x + dx, y: l.tail.y + dy } };
+              }
+              return next;
+            },
+            h.present,
+          ),
         ),
+      );
+      setSaveState("dirty");
+    },
+    [mapLayer],
+  );
+
+  /** 꼬리 끝점을 끄는 중. 이력에 쌓이지 않는다. */
+  const previewTail = useCallback(
+    (id: string, tail: { x: number; y: number }) => {
+      setHistory((h) =>
+        preview(h, mapLayer(id, (l) => ("balloon" in l ? { ...l, tail } : l), h.present)),
       );
       setSaveState("dirty");
     },
@@ -151,6 +175,26 @@ export function useEditor({ initial, save }: UseEditorOptions) {
     return () => clearTimeout(timer);
   }, [saveState, tree, save]);
 
+  // 다른 컷으로 넘어가거나 화면을 떠날 때 3초를 기다리지 않고 바로 보낸다.
+  // 안 그러면 마지막 변경이 디바운스 안에서 사라진다.
+  const pendingRef = useRef<{ dirty: boolean; tree: CutLayerTree }>({ dirty: false, tree });
+  useEffect(() => {
+    pendingRef.current = { dirty: saveState === "dirty", tree };
+  }, [saveState, tree]);
+  useEffect(() => {
+    const flush = () => {
+      if (pendingRef.current.dirty) {
+        pendingRef.current.dirty = false;
+        void save?.(pendingRef.current.tree).catch(() => {});
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [save]);
+
   // 실행 취소·다시 실행 단축키. 편집기에서 제일 많이 눌리는 키다.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -186,6 +230,7 @@ export function useEditor({ initial, save }: UseEditorOptions) {
     setSelectedId,
     beginDrag,
     previewBox,
+    previewTail,
     commitDrag,
     update,
     reorder,

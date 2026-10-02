@@ -5,14 +5,13 @@
  */
 
 import type { ImageGenerator } from "@/contracts/generation";
+import { processSingleton } from "@/lib/singleton";
 import { MockImageGenerator } from "./mock";
-
-let generator: ImageGenerator | null = null;
 
 export function getImageGenerator(): ImageGenerator {
   // 목 생성기는 "한 번 실패한 컷" 기억을 들고 있어야 재시도가 성공한다.
-  generator ??= new MockImageGenerator();
-  return generator;
+  // 액션과 라우트가 같은 기억을 보도록 프로세스에 하나만 둔다.
+  return processSingleton("image-generator", () => new MockImageGenerator());
 }
 
 export function usingMockGenerator(): boolean {
