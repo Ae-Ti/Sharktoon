@@ -1,6 +1,8 @@
 import { InsufficientCreditError } from "@/contracts/credit";
 import { processSingleton } from "@/lib/singleton";
 import type {
+  CreditPolicy,
+  RefundRequest,
   AdminOverview,
   Asset,
   AssetInput,
@@ -159,6 +161,15 @@ function newId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+const MOCK_POLICY: CreditPolicy = {
+  signupBonus: 8,
+  attendanceDaily: 0.5,
+  attendanceStreakDays: 7,
+  attendanceStreakBonus: 1,
+  attendanceMonthlyCap: 3,
+  refundFeeRate: 0.1,
+};
+
 const DEFAULT_RULE: SeriesRule = {
   stylePreset: "심플 라인",
   defaultCutCount: 6,
@@ -189,6 +200,11 @@ const S = processSingleton("platform-mock", () => {
     } as Record<string, string>,
     holds: new Map<string, { amount: number; reason: string; jobId: string; status: string }>(),
     attendance: { checkedInToday: false, streak: 6 } as AttendanceState,
+    attendanceThisMonth: 0,
+    /** 목에서 결제는 운영자 수동 지급만 흉내낸다. */
+    purchased: { credits: 0, krw: 0 },
+    refunds: [] as RefundRequest[],
+    deletionRequestedAt: null as string | null,
   };
 });
 
@@ -215,7 +231,14 @@ export const mockRepository: PlatformRepository = {
       throw new Error("오늘은 이미 출석했습니다");
     }
     const streak = S.attendance.streak + 1;
-    const granted = streak % 7 === 0 ? 4 : 1;
+    // 실제 저장소와 같은 정책: 하루 0.5, 연속 보너스 1, 한 달 상한 3.
+    const p = MOCK_POLICY;
+    const room = Math.max(0, p.attendanceMonthlyCap - S.attendanceThisMonth);
+    const daily = Math.min(p.attendanceDaily, room);
+    const bonus =
+      streak % p.attendanceStreakDays === 0 ? Math.min(p.attendanceStreakBonus, room - daily) : 0;
+    const granted = daily + bonus;
+    S.attendanceThisMonth += granted;
     S.attendance = { checkedInToday: true, streak };
     S.credit = { balance: S.credit.balance + granted, held: S.credit.held, delta: granted };
     return { streak, granted, balance: S.credit.balance };
@@ -464,14 +487,6 @@ export const mockRepository: PlatformRepository = {
     return h.amount;
   },
 
-  async refundOpenHolds(jobId: string) {
-    let total = 0;
-    for (const [id, h] of S.holds) {
-      if (h.jobId === jobId && h.status === "held") total += await this.refundCredit(id, "");
-    }
-    return total;
-  },
-
   async getAdminOverview(): Promise<AdminOverview | null> {
     // 목에서는 운영자라고 치고 그럴듯한 수를 보여준다.
     return {
@@ -496,5 +511,83 @@ export const mockRepository: PlatformRepository = {
       (acc, a) => ({ ...acc, [a.kind]: acc[a.kind] + 1 }),
       { character: 0, location: 0, prop: 0, style: 0 } as Record<AssetKind, number>,
     );
+  },
+
+  async getCreditDetail() {
+    const purchase = Math.min(S.purchased.credits, S.credit.balance);
+    return {
+      balance: S.credit.balance,
+      held: S.credit.held,
+      byKind: { free: S.credit.balance - purchase, subscription: 0, purchase },
+      nextExpiry: null,
+    };
+  },
+
+  async getCreditPolicy() {
+    return MOCK_POLICY;
+  },
+
+  async getRefundQuote() {
+    const credits = Math.min(S.purchased.credits, S.credit.balance);
+    const unit = S.purchased.credits ? S.purchased.krw / S.purchased.credits : 0;
+    const gross = Math.floor(credits * unit);
+    const fee = Math.floor(gross * MOCK_POLICY.refundFeeRate);
+    return { credits, grossKrw: gross, feeKrw: fee, netKrw: gross - fee };
+  },
+
+  async getMyRefundRequest() {
+    return S.refunds.at(-1) ?? null;
+  },
+
+  async requestRefund(reason) {
+    if (S.refunds.some((r) => r.status === "requested")) throw new Error("이미 처리 중인 환불 신청이 있습니다");
+    const q = await mockRepository.getRefundQuote();
+    if (q.netKrw <= 0) throw new Error("환불할 유료 크레딧이 없습니다");
+    S.refunds.push({
+      id: newId("rf"),
+      userId: PROFILE.id,
+      credits: q.credits,
+      netKrw: q.netKrw,
+      feeKrw: q.feeKrw,
+      reason,
+      status: "requested",
+      createdAt: new Date().toISOString(),
+    });
+  },
+
+  async getAccountStatus() {
+    const at = S.deletionRequestedAt;
+    return {
+      deletionRequestedAt: at,
+      purgeAt: at ? new Date(Date.parse(at) + 30 * 86_400_000).toISOString() : null,
+    };
+  },
+
+  async requestAccountDeletion() {
+    S.deletionRequestedAt ??= new Date().toISOString();
+    return mockRepository.getAccountStatus();
+  },
+
+  async cancelAccountDeletion() {
+    S.deletionRequestedAt = null;
+  },
+
+  async listRefundRequests() {
+    return [...S.refunds].reverse();
+  },
+
+  async processRefund(id, approve) {
+    const r = S.refunds.find((x) => x.id === id && x.status === "requested");
+    if (!r) throw new Error("처리할 환불 신청이 없습니다");
+    r.status = approve ? "approved" : "rejected";
+    if (approve) {
+      S.credit = { ...S.credit, balance: S.credit.balance - r.credits };
+      S.purchased = { credits: 0, krw: 0 };
+    }
+  },
+
+  async grantPurchase({ credits, amountKrw }) {
+    S.purchased = { credits: S.purchased.credits + credits, krw: S.purchased.krw + amountKrw };
+    S.credit = { ...S.credit, balance: S.credit.balance + credits, delta: credits };
   },
 };

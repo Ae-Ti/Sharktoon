@@ -227,3 +227,69 @@ export async function startEpisodeAction(input: {
     return fail(e);
   }
 }
+
+/** 환불 신청(약관 제14조). 견적은 서버가 그 시점 값으로 계산한다. */
+export async function requestRefundAction(reason: string | null): Promise<Result> {
+  try {
+    await (await getRepository()).requestRefund(reason?.slice(0, 500) || null);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 탈퇴 요청. 30일 안에는 철회할 수 있다. */
+export async function requestAccountDeletionAction(): Promise<Result> {
+  try {
+    await (await getRepository()).requestAccountDeletion();
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function cancelAccountDeletionAction(): Promise<Result> {
+  try {
+    await (await getRepository()).cancelAccountDeletion();
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 운영자: 환불 승인·거절. 권한은 DB 함수가 다시 확인한다(SK004). */
+export async function processRefundAction(
+  id: string,
+  approve: boolean,
+  note: string | null,
+): Promise<Result> {
+  try {
+    await (await getRepository()).processRefund(id, approve, note);
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 운영자: 수동 지급(베타 테스터, 계좌이체). */
+export async function grantPurchaseAction(input: {
+  userId: string;
+  credits: number;
+  amountKrw: number;
+  note: string | null;
+}): Promise<Result> {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(input.userId)) throw new Error("사용자 id 형식이 아니에요.");
+    if (!(input.credits > 0 && input.credits <= 10_000)) throw new Error("크레딧은 1~10000 사이로 적어 주세요.");
+    if (!(input.amountKrw >= 0 && input.amountKrw <= 10_000_000)) throw new Error("금액을 확인해 주세요.");
+    await (await getRepository()).grantPurchase(input);
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}

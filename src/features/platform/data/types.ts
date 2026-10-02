@@ -21,6 +21,51 @@ export interface CreditState {
   delta?: number;
 }
 
+/** 크레딧 종류별 잔량. 무상 → 구독 → 구매 순으로 쓴다(약관 제8조). */
+export interface CreditDetail {
+  balance: number;
+  held: number;
+  byKind: { free: number; subscription: number; purchase: number };
+  /** 가장 먼저 사라질 크레딧. 화면이 "N일 뒤 M크레딧 소멸"로 알린다. */
+  nextExpiry: { amount: number; at: string } | null;
+}
+
+/** 크레딧 정책. 출석 문구처럼 화면이 값을 그대로 보여주는 데 쓴다. */
+export interface CreditPolicy {
+  signupBonus: number;
+  attendanceDaily: number;
+  attendanceStreakDays: number;
+  attendanceStreakBonus: number;
+  attendanceMonthlyCap: number;
+  refundFeeRate: number;
+}
+
+/** 환불 견적(약관 제14조). 유료 크레딧 미사용분 × 산 단가 − 공제. */
+export interface RefundQuote {
+  credits: number;
+  grossKrw: number;
+  feeKrw: number;
+  netKrw: number;
+}
+
+export interface RefundRequest {
+  id: string;
+  userId: string;
+  credits: number;
+  netKrw: number;
+  feeKrw: number;
+  reason: string | null;
+  status: "requested" | "approved" | "rejected";
+  createdAt: string;
+}
+
+export interface AccountStatus {
+  /** 탈퇴 요청 시각. 30일 안에는 철회할 수 있다. */
+  deletionRequestedAt: string | null;
+  /** 이 시각이 지나면 계정과 파일이 지워진다. */
+  purgeAt: string | null;
+}
+
 export interface AttendanceState {
   /** 오늘 이미 받았는지. */
   checkedInToday: boolean;
@@ -144,14 +189,25 @@ export interface PlatformRepository {
   }): Promise<string>;
   commitCredit(holdId: string): Promise<void>;
   refundCredit(holdId: string, reason: string): Promise<number>;
-  /**
-   * 잡에 걸린 채 정산되지 않은 hold 를 전부 환불한다. 서버가 재시작돼 워커가 사라진
-   * 잡을 다시 올릴 때 쓴다. 돌려준 크레딧 합계를 돌려준다.
-   */
-  refundOpenHolds(jobId: string, reason: string): Promise<number>;
 
   /** 운영자 전용. 관리자가 아니면 null 을 돌려준다. */
   getAdminOverview(): Promise<AdminOverview | null>;
+
+  // --- 결제·환불·탈퇴 (마이그레이션 0008)
+  getCreditDetail(): Promise<CreditDetail>;
+  getCreditPolicy(): Promise<CreditPolicy>;
+  getRefundQuote(): Promise<RefundQuote>;
+  /** 내 가장 최근 환불 신청. */
+  getMyRefundRequest(): Promise<RefundRequest | null>;
+  requestRefund(reason: string | null): Promise<void>;
+  getAccountStatus(): Promise<AccountStatus>;
+  requestAccountDeletion(): Promise<AccountStatus>;
+  cancelAccountDeletion(): Promise<void>;
+  /** 운영자 전용. 운영자가 아니면 SK004 로 막힌다. */
+  listRefundRequests(): Promise<RefundRequest[]>;
+  processRefund(id: string, approve: boolean, note: string | null): Promise<void>;
+  /** 운영자 수동 지급(베타 테스터, 계좌이체). 결제 기록과 구매 크레딧을 같이 만든다. */
+  grantPurchase(input: { userId: string; credits: number; amountKrw: number; note: string | null }): Promise<void>;
 }
 
 export interface Resumable {

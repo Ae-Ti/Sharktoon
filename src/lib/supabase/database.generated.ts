@@ -166,6 +166,39 @@ export type Database = {
           },
         ]
       }
+      credit_hold_lots: {
+        Row: {
+          amount: number
+          hold_id: string
+          lot_id: string
+        }
+        Insert: {
+          amount: number
+          hold_id: string
+          lot_id: string
+        }
+        Update: {
+          amount?: number
+          hold_id?: string
+          lot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_hold_lots_hold_id_fkey"
+            columns: ["hold_id"]
+            isOneToOne: false
+            referencedRelation: "credit_holds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_hold_lots_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_holds: {
         Row: {
           amount: number
@@ -206,6 +239,102 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      credit_lots: {
+        Row: {
+          amount: number
+          created_at: string
+          earn_reason: Database["public"]["Enums"]["credit_earn_reason"]
+          expires_at: string | null
+          id: string
+          is_rollover: boolean
+          kind: Database["public"]["Enums"]["credit_lot_kind"]
+          payment_id: string | null
+          remaining: number
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          earn_reason: Database["public"]["Enums"]["credit_earn_reason"]
+          expires_at?: string | null
+          id?: string
+          is_rollover?: boolean
+          kind: Database["public"]["Enums"]["credit_lot_kind"]
+          payment_id?: string | null
+          remaining: number
+          unit_price?: number
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          earn_reason?: Database["public"]["Enums"]["credit_earn_reason"]
+          expires_at?: string | null
+          id?: string
+          is_rollover?: boolean
+          kind?: Database["public"]["Enums"]["credit_lot_kind"]
+          payment_id?: string | null
+          remaining?: number
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_lots_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_lots_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_policy: {
+        Row: {
+          attendance_daily: number
+          attendance_monthly_cap: number
+          attendance_streak_bonus: number
+          attendance_streak_days: number
+          free_credit_days: number
+          id: boolean
+          purchase_credit_years: number
+          refund_fee_rate: number
+          signup_bonus: number
+          updated_at: string
+        }
+        Insert: {
+          attendance_daily?: number
+          attendance_monthly_cap?: number
+          attendance_streak_bonus?: number
+          attendance_streak_days?: number
+          free_credit_days?: number
+          id?: boolean
+          purchase_credit_years?: number
+          refund_fee_rate?: number
+          signup_bonus?: number
+          updated_at?: string
+        }
+        Update: {
+          attendance_daily?: number
+          attendance_monthly_cap?: number
+          attendance_streak_bonus?: number
+          attendance_streak_days?: number
+          free_credit_days?: number
+          id?: boolean
+          purchase_credit_years?: number
+          refund_fee_rate?: number
+          signup_bonus?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       credit_transactions: {
         Row: {
@@ -374,8 +503,8 @@ export type Database = {
       }
       generation_jobs: {
         Row: {
+          context: Json
           created_at: string
-          cuts: Json
           episode_id: string
           finished_at: string | null
           id: string
@@ -385,8 +514,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          context?: Json
           created_at?: string
-          cuts?: Json
           episode_id: string
           finished_at?: string | null
           id: string
@@ -396,8 +525,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          context?: Json
           created_at?: string
-          cuts?: Json
           episode_id?: string
           finished_at?: string | null
           id?: string
@@ -417,6 +546,145 @@ export type Database = {
           {
             foreignKeyName: "generation_jobs_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_tasks: {
+        Row: {
+          attempt: number
+          created_at: string
+          cut_id: string
+          episode_id: string
+          error: string | null
+          finished_at: string | null
+          hold_id: string | null
+          id: number
+          image_ref: string | null
+          index: number
+          intent: string
+          job_id: string
+          lease_until: string | null
+          owner_id: string
+          prompt: string
+          refunded: boolean
+          started_at: string | null
+          status: Database["public"]["Enums"]["generation_task_status"]
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          cut_id: string
+          episode_id: string
+          error?: string | null
+          finished_at?: string | null
+          hold_id?: string | null
+          id?: never
+          image_ref?: string | null
+          index: number
+          intent?: string
+          job_id: string
+          lease_until?: string | null
+          owner_id: string
+          prompt: string
+          refunded?: boolean
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_task_status"]
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          cut_id?: string
+          episode_id?: string
+          error?: string | null
+          finished_at?: string | null
+          hold_id?: string | null
+          id?: never
+          image_ref?: string | null
+          index?: number
+          intent?: string
+          job_id?: string
+          lease_until?: string | null
+          owner_id?: string
+          prompt?: string
+          refunded?: boolean
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_task_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_tasks_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_tasks_hold_id_fkey"
+            columns: ["hold_id"]
+            isOneToOne: false
+            referencedRelation: "credit_holds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_tasks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "generation_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_tasks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_krw: number
+          created_at: string
+          id: string
+          note: string | null
+          paid_at: string
+          product: string
+          provider: string
+          provider_ref: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          user_id: string
+        }
+        Insert: {
+          amount_krw: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          paid_at?: string
+          product: string
+          provider: string
+          provider_ref?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          user_id: string
+        }
+        Update: {
+          amount_krw?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          paid_at?: string
+          product?: string
+          provider?: string
+          provider_ref?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -475,6 +743,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          deletion_requested_at: string | null
           display_name: string | null
           handle: string | null
           id: string
@@ -486,6 +755,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          deletion_requested_at?: string | null
           display_name?: string | null
           handle?: string | null
           id: string
@@ -497,6 +767,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          deletion_requested_at?: string | null
           display_name?: string | null
           handle?: string | null
           id?: string
@@ -506,6 +777,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      refund_requests: {
+        Row: {
+          created_at: string
+          credits: number
+          fee_krw: number
+          gross_krw: number
+          id: string
+          net_krw: number
+          note: string | null
+          processed_at: string | null
+          reason: string | null
+          status: Database["public"]["Enums"]["refund_request_status"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits: number
+          fee_krw: number
+          gross_krw: number
+          id?: string
+          net_krw: number
+          note?: string | null
+          processed_at?: string | null
+          reason?: string | null
+          status?: Database["public"]["Enums"]["refund_request_status"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          fee_krw?: number
+          gross_krw?: number
+          id?: string
+          net_krw?: number
+          note?: string | null
+          processed_at?: string | null
+          reason?: string | null
+          status?: Database["public"]["Enums"]["refund_request_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       series: {
         Row: {
@@ -666,6 +987,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _credit_add_lot: {
+        Args: {
+          p_amount: number
+          p_expires_at: string
+          p_is_rollover?: boolean
+          p_kind: Database["public"]["Enums"]["credit_lot_kind"]
+          p_payment_id?: string
+          p_reason: Database["public"]["Enums"]["credit_earn_reason"]
+          p_unit_price: number
+          p_user: string
+        }
+        Returns: number
+      }
+      _credit_expire_user: { Args: { p_user: string }; Returns: number }
       admin_funnel: {
         Args: never
         Returns: {
@@ -682,6 +1017,32 @@ export type Database = {
           refunded_amount: number
           spent: number
         }[]
+      }
+      admin_grant_purchase: {
+        Args: {
+          p_amount_krw: number
+          p_credits: number
+          p_note?: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      admin_list_refund_requests: {
+        Args: never
+        Returns: {
+          created_at: string
+          credits: number
+          fee_krw: number
+          id: string
+          net_krw: number
+          reason: string
+          status: Database["public"]["Enums"]["refund_request_status"]
+          user_id: string
+        }[]
+      }
+      admin_process_refund: {
+        Args: { p_approve: boolean; p_id: string; p_note?: string }
+        Returns: undefined
       }
       admin_recent_refunds: {
         Args: { p_limit?: number }
@@ -700,7 +1061,50 @@ export type Database = {
           streak: number
         }[]
       }
+      cancel_account_deletion: { Args: never; Returns: undefined }
+      claim_generation_tasks: {
+        Args: { p_lease_seconds?: number; p_limit?: number; p_per_job?: number }
+        Returns: {
+          attempt: number
+          created_at: string
+          cut_id: string
+          episode_id: string
+          error: string | null
+          finished_at: string | null
+          hold_id: string | null
+          id: number
+          image_ref: string | null
+          index: number
+          intent: string
+          job_id: string
+          lease_until: string | null
+          owner_id: string
+          prompt: string
+          refunded: boolean
+          started_at: string | null
+          status: Database["public"]["Enums"]["generation_task_status"]
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "generation_tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       credit_commit: { Args: { p_hold_id: string }; Returns: undefined }
+      credit_expire_all: { Args: never; Returns: number }
+      credit_grant: {
+        Args: {
+          p_amount: number
+          p_expires_at?: string
+          p_kind: Database["public"]["Enums"]["credit_lot_kind"]
+          p_payment_id?: string
+          p_reason: Database["public"]["Enums"]["credit_earn_reason"]
+          p_unit_price: number
+          p_user_id: string
+        }
+        Returns: number
+      }
       credit_hold: {
         Args: {
           p_amount: number
@@ -714,7 +1118,28 @@ export type Database = {
         Args: { p_hold_id: string; p_reason?: string }
         Returns: number
       }
+      credit_refund_quote: {
+        Args: never
+        Returns: {
+          credits: number
+          fee_krw: number
+          gross_krw: number
+          net_krw: number
+        }[]
+      }
+      credit_start_subscription_period: {
+        Args: {
+          p_amount: number
+          p_payment_id: string
+          p_period_end: string
+          p_unit_price: number
+          p_user_id: string
+        }
+        Returns: number
+      }
       is_admin: { Args: never; Returns: boolean }
+      request_account_deletion: { Args: never; Returns: string }
+      request_credit_refund: { Args: { p_reason?: string }; Returns: string }
     }
     Enums: {
       asset_kind: "character" | "location" | "prop" | "style"
@@ -727,10 +1152,13 @@ export type Database = {
         | "generation_refund"
         | "monthly_rollover"
       credit_hold_status: "held" | "committed" | "refunded"
+      credit_lot_kind: "free" | "subscription" | "purchase"
       credit_spend_reason:
         | "cut_image"
         | "partial_regenerate"
         | "animation_episode"
+        | "expiry"
+        | "refund_payout"
       episode_status:
         | "draft"
         | "storyboard"
@@ -743,7 +1171,10 @@ export type Database = {
         | "succeeded"
         | "partially_failed"
         | "failed"
+      generation_task_status: "queued" | "running" | "done" | "failed"
+      payment_status: "paid" | "cancelled" | "refunded" | "partially_refunded"
       plan_tier: "free" | "basic" | "pro"
+      refund_request_status: "requested" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -885,10 +1316,13 @@ export const Constants = {
         "monthly_rollover",
       ],
       credit_hold_status: ["held", "committed", "refunded"],
+      credit_lot_kind: ["free", "subscription", "purchase"],
       credit_spend_reason: [
         "cut_image",
         "partial_regenerate",
         "animation_episode",
+        "expiry",
+        "refund_payout",
       ],
       episode_status: [
         "draft",
@@ -904,7 +1338,10 @@ export const Constants = {
         "partially_failed",
         "failed",
       ],
+      generation_task_status: ["queued", "running", "done", "failed"],
+      payment_status: ["paid", "cancelled", "refunded", "partially_refunded"],
       plan_tier: ["free", "basic", "pro"],
+      refund_request_status: ["requested", "approved", "rejected"],
     },
   },
 } as const

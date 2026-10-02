@@ -1,9 +1,8 @@
 /**
- * 인메모리 큐 — 오픈 이슈 11 이 끝나기 전까지의 구현.
+ * 인메모리 큐 — 목 모드(`npm run dev:mock`)와 검증 스크립트용.
  *
- * **프로세스 안에서만 산다.** 서버가 재시작하면 돌던 잡이 사라지고,
- * 인스턴스가 둘이면 다른 인스턴스의 잡을 못 본다. 개발과 목업에는 충분하고
- * 프로덕션에는 못 쓴다 — 그래서 `JobQueue` 뒤에 숨겨 두었다.
+ * **프로세스 안에서만 산다.** 서버가 재시작하면 돌던 잡이 사라지고, 인스턴스가 둘이면
+ * 다른 인스턴스의 잡을 못 본다. 실제 저장소 모드에서는 Supabase 큐(`supabase.ts`)를 쓴다.
  */
 
 import {
@@ -12,26 +11,30 @@ import {
   type GenerationJobCut,
   type JobStatus,
 } from "@/contracts/generation";
-import { CUT_CONCURRENCY, type JobQueue, type QueueHooks } from "./types";
+import {
+  CUT_CONCURRENCY,
+  withRequest,
+  type CutRunner,
+  type JobContext,
+  type JobQueue,
+} from "./types";
 
-export interface CutWorkerInput {
-  job: GenerationJob;
-  cut: GenerationJobCut;
+export interface MemoryQueueHooks {
+  /** 등록·컷 종료·잡 종료처럼 상태가 실제로 바뀔 때. 진행률 틱마다 부르지 않는다. */
+  onChange?: (job: GenerationJob, event: "submit" | "cut" | "settle") => void;
 }
 
-export interface CutWorkerResult {
-  imageUrl: string;
-  imageRef?: string;
-}
-
-/** 컷 하나를 실제로 만드는 일. 파이프라인이 크레딧까지 묶어서 넘긴다. */
-export type CutWorker = (input: CutWorkerInput) => Promise<CutWorkerResult>;
-
-export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): JobQueue {
+export function createMemoryQueue(runner: CutRunner, hooks: MemoryQueueHooks = {}): JobQueue {
   const jobs = new Map<string, GenerationJob>();
+  const contexts = new Map<string, JobContext>();
   /** 잡마다 아직 안 끝난 컷 대기열. */
   const pending = new Map<string, string[]>();
   const running = new Map<string, number>();
+
+  function emit(jobId: string, event: "submit" | "cut" | "settle") {
+    const job = jobs.get(jobId);
+    if (job) hooks.onChange?.(job, event);
+  }
 
   function patchCut(jobId: string, cutId: string, patch: Partial<GenerationJobCut>) {
     const job = jobs.get(jobId);
@@ -40,11 +43,6 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
       ...job,
       cuts: job.cuts.map((c) => (c.cutId === cutId ? { ...c, ...patch } : c)),
     });
-  }
-
-  function emit(jobId: string, event: "submit" | "cut" | "settle") {
-    const job = jobs.get(jobId);
-    if (job) hooks.onChange?.(job, event);
   }
 
   /** 컷 상태에서 잡 상태를 다시 센다. 두 곳에서 따로 세면 어긋난다. */
@@ -74,7 +72,9 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
   async function runCut(jobId: string, cutId: string) {
     const job = jobs.get(jobId);
     const cut = job?.cuts.find((c) => c.cutId === cutId);
-    if (!job || !cut) return;
+    const context = contexts.get(jobId);
+    const work = context?.cuts[cutId];
+    if (!job || !cut || !context || !work) return;
 
     patchCut(jobId, cutId, {
       status: "running",
@@ -84,7 +84,6 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
     });
 
     // 모델이 중간 진행률을 주지 않으므로 화면이 멈춘 것처럼 보이지 않게 추정치를 올린다.
-    // 80% 에서 멈춰 세운다 — 끝나지 않았는데 100% 를 보여주면 그게 더 나쁘다.
     const ticker = setInterval(() => {
       const current = jobs.get(jobId)?.cuts.find((c) => c.cutId === cutId);
       if (!current || current.status !== "running") return;
@@ -92,7 +91,15 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
     }, 400);
 
     try {
-      const { imageUrl, imageRef } = await worker({ job, cut });
+      const { imageUrl, imageRef } = await runner({
+        job,
+        cut,
+        intent: work.intent,
+        prompt: work.prompt,
+        characterSheetRefs: context.characterSheetRefs,
+        assetRefs: context.assetRefs,
+        seriesRule: context.seriesRule,
+      });
       patchCut(jobId, cutId, {
         status: "done",
         progress: 100,
@@ -106,7 +113,7 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
         status: "failed",
         progress: undefined,
         error: e instanceof Error ? e.message : "이미지를 못 만들었어요",
-        // 크레딧을 잡기 전에 막혔으면(잔량 부족) 돌려줄 것이 없다. 워커가 알려준다.
+        // 크레딧을 잡기 전에 막혔으면(잔량 부족) 돌려줄 것이 없다. 작업자가 알려준다.
         refunded: (e as { refunded?: boolean } | null)?.refunded === true,
         finishedAt: new Date().toISOString(),
       });
@@ -120,18 +127,25 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
   }
 
   return {
-    async submit(job) {
+    async submit(job, context) {
       jobs.set(job.id, { ...job, status: "running" });
+      contexts.set(job.id, structuredClone(context));
       pending.set(job.id, job.cuts.filter((c) => c.status === "queued").map((c) => c.cutId));
       running.set(job.id, 0);
       emit(job.id, "submit");
       pump(job.id);
     },
 
-    async requeue(jobId, cutId) {
+    async requeue(jobId, cutId, change) {
       const job = jobs.get(jobId);
       const cut = job?.cuts.find((c) => c.cutId === cutId);
-      if (!job || !cut || cut.status === "running") return;
+      const context = contexts.get(jobId);
+      if (!job || !cut || !context || cut.status === "running" || cut.status === "queued") return;
+
+      const prev = context.cuts[cutId];
+      if (prev && change) {
+        context.cuts[cutId] = { intent: change.intent, prompt: withRequest(prev.prompt, change.request) };
+      }
 
       jobs.set(jobId, {
         ...job,
@@ -154,26 +168,14 @@ export function createMemoryQueue(worker: CutWorker, hooks: QueueHooks = {}): Jo
       return jobs.get(jobId) ?? null;
     },
 
-    async restore(job) {
-      if (jobs.has(job.id)) return;
-      // 서버가 재시작되면 돌던 컷은 주인을 잃는다. 실패로 돌려 사용자가 다시 누르게 한다.
-      // 크레딧은 hold 가 남아 있을 수 있다 — 정산 배치(운영)가 오래된 hold 를 환불한다.
-      jobs.set(job.id, {
-        ...job,
-        cuts: job.cuts.map((c) =>
-          c.status === "queued" || c.status === "running"
-            ? { ...c, status: "failed", error: "서버가 다시 시작돼 멈췄어요. 다시 눌러 주세요." }
-            : c,
-        ),
-      });
-      running.set(job.id, 0);
-      settleJob(job.id);
-    },
-
     async countActive(userId) {
       return [...jobs.values()].filter(
         (j) => j.userId === userId && (j.status === "queued" || j.status === "running"),
       ).length;
+    },
+
+    async drain() {
+      return 0;
     },
   };
 }

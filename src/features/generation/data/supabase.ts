@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { CutLayerTree } from "../types/layer";
 import type { Storyboard } from "../types/storyboard";
+import { buildJobView, type JobRowLike, type TaskRowLike } from "../queue/jobView";
 import type { CutRecord, GenerationStore, PostPackage } from "./types";
 
 /**
@@ -21,45 +22,19 @@ async function userId(): Promise<string> {
   return data.user.id;
 }
 
-/** 저장된 잡의 컷 ref 를 보기용 URL 로 바꾼다. 서명 URL 은 저장하지 않는다(만료된다). */
-async function withImageUrls(ownerId: string, job: GenerationJob): Promise<GenerationJob> {
-  const refs = job.cuts.map((c) => c.imageRef).filter((r): r is string => Boolean(r));
-  const urls = await resolveImages("cuts", ownerId, refs);
-  return {
-    ...job,
-    cuts: job.cuts.map((c) => ({
-      ...c,
-      imageUrl: c.imageRef ? urls.get(c.imageRef) : undefined,
-    })),
-  };
+const JOB_COLUMNS = "id, owner_id, episode_id, mode, status, created_at, finished_at, context";
+const TASK_COLUMNS = "id, cut_id, index, attempt, status, image_ref, error, refunded, started_at, finished_at";
+
+/** 잡 행 + 작업 행 → 화면 모양. 사용자 세션으로 읽으므로 남의 잡은 여기 오지 않는다. */
+async function jobView(job: JobRowLike | null): Promise<GenerationJob | null> {
+  if (!job) return null;
+  const db = await createClient();
+  const { data: tasks } = await db.from("generation_tasks").select(TASK_COLUMNS).eq("job_id", job.id).order("id");
+  const rows = (tasks ?? []) as TaskRowLike[];
+  const refs = rows.map((t) => t.image_ref).filter((r): r is string => Boolean(r));
+  const urls = await resolveImages("cuts", job.owner_id, refs);
+  return buildJobView(job, rows, (r) => urls.get(r));
 }
-
-type JobRow = {
-  id: string;
-  owner_id: string;
-  episode_id: string;
-  mode: string;
-  status: GenerationJob["status"];
-  cuts: Json;
-  created_at: string;
-  finished_at: string | null;
-};
-
-function fromJobRow(row: JobRow, seriesId: string): GenerationJob {
-  return {
-    id: row.id,
-    userId: row.owner_id,
-    episodeId: row.episode_id,
-    seriesId,
-    mode: row.mode as GenerationJob["mode"],
-    status: row.status,
-    cuts: row.cuts as unknown as GenerationJob["cuts"],
-    createdAt: row.created_at,
-    finishedAt: row.finished_at ?? undefined,
-  };
-}
-
-const JOB_COLUMNS = "id, owner_id, episode_id, mode, status, cuts, created_at, finished_at, episodes(series_id)";
 
 export const supabaseGenerationStore: GenerationStore = {
   async getStoryboard(episodeId) {
@@ -87,9 +62,7 @@ export const supabaseGenerationStore: GenerationStore = {
   async getJob(jobId) {
     const db = await createClient();
     const { data } = await db.from("generation_jobs").select(JOB_COLUMNS).eq("id", jobId).maybeSingle();
-    if (!data) return null;
-    const seriesId = (data.episodes as unknown as { series_id: string } | null)?.series_id ?? "";
-    return withImageUrls(data.owner_id, fromJobRow(data, seriesId));
+    return jobView(data as JobRowLike | null);
   },
 
   async getLatestJob(episodeId) {
@@ -100,10 +73,7 @@ export const supabaseGenerationStore: GenerationStore = {
       .eq("episode_id", episodeId)
       .order("created_at", { ascending: false })
       .limit(1);
-    const row = data?.[0];
-    if (!row) return null;
-    const seriesId = (row.episodes as unknown as { series_id: string } | null)?.series_id ?? "";
-    return withImageUrls(row.owner_id, fromJobRow(row, seriesId));
+    return jobView((data?.[0] as JobRowLike | undefined) ?? null);
   },
 
   async listCuts(episodeId) {
@@ -182,23 +152,6 @@ export const supabaseGenerationStore: GenerationStore = {
       .select("id");
     if (error) throw error;
     if (!data?.length) throw new Error("회차를 찾지 못했어요");
-  },
-
-  async workerSaveJob(job) {
-    const db = createServiceClient();
-    // 보기용 URL 은 만료되므로 저장하지 않는다. ref 만 남긴다.
-    const cuts = job.cuts.map((c) => ({ ...c, imageUrl: undefined }));
-    const { error } = await db.from("generation_jobs").upsert({
-      id: job.id,
-      owner_id: job.userId,
-      episode_id: job.episodeId,
-      mode: job.mode,
-      status: job.status,
-      cuts: cuts as unknown as Json,
-      created_at: job.createdAt,
-      finished_at: job.finishedAt ?? null,
-    });
-    if (error) throw error;
   },
 
   async workerSaveCutImage({ ownerId, episodeId, cutId, index, imageUrl, meta }) {

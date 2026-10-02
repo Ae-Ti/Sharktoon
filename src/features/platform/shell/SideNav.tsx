@@ -18,6 +18,7 @@ export function SideNav({ seriesHref }: SideNavProps) {
       ? [{ href: seriesHref, label: "시리즈", match: "/series" }]
       : []),
     { href: "/assets", label: "에셋", match: undefined },
+    { href: "/settings", label: "설정", match: undefined },
     { href: "/admin", label: "운영", match: undefined },
   ];
 

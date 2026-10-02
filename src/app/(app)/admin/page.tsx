@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Badge, EmptyState } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
+import { BillingAdmin } from "@/features/platform/admin/BillingAdmin";
 
 export const metadata: Metadata = { title: "운영 · 샥툰" };
 
@@ -22,6 +23,7 @@ export default async function Page() {
   }
 
   const { funnel, generation, credit, recentRefunds } = overview;
+  const refundRequests = await repo.listRefundRequests();
   const top = funnel[0]?.users ?? 0;
   const published = funnel[funnel.length - 1]?.users ?? 0;
   // 클로즈드 베타 출시 조건이 이 수치다.
@@ -137,6 +139,8 @@ export default async function Page() {
           </div>
         )}
       </section>
+
+      <BillingAdmin requests={refundRequests} />
     </div>
   );
 }

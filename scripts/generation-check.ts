@@ -30,6 +30,8 @@ import { InsufficientCreditError } from "@/contracts/credit";
 import { getGenerationStore } from "@/features/generation/data";
 import { buildLayerTree, hydrateLayerTree } from "@/features/generation/editor/buildLayerTree";
 import { withAiMetadata } from "@/features/generation/editor/pngMeta";
+import { buildJobView, latestPerCut, statusOf } from "@/features/generation/queue/jobView";
+import { estimateProgress, withRequest } from "@/features/generation/queue/types";
 import { tailWedge } from "@/features/generation/editor/shapes";
 import {
   HASHTAG_MAX,
@@ -197,6 +199,30 @@ async function main() {
     ok(fitDynamicTags(Array.from({ length: 40 }, (_, i) => `t${i}`), ["a", "b"]).length === HASHTAG_MAX - 2, "합계 25개를 넘기지 않는다");
   }
 
+  // --- 큐 → 화면 잡 (Supabase 큐가 쓰는 순수 함수)
+  {
+    const base = { image_ref: null, error: null, refunded: false, started_at: null, finished_at: null };
+    const tasks = [
+      { ...base, id: 1, cut_id: "a", index: 1, attempt: 1, status: "done" as const, image_ref: "u/e/a.png" },
+      { ...base, id: 2, cut_id: "b", index: 2, attempt: 1, status: "failed" as const, error: "x", refunded: true },
+      { ...base, id: 3, cut_id: "b", index: 2, attempt: 2, status: "running" as const, started_at: new Date(Date.now() - 7_500).toISOString() },
+    ];
+    const latest = latestPerCut(tasks);
+    ok(latest.length === 2 && latest[1].id === 3, "컷마다 가장 최근 시도만 본다");
+    ok(statusOf(latest) === "running", "하나라도 돌면 진행 중");
+    ok(statusOf([{ status: "done" }, { status: "failed" }]) === "partially_failed", "일부 실패");
+    ok(statusOf([{ status: "failed" }]) === "failed" && statusOf([{ status: "done" }]) === "succeeded", "전부 실패 / 전부 성공");
+    const view = buildJobView(
+      { id: "j", owner_id: "u", episode_id: "e", mode: "agent", status: "running", created_at: "2026-10-03T00:00:00Z", finished_at: null, context: { seriesId: "s" } },
+      tasks,
+      (r) => `signed:${r}`,
+    );
+    ok(view.cuts[0].imageUrl === "signed:u/e/a.png" && view.seriesId === "s", "이미지 ref 를 보기용 URL 로");
+    ok(view.cuts[1].attempt === 2 && (view.cuts[1].progress ?? 0) >= 35 && (view.cuts[1].progress ?? 0) <= 45, "진행 중 컷의 추정 진행률");
+    ok(estimateProgress(new Date(Date.now() - 600_000).toISOString()) === 80, "진행률은 80% 에서 멈춘다");
+    ok(withRequest("장면\n요청: 첫 요청", "두 번째") === "장면\n요청: 두 번째", "한 컷 모드 요청은 마지막 것만");
+  }
+
   // --- PNG AI 메타데이터
   {
     const png = Uint8Array.from(Buffer.from(
@@ -237,7 +263,7 @@ async function main() {
     });
     if (!started.ok) throw new Error("생성 시작 실패");
     const jobId = started.job.id;
-    const owner = { jobId, userId: USER, restore: async () => null };
+    const owner = { jobId, userId: USER };
 
     ok((await getJob(jobId, "someone-else")) === null, "남의 잡은 안 보인다");
 

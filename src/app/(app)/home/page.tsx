@@ -18,10 +18,11 @@ const RESUME: Record<EpisodeStatus, { note: string; label: string; path: string 
 
 export default async function Page() {
   const repo = await getRepository();
-  const [series, attendance, resumable] = await Promise.all([
+  const [series, attendance, resumable, policy] = await Promise.all([
     repo.listSeries(),
     repo.getAttendance(),
     repo.getResumable(),
+    repo.getCreditPolicy(),
   ]);
 
   return (
@@ -31,6 +32,7 @@ export default async function Page() {
       <AttendanceBanner
         checkedInToday={attendance.checkedInToday}
         streak={attendance.streak}
+        policy={policy}
       />
 
       <section className="flex flex-col gap-3">

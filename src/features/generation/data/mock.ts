@@ -61,9 +61,6 @@ export const mockGenerationStore: GenerationStore = {
     await setEpisodeStatus(episodeId, "published");
   },
 
-  async workerSaveJob(job) {
-    S.jobs.set(job.id, structuredClone(job));
-  },
   async workerSaveCutImage({ episodeId, cutId, index, imageUrl }) {
     const cuts = cutsOf(episodeId);
     const prev = cuts.get(cutId);
@@ -80,6 +77,11 @@ export const mockGenerationStore: GenerationStore = {
     await setEpisodeStatus(episodeId, status);
   },
 };
+
+/** 인메모리 큐가 상태를 바꿀 때 사본을 남긴다(목 모드 전용). */
+export function saveMockJob(job: GenerationJob) {
+  S.jobs.set(job.id, structuredClone(job));
+}
 
 /** 회차 상태는 플랫폼 목 저장소가 들고 있다. 같은 객체를 고친다. */
 async function setEpisodeStatus(episodeId: string, status: GenerationJob["status"] | string) {

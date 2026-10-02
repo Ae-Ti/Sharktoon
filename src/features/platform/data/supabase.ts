@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { createCreditLedger } from "@/features/platform/credit/ledger";
-import { createServiceClient } from "@/lib/supabase/service";
 import { resolveImages } from "./images";
 import type { AssetKind } from "@/lib/supabase/database.types";
 import type {
+  AccountStatus,
   AdminOverview,
+  CreditDetail,
+  RefundRequest,
   Asset,
   AssetInput,
   PlatformRepository,
@@ -604,19 +606,6 @@ export const supabaseRepository: PlatformRepository = {
     return createCreditLedger().refund(holdId as never, reason);
   },
 
-  async refundOpenHolds(jobId: string, reason: string) {
-    const ledger = createCreditLedger();
-    const { data, error } = await createServiceClient()
-      .from("credit_holds")
-      .select("id")
-      .eq("job_id", jobId)
-      .eq("status", "held");
-    if (error) throw error;
-    let total = 0;
-    for (const h of data ?? []) total += await ledger.refund(h.id as never, reason);
-    return total;
-  },
-
   async getAdminOverview(): Promise<AdminOverview | null> {
     const db = await createClient();
     // 집계는 security definer 함수 안에서만 열린다. 운영자가 아니면 SK004 로 막힌다.
@@ -654,4 +643,152 @@ export const supabaseRepository: PlatformRepository = {
       })),
     };
   },
+
+  async getCreditDetail(): Promise<CreditDetail> {
+    const db = await createClient();
+    const [{ data: account }, { data: lots }] = await Promise.all([
+      db.from("credit_accounts").select("balance, held").single(),
+      db.from("credit_lots").select("kind, remaining, expires_at").gt("remaining", 0),
+    ]);
+    const now = Date.now();
+    const live = (lots ?? []).filter((l) => !l.expires_at || Date.parse(l.expires_at) > now);
+    const byKind = { free: 0, subscription: 0, purchase: 0 };
+    for (const l of live) byKind[l.kind] += Number(l.remaining);
+    const soonest = live
+      .filter((l) => l.expires_at)
+      .sort((a, b) => Date.parse(a.expires_at!) - Date.parse(b.expires_at!))[0];
+    const nextExpiry = soonest
+      ? {
+          at: soonest.expires_at!,
+          amount: live
+            .filter((l) => l.expires_at === soonest.expires_at)
+            .reduce((n, l) => n + Number(l.remaining), 0),
+        }
+      : null;
+    return {
+      balance: Number(account?.balance ?? 0),
+      held: Number(account?.held ?? 0),
+      byKind,
+      nextExpiry,
+    };
+  },
+
+  async getCreditPolicy() {
+    const db = await createClient();
+    const { data } = await db.from("credit_policy").select("*").single();
+    return {
+      signupBonus: Number(data?.signup_bonus ?? 8),
+      attendanceDaily: Number(data?.attendance_daily ?? 0.5),
+      attendanceStreakDays: Number(data?.attendance_streak_days ?? 7),
+      attendanceStreakBonus: Number(data?.attendance_streak_bonus ?? 1),
+      attendanceMonthlyCap: Number(data?.attendance_monthly_cap ?? 3),
+      refundFeeRate: Number(data?.refund_fee_rate ?? 0.1),
+    };
+  },
+
+  async getRefundQuote() {
+    const db = await createClient();
+    const { data, error } = await db.rpc("credit_refund_quote");
+    if (error) throw error;
+    const q = data?.[0];
+    return {
+      credits: Number(q?.credits ?? 0),
+      grossKrw: Number(q?.gross_krw ?? 0),
+      feeKrw: Number(q?.fee_krw ?? 0),
+      netKrw: Number(q?.net_krw ?? 0),
+    };
+  },
+
+  async getMyRefundRequest() {
+    const db = await createClient();
+    const { data } = await db
+      .from("refund_requests")
+      .select("id, user_id, credits, net_krw, fee_krw, reason, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const r = data?.[0];
+    return r ? toRefundRequest(r) : null;
+  },
+
+  async requestRefund(reason) {
+    const db = await createClient();
+    const { error } = await db.rpc("request_credit_refund", { p_reason: reason ?? undefined });
+    if (error) throw new Error(error.message);
+  },
+
+  async getAccountStatus() {
+    const db = await createClient();
+    const { data } = await db.from("profiles").select("deletion_requested_at").single();
+    return accountStatus(data?.deletion_requested_at ?? null);
+  },
+
+  async requestAccountDeletion() {
+    const db = await createClient();
+    const { error } = await db.rpc("request_account_deletion");
+    if (error) throw error;
+    return this.getAccountStatus();
+  },
+
+  async cancelAccountDeletion() {
+    const db = await createClient();
+    const { error } = await db.rpc("cancel_account_deletion");
+    if (error) throw error;
+  },
+
+  async listRefundRequests() {
+    const db = await createClient();
+    const { data, error } = await db.rpc("admin_list_refund_requests");
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(toRefundRequest);
+  },
+
+  async processRefund(id, approve, note) {
+    const db = await createClient();
+    const { error } = await db.rpc("admin_process_refund", {
+      p_id: id,
+      p_approve: approve,
+      p_note: note ?? undefined,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  async grantPurchase({ userId, credits, amountKrw, note }) {
+    const db = await createClient();
+    const { error } = await db.rpc("admin_grant_purchase", {
+      p_user_id: userId,
+      p_credits: credits,
+      p_amount_krw: amountKrw,
+      p_note: note ?? undefined,
+    });
+    if (error) throw new Error(error.message);
+  },
 };
+
+function toRefundRequest(r: {
+  id: string;
+  user_id: string;
+  credits: number;
+  net_krw: number;
+  fee_krw: number;
+  reason: string | null;
+  status: RefundRequest["status"];
+  created_at: string;
+}): RefundRequest {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    credits: Number(r.credits),
+    netKrw: Number(r.net_krw),
+    feeKrw: Number(r.fee_krw),
+    reason: r.reason,
+    status: r.status,
+    createdAt: r.created_at,
+  };
+}
+
+function accountStatus(requestedAt: string | null): AccountStatus {
+  return {
+    deletionRequestedAt: requestedAt,
+    purgeAt: requestedAt ? new Date(Date.parse(requestedAt) + 30 * 86_400_000).toISOString() : null,
+  };
+}

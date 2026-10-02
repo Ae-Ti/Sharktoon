@@ -83,7 +83,7 @@ async function main() {
 
   // --- 출석
   const a1 = await r.checkIn();
-  ok(a1.granted === 4 && a1.streak === 7, "7일 연속 출석 보너스 3크레딧");
+  ok(a1.granted === 1.5 && a1.streak === 7, "7일째 출석 0.5 + 연속 보너스 1");
   try { await r.checkIn(); ok(false, "중복 출석 차단"); }
   catch { ok(true, "중복 출석 차단"); }
 
@@ -91,6 +91,24 @@ async function main() {
   const ov = await r.getAdminOverview();
   ok(ov != null && ov.funnel.length === 5, "관리자 깔때기 5단계");
   ok(ov!.generation.failureRate > 0 && ov!.generation.failureRate < 1, "실패율 0~1 범위");
+
+  // --- 환불·탈퇴
+  ok((await r.getRefundQuote()).netKrw === 0, "무상 크레딧만 있으면 환불할 것이 없다");
+  try { await r.requestRefund(null); ok(false, "환불할 것 없으면 신청 막힘"); }
+  catch { ok(true, "환불할 것 없으면 신청 막힘"); }
+  await r.grantPurchase({ userId: "mock-user", credits: 20, amountKrw: 4900, note: null });
+  const q = await r.getRefundQuote();
+  ok(q.credits === 20 && q.grossKrw === 4900 && q.feeKrw === 490 && q.netKrw === 4410, "구매 20크레딧 환불 견적 10% 공제");
+  await r.requestRefund("테스트");
+  const req = await r.getMyRefundRequest();
+  ok(req?.status === "requested", "환불 신청");
+  const before = (await r.getCredit()).balance;
+  await r.processRefund(req!.id, true, null);
+  ok((await r.getCredit()).balance === before - 20 && (await r.getMyRefundRequest())?.status === "approved", "환불 승인 뒤 유료분 차감");
+  const del = await r.requestAccountDeletion();
+  ok(del.deletionRequestedAt !== null && del.purgeAt !== null, "탈퇴 요청과 삭제 예정일");
+  await r.cancelAccountDeletion();
+  ok((await r.getAccountStatus()).deletionRequestedAt === null, "탈퇴 철회");
 
   console.log(fail === 0 ? "\n전부 통과" : `\n실패 ${fail}건`);
   process.exit(fail === 0 ? 0 : 1);

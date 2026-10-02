@@ -57,8 +57,7 @@ export interface GenerationStore {
   /** 사용자가 인스타에 올렸다고 표시한다. 첫 게시 완주율의 분자다. */
   markPublished(episodeId: string): Promise<void>;
 
-  // --- 생성 워커 전용 (서비스 롤)
-  workerSaveJob(job: GenerationJob): Promise<void>;
+  // --- 생성 워커 전용 (서비스 롤). 잡·컷 진행은 큐가 직접 쓴다(queue/).
   /** 컷 이미지를 저장하고 ref 와 보기용 URL 을 돌려준다. */
   workerSaveCutImage(input: {
     ownerId: string;

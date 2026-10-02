@@ -9,13 +9,14 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { InsufficientCreditError } from "@/contracts/credit";
 import type { CutEditIntent, GenerationJob } from "@/contracts/generation";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext, type EpisodeContext } from "@/features/platform/episode";
 import { getGenerationStore, type PostPackage } from "./data";
 import { generatePostPackage } from "./post/generate";
-import { regenerateCut, retryFailedCuts, startGeneration, type JobOwnerInput } from "./pipeline";
+import { drainQueue, regenerateCut, retryFailedCuts, startGeneration } from "./pipeline";
 import { generateStoryboard, isAnthropicConfigured } from "./storyboard/generate";
 import type { CutLayerTree } from "./types/layer";
 import type { Storyboard } from "./types/storyboard";
@@ -30,6 +31,20 @@ export type ActionResult<T> =
   | { ok: false; kind: "error"; message: string };
 
 class ActionError extends Error {}
+
+/**
+ * 큐에 넣은 뒤 응답을 보내고 나서 작업자를 돌린다. 서버리스는 응답 뒤에도 `after` 가 끝날
+ * 때까지(페이지의 maxDuration 안에서) 함수를 살려 둔다. 못 끝낸 일은 다음 작업자가 이어 한다.
+ */
+function kickQueue() {
+  after(async () => {
+    try {
+      await drainQueue();
+    } catch (e) {
+      console.error("[generation] 큐 처리 실패", e);
+    }
+  });
+}
 
 async function ownedEpisode(episodeId: string): Promise<{ context: EpisodeContext; userId: string }> {
   const repo = await getRepository();
@@ -121,6 +136,8 @@ export async function startGenerationAction(
         : { ok: false, kind: "error", message: result.message };
     }
 
+    kickQueue();
+
     // 이 회차가 실제로 쓴 에셋. 에셋을 바꿀 때 영향받는 회차를 이걸로 보여준다(PRD 2.1).
     await (await getRepository()).recordAssetReferences(
       context.episodeId,
@@ -133,14 +150,6 @@ export async function startGenerationAction(
   }
 }
 
-/** 재시작 뒤 잡을 다시 올릴 때 필요한 재료. */
-function restoreFor(context: EpisodeContext): JobOwnerInput["restore"] {
-  return async () => {
-    const saved = await (await getGenerationStore()).getStoryboard(context.episodeId);
-    return saved ? { storyboard: saved.storyboard, ...generationRefs(context) } : null;
-  };
-}
-
 /** PRD 3.1.2 — 한 컷만 다시. */
 export async function regenerateCutAction(input: {
   episodeId: string;
@@ -150,18 +159,18 @@ export async function regenerateCutAction(input: {
   prompt?: string;
 }): Promise<ActionResult<null>> {
   try {
-    const { context, userId } = await ownedEpisode(input.episodeId);
+    const { userId } = await ownedEpisode(input.episodeId);
     const result = await regenerateCut({
       jobId: input.jobId,
       userId,
       cutId: input.cutId,
       intent: input.intent,
       prompt: input.prompt?.slice(0, 200),
-      restore: restoreFor(context),
     });
     if (!result.ok) {
       return { ok: false, kind: "safety", message: result.message ?? "다시 만들 수 없어요" };
     }
+    kickQueue();
     return { ok: true, data: null };
   } catch (e) {
     return toCreditOrError(e);
@@ -174,13 +183,10 @@ export async function retryFailedCutsAction(input: {
   jobId: string;
 }): Promise<ActionResult<null>> {
   try {
-    const { context, userId } = await ownedEpisode(input.episodeId);
-    const result = await retryFailedCuts({
-      jobId: input.jobId,
-      userId,
-      restore: restoreFor(context),
-    });
+    const { userId } = await ownedEpisode(input.episodeId);
+    const result = await retryFailedCuts({ jobId: input.jobId, userId });
     if (!result.ok) return { ok: false, kind: "error", message: result.message ?? "다시 만들 수 없어요" };
+    kickQueue();
     return { ok: true, data: null };
   } catch (e) {
     return toCreditOrError(e);
@@ -291,6 +297,8 @@ function toCreditOrError(e: unknown): ActionResult<never> {
 /** 생성 호출에 실릴 고정 레퍼런스. 캐릭터 시트는 모든 호출에 들어간다(PRD 2.1). */
 function generationRefs(context: EpisodeContext) {
   return {
+    characterAssetIds: context.assets.filter((a) => a.kind === "character").map((a) => a.id),
+    assetIds: context.assets.filter((a) => a.kind !== "character").map((a) => a.id),
     characterSheetRefs: context.assets
       .filter((a) => a.kind === "character")
       .flatMap((a) => a.referenceUrls),

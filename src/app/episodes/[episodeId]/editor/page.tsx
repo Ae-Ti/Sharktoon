@@ -7,6 +7,9 @@ import { getImageGenerator } from "@/features/generation/image";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
 
+/** 이 화면의 서버 액션이 응답 뒤 생성 큐를 돌린다(`after`). 그 시간 상한. */
+export const maxDuration = 300;
+
 export const metadata = { title: "컷 편집 — 샥툰" };
 
 export default async function Page({

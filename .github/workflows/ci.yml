@@ -64,3 +64,5 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/02_series_rls_test.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/03_admin_test.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/04_generation_test.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/05_credit_lots_test.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/06_queue_test.sql

@@ -95,7 +95,18 @@ select '11111111-1111-1111-1111-111111111111',
        7 - g
 from generate_series(1, 6) g;
 set role authenticated;
-select '8. 출석' as step, * from attendance_check_in();
+-- 정책(0008): 하루 0.5 + 7일째 보너스 1, 한 달 상한 3.
+do $$
+declare
+  r record;
+begin
+  select * into r from attendance_check_in();
+  if r.streak <> 7 or r.granted <> 1.5 then
+    raise exception '8. 출석 7일째: 연속 %, 지급 % (기대 7, 1.5)', r.streak, r.granted;
+  end if;
+  raise notice '8. 출석 7일째 0.5 + 보너스 1 OK';
+end;
+$$;
 
 -- 9. 다른 사용자 데이터는 안 보인다 (RLS)
 reset role;
