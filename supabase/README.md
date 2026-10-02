@@ -13,6 +13,8 @@ CLI 를 쓰면 `supabase link` 후 `supabase db push` 한다.
 | `20260918000004_admin.sql` | 운영자 플래그와 집계 함수(깔때기·생성 지표·환불 내역) |
 | `20261002000005_credit_server_only.sql` | 크레딧 정산 함수를 서비스 롤 전용으로. 누구의 크레딧인지 인자로 받는다 |
 | `20261002000006_generation.sql` | 콘티·생성 잡·컷(이미지·레이어)·게시물 패키지, Storage 버킷 `cuts`·`assets` |
+| `20261003000007_generation_queue.sql` | 생성 큐 `generation_tasks` 와 `claim_generation_tasks()` |
+| `20261003000008_credit_lots.sql` | 크레딧 묶음(무상·구독·구매), 차감 순서, 만료·이월, 환불 견적·신청, 탈퇴 요청, 정책 테이블 |
 
 로컬에서 스키마를 고쳤으면 `npm run db:reset` 으로 다시 적용하고 `npm run db:types` 로
 `src/lib/supabase/database.generated.ts` 를 다시 뽑는다. 손으로 고치지 않는다.
@@ -67,6 +69,74 @@ Storage 버킷 두 개는 비공개다. 업로드·삭제·서명 모두 서버�
 
 CI 의 맨 Postgres 에는 storage 스키마가 없어서 버킷 생성은 스키마가 있을 때만 돈다.
 
+## 생성 큐 (0007)
+
+오픈 이슈 11 결정: **Supabase Postgres 테이블을 큐로 쓴다.** 별도 큐 서비스·작업 서버 비용이 없다.
+
+쉽게 말하면 식당 주문표다. 손님(사용자)이 "6컷 그려 주세요"라고 하면 주문표 6장을 `generation_tasks` 에
+꽂아 두고 바로 "접수됐어요"라고 답한다. 요리사(작업자)는 주문표를 몇 장씩 집어 가서 그리고, 다 되면
+표에 "완료"라고 적는다. 요리사가 중간에 쓰러져도 주문표는 꽂혀 있으니 다른 요리사가 3분 뒤 다시 집어 간다.
+
+| 장치 | 하는 일 |
+|---|---|
+| `generation_tasks` | 컷 한 번의 시도가 한 행. 다시 만들면 새 행. 화면은 컷마다 가장 최근 행을 본다 |
+| `claim_generation_tasks(limit, lease, per_job)` | 할 일을 꺼낸다. `FOR UPDATE SKIP LOCKED` 로 작업자 여럿이 같은 행을 두 번 못 가져가고, 한 잡에서 동시에 2컷까지만 |
+| 임대(`lease_until`, 3분) | 작업자가 죽으면 지나서 다른 작업자가 가져간다. 그 전에 죽은 작업자가 잡아 둔 크레딧(`hold_id`)을 먼저 환불한다 |
+
+작업자는 웹 서버 코드(`src/features/generation/queue/supabase.ts`)이고, 세 군데서 깨어난다.
+
+1. 생성 요청 직후 — 서버 액션이 응답을 보내고 `after()` 로 처리한다(페이지 `maxDuration` 300초 안).
+2. 진행률 폴링 — 대기 중인 컷이 있는데 아무도 안 돌고 있으면 `/api/jobs/:id` 가 깨운다.
+3. 크론 — 사용자가 화면을 닫아도 마저 하도록 1분마다 `/api/queue/run` 을 부른다.
+
+pgmq 를 쓰지 않은 이유: 컷마다 시도 기록(실패 사유·환불 여부)을 사용자가 RLS 로 읽어야 하는데 pgmq 메시지는
+꺼내면 사라지고 사용자 권한으로 읽을 수 없다. 원리(SKIP LOCKED + 임대)는 같고, CI 의 맨 Postgres 에서도 돈다.
+
+### 크론 설정 (환경마다 한 번)
+
+pg_cron 과 pg_net 확장을 켜고(대시보드 → Database → Extensions), 앱 주소와 `CRON_SECRET` 을 Vault 에 넣은 뒤
+아래를 실행한다. 비밀값을 SQL 에 직접 쓰지 않으려고 Vault 에서 읽는다.
+
+```sql
+select vault.create_secret('https://<앱 주소>', 'app_url');
+select vault.create_secret('<CRON_SECRET 값>', 'cron_secret');
+
+select cron.schedule('sharktoon-queue', '* * * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_url') || '/api/queue/run',
+    headers := jsonb_build_object('Authorization', 'Bearer ' ||
+      (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    timeout_milliseconds := 5000)
+$$);
+
+-- 하루 한 번(한국 시간 새벽 4시): 크레딧 만료, 탈퇴 30일 지난 계정 삭제
+select cron.schedule('sharktoon-daily', '0 19 * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_url') || '/api/cron/daily',
+    headers := jsonb_build_object('Authorization', 'Bearer ' ||
+      (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    timeout_milliseconds := 5000)
+$$);
+```
+
+크론 없이도 1·2번으로 생성은 돈다. 크론은 사용자가 화면을 닫은 잡과 만료·탈퇴 정리를 맡는다.
+
+## 크레딧 묶음 (0008)
+
+약관(제8조·제14조)이 약속한 차감 순서·이월·환불을 계산하려면 "얼마에 산 크레딧이 몇 개 남았는지"가 필요하다.
+그래서 크레딧을 묶음(`credit_lots`)으로 나눴다.
+
+- 차감: 무상 → 구독 → 구매, 같은 종류 안에서는 먼저 만료되는 것부터. hold 가 어느 묶음에서 얼마를 가져갔는지
+  `credit_hold_lots` 에 남기고, 환불하면 같은 묶음으로 돌려준다.
+- 만료: hold 직전과 하루 한 번(`credit_expire_all`) 기한 지난 묶음을 0 으로 만들고 `expiry` 거래를 남긴다.
+- 구독 이월: 새 기간을 시작할 때(`credit_start_subscription_period`) 지난 구독분의 절반만 한 번 이월한다.
+- 환불: `credit_refund_quote()` 가 유료 묶음 남은 수 × 산 단가 − 10% (결제 7일 안 미사용분은 공제 없음).
+  신청(`request_credit_refund`)은 그 시점 견적을 남기고, 운영자가 승인(`admin_process_refund`)하면 유료 묶음을 비우고
+  `refund_payout` 거래를 남긴다. 돈은 운영자가 결제 취소·이체로 돌려준다.
+- 정책 값(출석·가입 보너스·유효기간·공제율)은 `credit_policy` 한 행이다. 배포 없이 바꾼다. 근거는 `docs/요금제_모델.md`.
+
+지켜지는 식: `잔량 = 묶음 남은 수 합 = 거래 합`. 테스트 05 가 단계마다 확인한다.
+
 ### 오류 코드
 
 | SQLSTATE | 뜻 | 앱에서 |
@@ -92,6 +162,8 @@ psql -f supabase/tests/01_ledger_test.sql
 psql -f supabase/tests/02_series_rls_test.sql
 psql -f supabase/tests/03_admin_test.sql
 psql -f supabase/tests/04_generation_test.sql
+psql -f supabase/tests/05_credit_lots_test.sql
+psql -f supabase/tests/06_queue_test.sql
 ```
 
 `00_auth_stub.sql` 은 Supabase 의 기본 권한(새 테이블·함수에 anon·authenticated·service_role 부여)과
@@ -112,6 +184,9 @@ psql -f supabase/tests/04_generation_test.sql
 - 운영자가 아니면 집계 함수가 SK004 로 막히고, 운영자로 올리면 깔때기·생성 지표·환불 내역이 나온다
 - 사용자는 hold·commit·refund 를 직접 부를 수 없다(42501)
 - 사용자는 생성 잡·컷을 만들 수 없고, 컷의 이미지 경로를 못 바꾸며, 남의 콘티·잡·컷·패키지가 안 보인다
+- 크레딧은 무상 → 구독 → 구매 순으로 빠지고, 환불은 같은 묶음으로, 만료·이월·환불 견적이 약관대로 계산된다
+- 출석은 한 달 상한을 넘겨 주지 않는다
+- 큐는 같은 작업을 두 번 꺼내지 않고, 잡당 동시 2컷, 임대가 지난 작업은 회수한다
 
 ## 운영자 지정
 
