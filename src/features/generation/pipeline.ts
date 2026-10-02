@@ -77,13 +77,18 @@ interface JobContext {
   seriesRule: Record<string, unknown>;
 }
 
-const jobContext = new Map<string, JobContext>();
+// 서버 액션과 라우트 핸들러는 dev 에서 모듈 인스턴스가 따로 뜬다.
+// 모듈 변수에 두면 액션이 넣은 잡을 /api/jobs 가 못 찾는다(404). 프로세스 전역에 둔다.
+const store = globalThis as typeof globalThis & {
+  __sharktoonJobContext?: Map<string, JobContext>;
+  __sharktoonQueue?: JobQueue;
+};
 
-let queue: JobQueue | null = null;
+const jobContext = (store.__sharktoonJobContext ??= new Map<string, JobContext>());
 
 function getQueue(): JobQueue {
-  queue ??= createMemoryQueue(generateOneCut);
-  return queue;
+  store.__sharktoonQueue ??= createMemoryQueue(generateOneCut);
+  return store.__sharktoonQueue;
 }
 
 export interface StartGenerationInput {
