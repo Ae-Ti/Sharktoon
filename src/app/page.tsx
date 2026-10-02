@@ -36,6 +36,10 @@ export default function Page() {
           <br />
           가입 즉시 8크레딧을 드려요.
         </p>
+        {/* AI 기본법 제31조 제1항 — 생성형 AI 기반 서비스라는 사실을 이용 전에 알린다. */}
+        <p className="text-center text-caption text-ink-subtle">
+          샥툰은 생성형 AI로 콘티·그림·캡션을 만들어요. 만든 이미지에는 AI 생성 표시가 들어가요.
+        </p>
       </div>
     </main>
   );
