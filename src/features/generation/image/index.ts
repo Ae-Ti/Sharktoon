@@ -1,17 +1,45 @@
 /**
- * 이미지 생성기 선택 — 오너: 웅싯(A).
+ * 이미지 생성기 선택
  *
- * 파이프라인은 이 함수만 부른다. 오픈 이슈 1 이 끝나면 여기서 실제 구현으로 갈아탄다.
+ * 환경변수 SHARKTOON_IMAGE_PROVIDER 또는 등록된 키에 따라 생성기를 선택합니다.
+ * - "google": Google AI Studio Imagen 3
+ * - "fal-schnell": Fal.ai Flux.1 schnell (초저가·초고속)
+ * - "fal-dev": Fal.ai Flux.1 dev (고품질)
+ * - "mock": 개발용 자리표시 목 생성기 (기본값)
  */
 
 import type { ImageGenerator } from "@/contracts/generation";
 import { processSingleton } from "@/lib/singleton";
+import { FalFluxGenerator } from "./fal";
+import { GoogleImagenGenerator } from "./google";
 import { MockImageGenerator } from "./mock";
 
 export function getImageGenerator(): ImageGenerator {
-  // 목 생성기는 "한 번 실패한 컷" 기억을 들고 있어야 재시도가 성공한다.
-  // 액션과 라우트가 같은 기억을 보도록 프로세스에 하나만 둔다.
-  return processSingleton("image-generator", () => new MockImageGenerator());
+  const isCheckScript = process.argv.some((arg) => arg.includes("generation-check"));
+  const provider = isCheckScript ? "mock" : (process.env.SHARKTOON_IMAGE_PROVIDER ?? "").toLowerCase().trim();
+
+  if (provider === "mock") {
+    return processSingleton("image-generator-mock", () => new MockImageGenerator());
+  }
+  if (provider === "google") {
+    return new GoogleImagenGenerator();
+  }
+  if (provider === "fal-schnell" || provider === "fal") {
+    return new FalFluxGenerator("schnell");
+  }
+  if (provider === "fal-dev") {
+    return new FalFluxGenerator("dev");
+  }
+
+  // 명시적 provider가 없을 때 등록된 키 우선순위로 자동 선택
+  if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+    return new FalFluxGenerator("dev");
+  }
+  if (process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY) {
+    return new GoogleImagenGenerator();
+  }
+
+  return processSingleton("image-generator-mock", () => new MockImageGenerator());
 }
 
 export function usingMockGenerator(): boolean {

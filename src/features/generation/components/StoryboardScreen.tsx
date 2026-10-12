@@ -15,11 +15,14 @@ import { CREDIT_COST } from "@/contracts/credit";
 import {
   CAMERA_LABEL,
   EMOTION_LABEL,
+  BACKGROUND_PRESET_LABEL,
   canGenerate,
   characterName,
   reindexCuts,
   type Storyboard,
   type StoryboardCut,
+  type BackgroundPreset,
+  type CutBackground,
 } from "../types/storyboard";
 import { BALLOON_LABEL } from "../types/layer";
 import {
@@ -351,6 +354,7 @@ function StoryboardEditor({
                   })
                 }
                 onChangeNarration={(narration) => patchCut(cut.id, { narration })}
+                onChangeBackground={(background) => patchCut(cut.id, { background })}
               />
             ))
           )}
@@ -496,6 +500,25 @@ function StorySidebar({
   );
 }
 
+const BG_PRESET_OPTIONS: { id: BackgroundPreset; label: string }[] = [
+  { id: "vet_clinic", label: "🏥 동물병원" },
+  { id: "living_room", label: "🛋️ 거실" },
+  { id: "entrance", label: "🚪 현관" },
+  { id: "bedroom", label: "🛏️ 침실" },
+  { id: "cafe", label: "☕ 카페" },
+  { id: "office", label: "💼 사무실" },
+  { id: "solid_color", label: "🎨 단색 배경" },
+];
+
+const SOLID_COLOR_PALETTE = [
+  { hex: "#FFF9F0", label: "아이보리" },
+  { hex: "#FEF9C3", label: "옐로우" },
+  { hex: "#ECFDF5", label: "민트" },
+  { hex: "#FDF2F8", label: "핑크" },
+  { hex: "#EFF6FF", label: "블루" },
+  { hex: "#FFFFFF", label: "화이트" },
+];
+
 function CutCard({
   cut,
   nameOf,
@@ -509,6 +532,7 @@ function CutCard({
   onAddAfter,
   onChangeLine,
   onChangeNarration,
+  onChangeBackground,
 }: {
   cut: StoryboardCut;
   nameOf: (key: string | null) => string;
@@ -522,6 +546,7 @@ function CutCard({
   onAddAfter: () => void;
   onChangeLine: (lineId: string, text: string) => void;
   onChangeNarration: (text: string) => void;
+  onChangeBackground: (bg: CutBackground) => void;
 }) {
   return (
     <article
@@ -533,7 +558,7 @@ function CutCard({
           : "border border-border hover:border-border-control",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
           {cut.index}
         </span>
@@ -541,6 +566,47 @@ function CutCard({
         {cut.index === total && <Badge tone="brand">CTA</Badge>}
         <Badge>{EMOTION_LABEL[cut.emotion]}</Badge>
         <Badge>{CAMERA_LABEL[cut.camera]}</Badge>
+
+        {/* 배경 선택 드롭다운 */}
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <select
+            value={cut.background?.preset ?? "living_room"}
+            onChange={(e) =>
+              onChangeBackground({
+                preset: e.target.value as BackgroundPreset,
+                colorHex: cut.background?.colorHex ?? "#FFF9F0",
+              })
+            }
+            aria-label={`${cut.index}컷 배경`}
+            className="rounded-md border border-border bg-surface-sunken px-2 py-1 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+          >
+            {BG_PRESET_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          {cut.background?.preset === "solid_color" && (
+            <select
+              value={cut.background?.colorHex ?? "#FFF9F0"}
+              onChange={(e) =>
+                onChangeBackground({
+                  preset: "solid_color",
+                  colorHex: e.target.value,
+                })
+              }
+              aria-label={`${cut.index}컷 배경 색상`}
+              className="rounded-md border border-border bg-surface-sunken px-1.5 py-1 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+            >
+              {SOLID_COLOR_PALETTE.map((c) => (
+                <option key={c.hex} value={c.hex}>
+                  {c.label} ({c.hex})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
 
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>

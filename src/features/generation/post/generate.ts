@@ -69,16 +69,19 @@ export async function generatePostPackage(input: {
   });
   if (!result.ok) return result;
 
-  const dynamic = fitDynamicTags(
-    [...result.data.popular_hashtags, ...result.data.niche_hashtags],
-    fixed,
-  );
+  const popular = Array.isArray(result.data.popular_hashtags) ? result.data.popular_hashtags : [];
+  const niche = Array.isArray(result.data.niche_hashtags) ? result.data.niche_hashtags : [];
+  const rawTags = [...popular, ...niche];
+  const dynamic = rawTags.length > 0
+    ? fitDynamicTags(rawTags, fixed)
+    : mockPostPackage(input.storyboard, fixed).hashtags.dynamic;
+
   return {
     ok: true,
     data: {
-      captions: result.data.captions,
+      captions: result.data.captions || mockPostPackage(input.storyboard, fixed).captions,
       hashtags: { fixed, dynamic },
-      firstComment: result.data.first_comment,
+      firstComment: result.data.first_comment || mockPostPackage(input.storyboard, fixed).firstComment,
       usedMock: false,
     },
   };

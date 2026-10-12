@@ -194,7 +194,7 @@ const S = processSingleton("platform-mock", () => {
   return {
     assets,
     series,
-    credit: { balance: 11, held: 0 } as CreditState,
+    credit: { balance: 100, held: 0 } as CreditState,
     stories: {
       ep_001: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다",
     } as Record<string, string>,

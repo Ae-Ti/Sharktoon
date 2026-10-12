@@ -8,6 +8,7 @@ import { removeObjects } from "@/lib/supabase/storage";
 import { getRepository } from "./data";
 import { checkUpload, resolveImages, storeImage, storeUpload } from "./data/images";
 import type { AssetInput, SeriesInput, SeriesRule } from "./data/types";
+import { extractCharacterFeaturesFromSelfie } from "./vision";
 
 /** 출석 체크. 하루 1크레딧, 7일 연속이면 3크레딧을 더 준다. */
 export async function checkInAction(): Promise<
@@ -112,20 +113,41 @@ export async function createCharacterAction(
 
     let selfieRef: string | null = null;
     let selfieUrl: string | undefined;
+    let effectiveTags = tags;
+    let effectiveDesc = tags.length ? tags.join(", ") : null;
+
     if (method === "selfie") {
+      const uploadFile = checkUpload(form.get("selfie"));
       selfieRef = await storeUpload({
         bucket: "assets",
         ownerId,
         path: `${asset.id}/selfie`,
-        file: checkUpload(form.get("selfie")),
+        file: uploadFile,
       });
       selfieUrl = (await resolveImages("assets", ownerId, [selfieRef])).get(selfieRef);
+
+      // Gemini Vision으로 셀카 분석하여 2D 캐릭터 외모 특징 추출
+      const bytes = await uploadFile.arrayBuffer();
+      const visionFeatures = await extractCharacterFeaturesFromSelfie({
+        buffer: bytes,
+        mimeType: uploadFile.type || "image/jpeg",
+      });
+
+      if (visionFeatures) {
+        effectiveTags = visionFeatures.tags;
+        effectiveDesc = visionFeatures.description;
+        await repo.updateAsset(asset.id, {
+          tags: effectiveTags,
+          description: effectiveDesc,
+        });
+      }
     }
 
     const sheet = await getImageGenerator().generateCharacterSheet({
       name: asset.name,
       selfieUrl,
-      tags,
+      tags: effectiveTags,
+      description: effectiveDesc ?? undefined,
       style,
     });
     const refs: string[] = [];

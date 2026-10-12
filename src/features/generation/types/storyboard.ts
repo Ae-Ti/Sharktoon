@@ -60,6 +60,33 @@ export interface StoryboardLine {
   balloon: BalloonKind;
 }
 
+export type BackgroundPreset =
+  | "auto"
+  | "vet_clinic"
+  | "living_room"
+  | "entrance"
+  | "bedroom"
+  | "cafe"
+  | "office"
+  | "solid_color";
+
+export const BACKGROUND_PRESET_LABEL: Record<BackgroundPreset, string> = {
+  auto: "자동 추천 배경",
+  vet_clinic: "🏥 동물병원 진료실",
+  living_room: "🛋️ 아파트 거실",
+  entrance: "🚪 아파트 현관",
+  bedroom: "🛏️ 아늑한 침실",
+  cafe: "☕ 감성 카페",
+  office: "💼 회사 사무실",
+  solid_color: "🎨 단색 배경",
+};
+
+export interface CutBackground {
+  preset: BackgroundPreset;
+  colorHex?: string;
+  customName?: string;
+}
+
 export interface StoryboardCut {
   id: string;
   /** 1부터. 순서를 바꾸면 다시 매긴다. */
@@ -73,6 +100,8 @@ export interface StoryboardCut {
   dialogue: StoryboardLine[];
   /** 말풍선 밖 나레이션. 없으면 비운다. */
   narration?: string;
+  /** 컷 배경 설정 (장소 인테리어 프리셋 또는 단색) */
+  background?: CutBackground;
 }
 
 /** 첫 컷 후킹 / 마지막 컷 CTA 후보. 각각 3안을 준다(PRD 2.2). */
@@ -122,10 +151,14 @@ export interface Storyboard {
   updatedAt: string;
 }
 
-/** 화자 key → 표시 이름. 모르는 key 는 key 그대로 보여준다(모델이 지어낸 값이 드러나게). */
 export function characterName(storyboard: Pick<Storyboard, "characters">, key: string | null): string {
   if (!key) return "효과음";
-  return storyboard.characters.find((c) => c.key === key)?.name ?? key;
+  if (key === "[object Object]" || key.includes("object Object")) return "나";
+  const found = storyboard.characters.find((c) => c.key === key || c.name === key);
+  if (found && !found.name.includes("object Object")) return found.name;
+  if (key === "ch_me") return "나";
+  if (key === "ch_vet" || key.includes("vet") || key.includes("doctor") || key.includes("수의사")) return "수의사 선생님";
+  return key;
 }
 
 /** 컷을 옮긴 뒤 index 를 1부터 다시 매긴다. 원본은 건드리지 않는다. */

@@ -18,6 +18,7 @@ import { getGenerationStore, type PostPackage } from "./data";
 import { generatePostPackage } from "./post/generate";
 import { drainQueue, regenerateCut, retryFailedCuts, startGeneration } from "./pipeline";
 import { generateStoryboard, isAnthropicConfigured } from "./storyboard/generate";
+import { extractEntitiesFromStory } from "./storyboard/extractEntities";
 import type { CutLayerTree } from "./types/layer";
 import type { Storyboard } from "./types/storyboard";
 
@@ -69,15 +70,44 @@ export async function generateStoryboardAction(input: {
       return { ok: false, kind: "error", message: "사연을 조금 더 적어주세요. 한 문장이면 충분해요." };
     }
 
+    // 1. 사연 기반 '사전 에셋 자동 생성(Pre-Asset Generation)'
+    const repo = await getRepository();
+    try {
+      const extractedEntities = await extractEntitiesFromStory(story);
+      const currentAssets = await repo.listAssets();
+      const seriesAssetIds = [...context.assets.map((a) => a.id)];
+
+      for (const ent of extractedEntities) {
+        if (ent.role === "protagonist") continue;
+        const existing = currentAssets.find((a) => a.name === ent.name && a.kind === ent.kind);
+        if (existing) {
+          if (!seriesAssetIds.includes(existing.id)) seriesAssetIds.push(existing.id);
+        } else {
+          const created = await repo.createAsset({
+            kind: ent.kind,
+            name: ent.name,
+            description: ent.visualDna,
+            tags: ent.tags,
+          });
+          seriesAssetIds.push(created.id);
+        }
+      }
+      await repo.setSeriesAssets(context.seriesId, seriesAssetIds);
+    } catch (e) {
+      console.error("[generateStoryboardAction] Pre-Asset generation error:", e);
+    }
+
+    const { context: freshContext } = await ownedEpisode(input.episodeId);
+
     // 시리즈 규칙과 고정 캐릭터는 화면이 아니라 서버가 읽는다.
     // 클라이언트가 보낸 값을 그대로 프롬프트에 넣으면 규칙을 우회할 수 있다.
     const result = await generateStoryboard({
       story,
-      episodeId: context.episodeId,
-      seriesId: context.seriesId,
-      cutCount: context.cutCount,
-      seriesRule: describeRule(context),
-      fixedCharacters: characterNames(context),
+      episodeId: freshContext.episodeId,
+      seriesId: freshContext.seriesId,
+      cutCount: freshContext.cutCount,
+      seriesRule: describeRule(freshContext),
+      fixedCharacters: characterNames(freshContext),
     });
 
     if (!result.ok) {
@@ -296,16 +326,22 @@ function toCreditOrError(e: unknown): ActionResult<never> {
 
 /** 생성 호출에 실릴 고정 레퍼런스. 캐릭터 시트는 모든 호출에 들어간다(PRD 2.1). */
 function generationRefs(context: EpisodeContext) {
+  const characters = context.assets.filter((a) => a.kind === "character");
+  const characterTraits = characters.map((c) =>
+    [c.name !== "나" ? c.name : "", ...(c.tags ?? []), c.description].filter(Boolean).join(", "),
+  ).filter(Boolean);
+
   return {
-    characterAssetIds: context.assets.filter((a) => a.kind === "character").map((a) => a.id),
+    characterAssetIds: characters.map((a) => a.id),
     assetIds: context.assets.filter((a) => a.kind !== "character").map((a) => a.id),
-    characterSheetRefs: context.assets
-      .filter((a) => a.kind === "character")
-      .flatMap((a) => a.referenceUrls),
+    characterSheetRefs: characters.flatMap((a) => a.referenceUrls),
     assetRefs: context.assets
       .filter((a) => a.kind !== "character")
       .flatMap((a) => a.referenceUrls),
-    seriesRule: { ...context.rule },
+    seriesRule: {
+      ...context.rule,
+      characterTraits,
+    },
   };
 }
 

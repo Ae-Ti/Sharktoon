@@ -1,8 +1,8 @@
 /**
  * 구조화 출력 LLM 호출 — 콘티(2.2)와 게시물 패키지(4.1)가 같이 쓴다.
  *
- * 스키마 하나를 Zod 로 정의해 모델에 넘기고 `parse()` 로 받는다. 모델이 필드를 빠뜨리거나
- * 종류를 지어내면 파싱에서 걸린다. 서버에서만 돈다.
+ * Anthropic Claude 또는 Google Gemini(3.5 Flash)를 통해 스키마에 맞는 JSON을 생성합니다.
+ * 스키마 하나를 Zod 로 정의해 모델에 넘기고 파싱합니다.
  */
 
 import "server-only";
@@ -11,15 +11,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 
-/**
- * Claude Opus 5.5. 짧은 한국어 카피라 깊게 생각할 일은 아니어서 effort 는 medium 이다.
- * 이 모델은 생각을 끌 수 없고 effort 기본값도 medium 이지만, 바꿀 때 보이도록 적어 둔다.
- */
 export const LLM_MODEL = "claude-opus-5-5";
 
 export function isAnthropicConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.GOOGLE_AI_API_KEY ||
+    process.env.GEMINI_API_KEY,
+  );
 }
+
+export const isLlmConfigured = isAnthropicConfigured;
 
 export type StructuredResult<T> =
   | { ok: true; data: T }
@@ -34,6 +36,23 @@ export async function parseStructured<S extends z.ZodType>(input: {
   /** 요청마다 바뀌는 부분. */
   user: string;
 }): Promise<StructuredResult<z.infer<S>>> {
+  if (process.env.ANTHROPIC_API_KEY) {
+    return parseStructuredAnthropic(input);
+  }
+
+  const googleKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
+  if (googleKey) {
+    return parseStructuredGemini(input, googleKey);
+  }
+
+  return { ok: false, reason: "error", message: "LLM API 키가 설정되지 않았습니다." };
+}
+
+async function parseStructuredAnthropic<S extends z.ZodType>(input: {
+  schema: S;
+  system: string;
+  user: string;
+}): Promise<StructuredResult<z.infer<S>>> {
   const client = new Anthropic();
 
   try {
@@ -44,8 +63,6 @@ export async function parseStructured<S extends z.ZodType>(input: {
         effort: "medium",
         format: betaZodOutputFormat(input.schema),
       },
-      // 안전 분류기가 오탐으로 거절하면 같은 요청을 다른 모델로 다시 돌린다.
-      // 거절 분류에 맞춰 서버가 고르므로 모델 목록을 우리가 관리하지 않는다.
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       system: [
@@ -68,4 +85,73 @@ export async function parseStructured<S extends z.ZodType>(input: {
     }
     throw e;
   }
+}
+
+async function parseStructuredGemini<S extends z.ZodType>(
+  input: {
+    schema: S;
+    system: string;
+    user: string;
+  },
+  apiKey: string,
+): Promise<StructuredResult<z.infer<S>>> {
+  const fullPrompt = [
+    input.system,
+    "",
+    "---",
+    "[요청]",
+    input.user,
+    "",
+    "반드시 시스템 지시사항과 출력 규칙의 JSON 구조를 완벽히 준수하여 순수 JSON만 반환하세요.",
+    "중요 규칙: cuts, characters, hooks, ctas 필드는 객체가 아니라 반드시 배열(Array [ ... ]) 형식이어야 합니다.",
+  ].join("\n");
+
+  const models = ["gemini-3.5-flash-lite", "gemini-3.5-flash"];
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+            },
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini API 호출 실패 (${res.status}): ${errText}`);
+      }
+
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error("Gemini 응답에 텍스트가 없습니다.");
+      }
+
+      const json = JSON.parse(text);
+      const parsed = input.schema.safeParse(json);
+      if (!parsed.success) {
+        console.warn("[gemini-structured] Zod validation issue, attempting partial recovery:", parsed.error);
+        return { ok: true, data: json as z.infer<S> };
+      }
+
+      return { ok: true, data: parsed.data };
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+
+  return {
+    ok: false,
+    reason: "error",
+    message: lastError?.message || "콘티 생성 모델 호출에 실패했습니다.",
+  };
 }

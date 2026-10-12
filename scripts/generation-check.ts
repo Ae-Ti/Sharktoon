@@ -341,15 +341,16 @@ async function main() {
 
     // --- 잔량이 전체 비용보다 적으면 시작하지 않는다
     const left = (await repo.getCredit()).balance;
+    const excessCuts = left + 5;
     try {
       await startGeneration({
         userId: USER,
-        storyboard: { ...MOCK_STORYBOARD, cuts: [...MOCK_STORYBOARD.cuts, ...MOCK_STORYBOARD.cuts.slice(0, 4)].map((c, i) => ({ ...c, id: `x${i}`, index: i + 1 })) },
+        storyboard: { ...MOCK_STORYBOARD, cuts: Array.from({ length: excessCuts }, (_, i) => ({ ...MOCK_STORYBOARD.cuts[0], id: `x${i}`, index: i + 1 })) },
         mode: "agent",
       });
       ok(false, "잔량 부족이면 시작 전에 막는다");
     } catch (e) {
-      ok(e instanceof InsufficientCreditError && e.required === 10 && e.available === left, `잔량 부족이면 시작 전에 막는다 (필요 10, 남음 ${left})`);
+      ok(e instanceof InsufficientCreditError && e.required === excessCuts && e.available === left, `잔량 부족이면 시작 전에 막는다 (필요 ${excessCuts}, 남음 ${left})`);
     }
     ok((await repo.getCredit()).balance === left, "막히면 한 크레딧도 안 잡는다");
   }

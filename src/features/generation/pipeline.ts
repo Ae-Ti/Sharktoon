@@ -36,7 +36,13 @@ import {
   type JobQueue,
 } from "./queue/types";
 import { screenText } from "./safety/rules";
-import { CAMERA_LABEL, EMOTION_LABEL, characterName, type Storyboard } from "./types/storyboard";
+import {
+  BACKGROUND_PRESET_LABEL,
+  CAMERA_LABEL,
+  EMOTION_LABEL,
+  characterName,
+  type Storyboard,
+} from "./types/storyboard";
 
 /** 실패 사유와 함께 "크레딧을 돌려줬는지"를 큐에 알린다. 화면 문구가 이걸 본다. */
 class CutFailure extends Error {
@@ -314,11 +320,22 @@ export function buildCutPrompt(storyboard: Storyboard, cutId: string): string {
   const cut = storyboard.cuts.find((c) => c.id === cutId);
   if (!cut) return "";
   const who = cut.characterIds.map((k) => characterName(storyboard, k)).join(", ");
+
+  let bgDesc: string | null = null;
+  if (cut.background) {
+    if (cut.background.preset === "solid_color") {
+      bgDesc = `배경: 단색 컬러 (${cut.background.colorHex || "#FFF9F0"})`;
+    } else if (cut.background.preset !== "auto") {
+      bgDesc = `배경: ${BACKGROUND_PRESET_LABEL[cut.background.preset] || cut.background.preset}`;
+    }
+  }
+
   return [
     cut.scene,
     who ? `등장: ${who}` : null,
     `감정: ${EMOTION_LABEL[cut.emotion]}`,
     `카메라: ${CAMERA_LABEL[cut.camera]}`,
+    bgDesc,
     "말풍선과 글자는 그리지 않는다",
   ]
     .filter(Boolean)

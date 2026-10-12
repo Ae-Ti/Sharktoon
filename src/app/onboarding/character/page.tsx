@@ -78,35 +78,78 @@ export default function Page() {
           어떤 캐릭터로 그릴까요?
         </h1>
         <p className="text-body-sm text-ink-muted">
-          한 번 정하면 모든 회차에 같은 얼굴로 나와요.
+          선택한 화풍과 얼굴로 모든 회차의 주인공과 컷이 그려져요.
         </p>
       </div>
 
-      <div role="group" aria-label="캐릭터 만드는 방법" className="flex flex-col gap-2.5">
-        {METHODS.map((m) => (
-          <ChoiceCard
-            key={m.id}
-            title={m.title}
-            description={m.description}
-            selected={method === m.id}
-            onClick={() => {
-              set("method", m.id);
-              // 방법을 바꾸면 이전에 만든 캐릭터는 쓰지 않는다.
-              set("characterAssetId", null);
-            }}
-          />
-        ))}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="text-label font-semibold">1. 웹툰 화풍 스타일</div>
+          <span className="text-caption text-ink-muted">캐릭터 애셋과 4컷 만화에 함께 적용</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {STYLES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              aria-pressed={style === s.id}
+              onClick={() => {
+                set("style", s.id);
+                set("characterAssetId", null);
+              }}
+              className={cn(
+                "group cursor-pointer rounded-lg p-3 text-left transition-all",
+                style === s.id
+                  ? "border-2 border-brand bg-brand-tint ring-1 ring-brand/30"
+                  : "border border-border-control bg-surface-card hover:bg-surface-sunken",
+              )}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-label font-bold text-ink">
+                  {s.label}
+                </span>
+                {style === s.id && (
+                  <span className="size-2 rounded-full bg-brand" />
+                )}
+              </div>
+              <span className="block text-[11px] leading-tight text-ink-muted">
+                {s.id === "simple_line" && "1.5px 슬림선 · 플랫 셀채색"}
+                {s.id === "bold_line" && "2.5px 또렷한 선 · 선명한 명암"}
+                {s.id === "pastel" && "부드러운 파스텔 · 따뜻한 감성"}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="text-label font-semibold">2. 캐릭터 만드는 방법</div>
+        <div role="group" aria-label="캐릭터 만드는 방법" className="flex flex-col gap-2.5">
+          {METHODS.map((m) => (
+            <ChoiceCard
+              key={m.id}
+              title={m.title}
+              description={m.description}
+              selected={method === m.id}
+              onClick={() => {
+                set("method", m.id);
+                // 방법을 바꾸면 이전에 만든 캐릭터는 쓰지 않는다.
+                set("characterAssetId", null);
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {method === "selfie" && (
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border-control bg-surface-sunken px-6 py-8 text-center">
+        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border-control bg-surface-sunken px-6 py-7 text-center hover:border-brand transition-colors">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="고른 사진" className="size-28 rounded-full object-cover" />
+            <img src={preview} alt="고른 사진" className="size-24 rounded-full object-cover ring-2 ring-brand" />
           ) : null}
           <span className="text-body font-semibold">{selfie ? "다른 사진 고르기" : "사진 고르기"}</span>
           <span className="text-body-sm text-ink-muted">
-            얼굴이 잘 보이는 사진 1장이면 돼요. PNG·JPG, 10MB 까지.
+            얼굴이 잘 보이는 사진 1장으로 <strong className="text-brand font-medium">'{STYLE_LABEL[style]}'</strong> 2D 캐릭터를 만들어요.
           </span>
           <input
             type="file"
@@ -133,41 +176,6 @@ export default function Page() {
           error={tagCount > 5 ? "5개까지만 넣을 수 있어요." : undefined}
         />
       )}
-
-      <div className="flex flex-col gap-2.5">
-        <div className="text-label font-semibold">그림체</div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {STYLES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              aria-pressed={style === s.id}
-              onClick={() => {
-                set("style", s.id);
-                set("characterAssetId", null);
-              }}
-              className={cn(
-                "cursor-pointer rounded-lg p-0",
-                style === s.id
-                  ? "border-2 border-brand bg-brand-tint"
-                  : "border border-border-control bg-surface-card",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid h-21 place-items-center rounded-md bg-skeleton text-[11px] text-ink-subtle",
-                  style === s.id ? "m-1" : "m-[5px]",
-                )}
-              >
-                미리보기
-              </span>
-              <span className="block pt-1.5 pb-2.5 text-caption font-semibold">
-                {s.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="flex-1" />
 
