@@ -313,6 +313,7 @@ function StoryboardEditor({
           onChange={setStory}
           onRegenerate={regenerateStoryboard}
           fixedCharacters={fixedCharacters}
+          characters={sb.characters}
           stylePreset={stylePreset}
           aspectRatio={aspectRatio}
           tier={tier}
@@ -389,13 +390,64 @@ function StoryboardEditor({
                     ),
                   })
                 }
-                onChangeLineSpeaker={(lineId, speakerId) =>
-                  patchCut(cut.id, {
-                    dialogue: cut.dialogue.map((l) =>
-                      l.id === lineId ? { ...l, speakerId } : l,
-                    ),
-                  })
-                }
+                onChangeLineSpeaker={(lineId, speakerId) => {
+                  setSb((s) => {
+                    const nextCuts = s.cuts.map((c) => {
+                      if (c.id !== cut.id) return c;
+                      const nextCharIds =
+                        speakerId && !c.characterIds.includes(speakerId)
+                          ? [...c.characterIds, speakerId]
+                          : c.characterIds;
+                      const nextDialogue = c.dialogue.map((l) =>
+                        l.id === lineId ? { ...l, speakerId } : l,
+                      );
+                      return {
+                        ...c,
+                        characterIds: nextCharIds,
+                        dialogue: nextDialogue,
+                      };
+                    });
+                    return { ...s, cuts: nextCuts };
+                  });
+                }}
+                onAddLineSpeaker={(lineId, name) => {
+                  const trimmed = name.trim();
+                  if (!trimmed) return;
+                  setSb((s) => {
+                    let key: string;
+                    const existing = s.characters.find(
+                      (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
+                    );
+                    let nextCharacters = s.characters;
+                    if (existing) {
+                      key = existing.key;
+                    } else {
+                      key = `ch_${crypto.randomUUID().slice(0, 8)}`;
+                      nextCharacters = [...s.characters, { key, name: trimmed }];
+                    }
+
+                    const nextCuts = s.cuts.map((c) => {
+                      if (c.id !== cut.id) return c;
+                      const nextCharIds = c.characterIds.includes(key)
+                        ? c.characterIds
+                        : [...c.characterIds, key];
+                      const nextDialogue = c.dialogue.map((l) =>
+                        l.id === lineId ? { ...l, speakerId: key } : l,
+                      );
+                      return {
+                        ...c,
+                        characterIds: nextCharIds,
+                        dialogue: nextDialogue,
+                      };
+                    });
+
+                    return {
+                      ...s,
+                      characters: nextCharacters,
+                      cuts: nextCuts,
+                    };
+                  });
+                }}
                 onChangeLineBalloon={(lineId, balloon) =>
                   patchCut(cut.id, {
                     dialogue: cut.dialogue.map((l) =>
@@ -582,6 +634,7 @@ function StorySidebar({
   onChange,
   onRegenerate,
   fixedCharacters,
+  characters,
   stylePreset,
   aspectRatio,
   tier,
@@ -593,6 +646,7 @@ function StorySidebar({
   onChange: (value: string) => void;
   onRegenerate: () => void;
   fixedCharacters: string[];
+  characters: StoryboardCharacter[];
   stylePreset: string;
   aspectRatio: string;
   tier: GenerationTier;
@@ -662,6 +716,23 @@ function StorySidebar({
         <p className="text-caption text-ink-subtle">
           다시 만들면 지금 고친 대사는 사라져요. 콘티 생성은 크레딧을 쓰지 않아요.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-card p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-label font-semibold text-ink">등장인물</h2>
+          <span className="text-caption text-ink-muted">{characters.length}명</span>
+        </div>
+        <p className="text-body-sm text-ink-muted">
+          대사에서 화자를 선택하거나 새 인물을 바로 추가할 수 있어요.
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {characters.map((ch) => (
+            <Badge key={ch.key} tone={ch.key === "ch_me" ? "brand" : "neutral"}>
+              {ch.name}
+            </Badge>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-card p-4">
@@ -791,6 +862,7 @@ function LocationTagPicker({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                if (e.nativeEvent.isComposing) return;
                 e.preventDefault();
                 if (canCreate) handleCreate();
               }
@@ -892,6 +964,143 @@ function LocationTagPicker({
   );
 }
 
+/** 대사 인물/화자 드롭다운 (선택 및 새 인물 추가 가능) */
+function SpeakerPicker({
+  speakerId,
+  characters,
+  onSelectSpeaker,
+  onAddSpeaker,
+}: {
+  speakerId: string | null;
+  characters: StoryboardCharacter[];
+  onSelectSpeaker: (speakerId: string | null) => void;
+  onAddSpeaker: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const currentSpeaker = characters.find(
+    (c) => c.key === speakerId || c.name === speakerId,
+  );
+  const currentLabel = currentSpeaker?.name ?? (speakerId ? speakerId : "화자 없음");
+
+  const q = query.trim().toLowerCase();
+  const filtered = characters.filter((c) => c.name.toLowerCase().includes(q));
+  const hasExactMatch = characters.some((c) => c.name.toLowerCase() === q);
+  const canCreate = q.length > 0 && !hasExactMatch && q !== "화자 없음";
+
+  function handleCreate() {
+    if (!canCreate) return;
+    const name = query.trim();
+    onAddSpeaker(name);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative inline-block" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        title={currentLabel}
+        className="flex h-control-sm items-center gap-1.5 rounded border border-border bg-surface-card px-2.5 text-caption font-medium text-ink hover:border-border-control transition-colors"
+      >
+        <span className="max-w-[70px] truncate">{currentLabel}</span>
+        <span className="text-[10px] text-ink-muted">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-1 w-52 rounded-lg border border-border bg-surface-card p-2 shadow-lg">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                if (canCreate) {
+                  handleCreate();
+                } else if (filtered.length > 0) {
+                  onSelectSpeaker(filtered[0].key);
+                  setOpen(false);
+                }
+              } else if (e.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder="인물 검색 또는 새 인물..."
+            className="mb-2 h-7 w-full rounded border border-border bg-surface-sunken px-2 text-caption text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
+          />
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="mb-1.5 flex w-full items-center justify-between rounded bg-brand-subtle px-2 py-1.5 text-left text-caption font-semibold text-brand hover:bg-brand-tint transition-colors"
+            >
+              <span>+ &quot;{query.trim()}&quot; 인물 추가</span>
+              <kbd className="text-[10px] font-normal text-ink-subtle">Enter</kbd>
+            </button>
+          )}
+
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onSelectSpeaker(null);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-caption transition-colors",
+                !speakerId
+                  ? "bg-surface-sunken font-bold text-brand"
+                  : "text-ink hover:bg-surface-sunken",
+              )}
+            >
+              <span>화자 없음</span>
+              {!speakerId && <span>✓</span>}
+            </button>
+
+            {filtered.map((ch) => (
+              <button
+                key={ch.key}
+                type="button"
+                onClick={() => {
+                  onSelectSpeaker(ch.key);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-caption transition-colors",
+                  speakerId === ch.key
+                    ? "bg-surface-sunken font-bold text-brand"
+                    : "text-ink hover:bg-surface-sunken",
+                )}
+              >
+                <span className="truncate">{ch.name}</span>
+                {speakerId === ch.key && <span>✓</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CutCard({
   cut,
   characters,
@@ -912,6 +1121,7 @@ function CutCard({
   onRemoveLine,
   onChangeLine,
   onChangeLineSpeaker,
+  onAddLineSpeaker,
   onChangeLineBalloon,
   onAddNarration,
   onRemoveNarration,
@@ -936,6 +1146,7 @@ function CutCard({
   onRemoveLine: (lineId: string) => void;
   onChangeLine: (lineId: string, text: string) => void;
   onChangeLineSpeaker: (lineId: string, speakerId: string | null) => void;
+  onAddLineSpeaker: (lineId: string, name: string) => void;
   onChangeLineBalloon: (lineId: string, balloon: BalloonKind) => void;
   onAddNarration: () => void;
   onRemoveNarration: () => void;
@@ -1077,20 +1288,13 @@ function CutCard({
             {cut.dialogue.map((line) => (
               <li key={line.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-sunken/40 p-2">
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* 화자 선택 */}
-                  <select
-                    value={line.speakerId ?? ""}
-                    onChange={(e) => onChangeLineSpeaker(line.id, e.target.value ? e.target.value : null)}
-                    aria-label="화자 선택"
-                    className="h-control-sm rounded border border-border bg-surface-card px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
-                  >
-                    <option value="">화자 없음</option>
-                    {characters.map((ch) => (
-                      <option key={ch.key} value={ch.key}>
-                        {ch.name}
-                      </option>
-                    ))}
-                  </select>
+                  {/* 인물/화자 드롭다운 (선택 및 새 인물 추가 가능) */}
+                  <SpeakerPicker
+                    speakerId={line.speakerId}
+                    characters={characters}
+                    onSelectSpeaker={(speakerId) => onChangeLineSpeaker(line.id, speakerId)}
+                    onAddSpeaker={(name) => onAddLineSpeaker(line.id, name)}
+                  />
 
                   {/* 말풍선 종류 선택 */}
                   <select
