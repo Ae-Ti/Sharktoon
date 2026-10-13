@@ -110,7 +110,7 @@ export const supabaseRepository: PlatformRepository = {
 
     const { data } = await db
       .from("profiles")
-      .select("id, display_name, avatar_url, plan, keep_selfie_original")
+      .select("id, display_name, avatar_url, plan, keep_selfie_original, is_admin")
       .eq("id", auth.user.id)
       .single();
     if (!data) return null;
@@ -121,6 +121,7 @@ export const supabaseRepository: PlatformRepository = {
       avatarUrl: data.avatar_url,
       plan: data.plan,
       keepSelfieOriginal: data.keep_selfie_original,
+      isAdmin: Boolean(data.is_admin),
     };
   },
 
@@ -233,7 +234,7 @@ export const supabaseRepository: PlatformRepository = {
       rule: {
         stylePreset: rule?.style_preset ?? "심플 라인",
         defaultCutCount: rule?.default_cut_count ?? 6,
-        aspectRatio: rule?.aspect_ratio ?? "4:5",
+        aspectRatio: rule?.aspect_ratio ?? "1:1",
         tone: rule?.tone ?? null,
         fixedHashtags: rule?.fixed_hashtags ?? [],
       },
@@ -528,7 +529,7 @@ export const supabaseRepository: PlatformRepository = {
       rule: {
         stylePreset: rule?.style_preset ?? "심플 라인",
         defaultCutCount: rule?.default_cut_count ?? 6,
-        aspectRatio: rule?.aspect_ratio ?? "4:5",
+        aspectRatio: rule?.aspect_ratio ?? "1:1",
         tone: rule?.tone ?? null,
         fixedHashtags: rule?.fixed_hashtags ?? [],
       },

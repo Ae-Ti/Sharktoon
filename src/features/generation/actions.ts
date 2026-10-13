@@ -185,19 +185,33 @@ export async function startGenerationAction(
 /** PRD 3.1.2 — 한 컷만 다시. */
 export async function regenerateCutAction(input: {
   episodeId: string;
-  jobId: string;
+  jobId?: string;
   cutId: string;
   intent: CutEditIntent;
   prompt?: string;
+  skipFaceLock?: boolean;
+  maskUrl?: string;
 }): Promise<ActionResult<null>> {
   try {
     const { userId } = await ownedEpisode(input.episodeId);
+    let jobId = input.jobId;
+    if (!jobId) {
+      const store = await getGenerationStore();
+      const latestJob = await store.getLatestJob(input.episodeId);
+      jobId = latestJob?.id;
+    }
+    if (!jobId) {
+      return { ok: false, kind: "error", message: "생성 작업을 찾지 못했어요" };
+    }
+
     const result = await regenerateCut({
-      jobId: input.jobId,
+      jobId,
       userId,
       cutId: input.cutId,
       intent: input.intent,
       prompt: input.prompt?.slice(0, 200),
+      skipFaceLock: input.skipFaceLock,
+      maskUrl: input.maskUrl,
     });
     if (!result.ok) {
       return { ok: false, kind: "safety", message: result.message ?? "다시 만들 수 없어요" };
@@ -213,10 +227,11 @@ export async function regenerateCutAction(input: {
 export async function retryFailedCutsAction(input: {
   episodeId: string;
   jobId: string;
+  skipFaceLock?: boolean;
 }): Promise<ActionResult<null>> {
   try {
     const { userId } = await ownedEpisode(input.episodeId);
-    const result = await retryFailedCuts({ jobId: input.jobId, userId });
+    const result = await retryFailedCuts({ jobId: input.jobId, userId, skipFaceLock: input.skipFaceLock });
     if (!result.ok) return { ok: false, kind: "error", message: result.message ?? "다시 만들 수 없어요" };
     kickQueue();
     return { ok: true, data: null };

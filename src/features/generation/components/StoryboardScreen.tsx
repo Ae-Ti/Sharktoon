@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Badge,
@@ -22,10 +22,13 @@ import {
   reindexCuts,
   type Storyboard,
   type StoryboardCut,
+  type StoryboardCharacter,
+  type CutEmotion,
+  type CameraShot,
   type BackgroundPreset,
   type CutBackground,
 } from "../types/storyboard";
-import { BALLOON_LABEL } from "../types/layer";
+import { BALLOON_LABEL, type BalloonKind } from "../types/layer";
 import {
   generateStoryboardAction,
   saveStoryboardAction,
@@ -169,10 +172,20 @@ function StoryboardEditor({
   const [selectedId, setSelectedId] = useState<string | null>(
     initial.cuts[0]?.id ?? null,
   );
+  const [copyTab, setCopyTab] = useState<"hook" | "cta">("hook");
+  const [customLocations, setCustomLocations] = useState<string[]>([]);
+
+  const allCustomLocations = useMemo(() => {
+    const set = new Set(customLocations);
+    for (const cut of sb.cuts) {
+      if (cut.background?.customName) {
+        set.add(cut.background.customName);
+      }
+    }
+    return Array.from(set);
+  }, [customLocations, sb.cuts]);
 
   const selected = sb.cuts.find((c) => c.id === selectedId) ?? null;
-  const isFirst = selected?.index === 1;
-  const isLast = selected != null && selected.index === sb.cuts.length;
   const ready = canGenerate(sb);
   const unitCost = tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage;
   const cost = sb.cuts.length * unitCost;
@@ -284,7 +297,7 @@ function StoryboardEditor({
             cost={cost}
             disabled={!ready}
             // 실제로는 CreditLedger.hold 가 먼저 가고, 모자라면 충전 시트가 열린다.
-            title={ready ? undefined : "후킹과 CTA를 먼저 고르세요"}
+            title={ready ? undefined : "모든 컷의 장면 묘사를 먼저 입력하세요"}
             loading={pending}
             onClick={startGeneration}
           >
@@ -334,23 +347,46 @@ function StoryboardEditor({
               <CutCard
                 key={cut.id}
                 cut={cut}
+                characters={sb.characters}
+                allCustomLocations={allCustomLocations}
                 nameOf={(key) => characterName(sb, key)}
                 total={sb.cuts.length}
                 selected={cut.id === selectedId}
-                hookText={
-                  cut.index === 1
-                    ? sb.hookOptions.find((h) => h.id === sb.selectedHookId)?.text
-                    : undefined
-                }
-                ctaText={
-                  cut.index === sb.cuts.length
-                    ? sb.ctaOptions.find((c) => c.id === sb.selectedCtaId)?.text
-                    : undefined
-                }
-                onSelect={() => setSelectedId(cut.id)}
+                onSelect={() => {
+                  setSelectedId(cut.id);
+                  if (cut.index === 1) setCopyTab("hook");
+                  else if (cut.index === sb.cuts.length) setCopyTab("cta");
+                }}
                 onMove={(dir) => moveCut(cut.id, dir)}
                 onRemove={() => removeCut(cut.id)}
                 onAddAfter={() => addCutAfter(cut.id)}
+                onChangeScene={(scene) => patchCut(cut.id, { scene })}
+                onChangeEmotion={(emotion) => patchCut(cut.id, { emotion })}
+                onChangeCamera={(camera) => patchCut(cut.id, { camera })}
+                onChangeBackground={(background) => patchCut(cut.id, { background })}
+                onAddCustomLocation={(name) =>
+                  setCustomLocations((prev) =>
+                    prev.includes(name) ? prev : [...prev, name],
+                  )
+                }
+                onAddLine={() =>
+                  patchCut(cut.id, {
+                    dialogue: [
+                      ...cut.dialogue,
+                      {
+                        id: `line_${crypto.randomUUID().slice(0, 8)}`,
+                        speakerId: sb.characters[0]?.key ?? null,
+                        text: "",
+                        balloon: "normal",
+                      },
+                    ],
+                  })
+                }
+                onRemoveLine={(lineId) =>
+                  patchCut(cut.id, {
+                    dialogue: cut.dialogue.filter((l) => l.id !== lineId),
+                  })
+                }
                 onChangeLine={(lineId, text) =>
                   patchCut(cut.id, {
                     dialogue: cut.dialogue.map((l) =>
@@ -358,64 +394,280 @@ function StoryboardEditor({
                     ),
                   })
                 }
+                onChangeLineSpeaker={(lineId, speakerId) =>
+                  patchCut(cut.id, {
+                    dialogue: cut.dialogue.map((l) =>
+                      l.id === lineId ? { ...l, speakerId } : l,
+                    ),
+                  })
+                }
+                onChangeLineBalloon={(lineId, balloon) =>
+                  patchCut(cut.id, {
+                    dialogue: cut.dialogue.map((l) =>
+                      l.id === lineId ? { ...l, balloon } : l,
+                    ),
+                  })
+                }
+                onAddNarration={() => patchCut(cut.id, { narration: "" })}
+                onRemoveNarration={() => patchCut(cut.id, { narration: undefined })}
                 onChangeNarration={(narration) => patchCut(cut.id, { narration })}
-                onChangeBackground={(background) => patchCut(cut.id, { background })}
               />
             ))
           )}
         </section>
 
-        <aside aria-label="컷 설정" className="flex flex-col gap-4">
-          {isFirst && (
+        <aside aria-label="컷 및 문구 설정" className="flex flex-col gap-4">
+          {/* 1. 선택된 컷 연출 설정 패널 */}
+          {selected && (
             <OptionPanel
-              title="1컷 후킹"
-              caption={`첫 컷에서 멈추면 나머지 ${sb.cuts.length - 1}컷은 아무도 안 봅니다.`}
+              title={`${selected.index}컷 연출 설정`}
+              caption="선택한 컷의 감정, 카메라 구도, 등장인물 및 배경 장소를 설정합니다."
             >
-              {sb.hookOptions.map((o) => (
-                <ChoiceCard
-                  key={o.id}
-                  title={o.text}
-                  description={o.rationale}
-                  selected={sb.selectedHookId === o.id}
-                  onClick={() => setSb((s) => ({ ...s, selectedHookId: o.id }))}
-                />
-              ))}
+              <div className="flex flex-col gap-3 text-caption">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink-muted">감정</span>
+                  <select
+                    value={selected.emotion}
+                    onChange={(e) =>
+                      patchCut(selected.id, { emotion: e.target.value as CutEmotion })
+                    }
+                    aria-label={`${selected.index}컷 감정 선택`}
+                    className="h-control-sm rounded border border-border bg-surface-sunken px-2 font-medium text-ink focus:border-brand focus:outline-none"
+                  >
+                    {Object.entries(EMOTION_LABEL).map(([val, label]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink-muted">카메라 구도</span>
+                  <select
+                    value={selected.camera}
+                    onChange={(e) =>
+                      patchCut(selected.id, { camera: e.target.value as CameraShot })
+                    }
+                    aria-label={`${selected.index}컷 카메라 구도 선택`}
+                    className="h-control-sm rounded border border-border bg-surface-sunken px-2 font-medium text-ink focus:border-brand focus:outline-none"
+                  >
+                    {Object.entries(CAMERA_LABEL).map(([val, label]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink-muted">장소 배경</span>
+                  <LocationTagPicker
+                    background={selected.background}
+                    allCustomLocations={allCustomLocations}
+                    onSelectPreset={(preset) =>
+                      patchCut(selected.id, {
+                        background: { preset, customName: undefined },
+                      })
+                    }
+                    onSelectCustom={(customName) =>
+                      patchCut(selected.id, {
+                        background: { preset: "auto", customName },
+                      })
+                    }
+                    onSelectSolidColor={(colorHex) =>
+                      patchCut(selected.id, {
+                        background: { preset: "solid_color", colorHex },
+                      })
+                    }
+                    onAddCustomLocation={(name) =>
+                      setCustomLocations((prev) =>
+                        prev.includes(name) ? prev : [...prev, name],
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-border-subtle">
+                  <span className="font-semibold text-ink-muted">등장인물</span>
+                  <span className="font-medium text-ink">
+                    {selected.characterIds.map((id) => characterName(sb, id)).join(", ") ||
+                      "없음"}
+                  </span>
+                </div>
+              </div>
             </OptionPanel>
           )}
 
-          {isLast && (
-            <OptionPanel
-              title="마지막 컷 CTA"
-              caption="좋아요·다음 화·질문 중 하나만 고릅니다. 셋 다 넣으면 아무것도 안 합니다."
-            >
-              {sb.ctaOptions.map((o) => (
-                <ChoiceCard
-                  key={o.id}
-                  title={o.text}
-                  description={o.rationale}
-                  selected={sb.selectedCtaId === o.id}
-                  onClick={() => setSb((s) => ({ ...s, selectedCtaId: o.id }))}
-                />
-              ))}
-            </OptionPanel>
-          )}
+          {/* 2. 후킹 & CTA 전용 패널 (오른쪽 사이드바에서만 집중 제어) */}
+          <OptionPanel
+            title="헤드라인 & 발행 문구"
+            caption="첫 컷과 마지막 컷의 헤드라인 및 인스타 캡션 문구를 여기서 설정합니다."
+          >
+            {/* 탭 전환 버튼 */}
+            <div className="flex rounded-lg bg-surface-sunken p-1 text-caption">
+              <button
+                type="button"
+                onClick={() => setCopyTab("hook")}
+                className={cn(
+                  "flex-1 rounded-md py-1.5 font-medium transition-colors",
+                  copyTab === "hook"
+                    ? "bg-surface-card text-brand font-bold shadow-sm"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                1컷 후킹 {sb.selectedHookId && "✓"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCopyTab("cta")}
+                className={cn(
+                  "flex-1 rounded-md py-1.5 font-medium transition-colors",
+                  copyTab === "cta"
+                    ? "bg-surface-card text-brand font-bold shadow-sm"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                마지막 컷 CTA {sb.selectedCtaId && "✓"}
+              </button>
+            </div>
 
-          {selected && !isFirst && !isLast && (
-            <OptionPanel title={`${selected.index}컷 설정`}>
-              <dl className="flex flex-col gap-2 text-label">
-                <Row label="감정">{EMOTION_LABEL[selected.emotion]}</Row>
-                <Row label="카메라">{CAMERA_LABEL[selected.camera]}</Row>
-                <Row label="등장인물">
-                  {selected.characterIds.map((id) => characterName(sb, id)).join(", ") ||
-                    "없음"}
-                </Row>
-              </dl>
-            </OptionPanel>
-          )}
+            {/* 후킹 탭 */}
+            {copyTab === "hook" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-caption text-ink-muted">
+                    {sb.selectedHookId
+                      ? "첫 컷 상단 배너 & 인스타 캡션 첫 줄"
+                      : "후킹 문구를 사용하지 않습니다."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSb((s) => ({
+                        ...s,
+                        selectedHookId: s.selectedHookId
+                          ? null
+                          : s.hookOptions[0]?.id ?? null,
+                      }))
+                    }
+                    className="text-caption font-semibold text-brand hover:underline"
+                  >
+                    {sb.selectedHookId ? "후킹 끄기" : "후킹 켜기"}
+                  </button>
+                </div>
+
+                {sb.selectedHookId && (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      {sb.hookOptions.map((o) => (
+                        <ChoiceCard
+                          key={o.id}
+                          title={o.text}
+                          description={o.rationale}
+                          selected={sb.selectedHookId === o.id}
+                          onClick={() => setSb((s) => ({ ...s, selectedHookId: o.id }))}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+                      <label className="text-caption font-semibold text-ink">
+                        선택한 후킹 문구 직접 수정
+                      </label>
+                      <input
+                        value={
+                          sb.hookOptions.find((h) => h.id === sb.selectedHookId)?.text ??
+                          ""
+                        }
+                        onChange={(e) => {
+                          const newText = e.target.value;
+                          setSb((s) => ({
+                            ...s,
+                            hookOptions: s.hookOptions.map((h) =>
+                              h.id === s.selectedHookId ? { ...h, text: newText } : h,
+                            ),
+                          }));
+                        }}
+                        placeholder="후킹 문구를 입력하세요"
+                        className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* CTA 탭 */}
+            {copyTab === "cta" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-caption text-ink-muted">
+                    {sb.selectedCtaId
+                      ? "마지막 컷 하단 배너 & 인스타 캡션 끝"
+                      : "CTA 문구를 사용하지 않습니다."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSb((s) => ({
+                        ...s,
+                        selectedCtaId: s.selectedCtaId
+                          ? null
+                          : s.ctaOptions[0]?.id ?? null,
+                      }))
+                    }
+                    className="text-caption font-semibold text-brand hover:underline"
+                  >
+                    {sb.selectedCtaId ? "CTA 끄기" : "CTA 켜기"}
+                  </button>
+                </div>
+
+                {sb.selectedCtaId && (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      {sb.ctaOptions.map((o) => (
+                        <ChoiceCard
+                          key={o.id}
+                          title={o.text}
+                          description={o.rationale}
+                          selected={sb.selectedCtaId === o.id}
+                          onClick={() => setSb((s) => ({ ...s, selectedCtaId: o.id }))}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+                      <label className="text-caption font-semibold text-ink">
+                        선택한 CTA 문구 직접 수정
+                      </label>
+                      <input
+                        value={
+                          sb.ctaOptions.find((c) => c.id === sb.selectedCtaId)?.text ??
+                          ""
+                        }
+                        onChange={(e) => {
+                          const newText = e.target.value;
+                          setSb((s) => ({
+                            ...s,
+                            ctaOptions: s.ctaOptions.map((c) =>
+                              c.id === s.selectedCtaId ? { ...c, text: newText } : c,
+                            ),
+                          }));
+                        }}
+                        placeholder="CTA 문구를 입력하세요"
+                        className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </OptionPanel>
 
           {!ready && (
             <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
-              후킹과 CTA를 고르면 이미지 생성으로 넘어갈 수 있어요.
+              모든 컷의 장면 묘사를 입력하면 이미지 생성을 시작할 수 있어요.
             </p>
           )}
         </aside>
@@ -554,14 +806,14 @@ function StorySidebar({
   );
 }
 
-const BG_PRESET_OPTIONS: { id: BackgroundPreset; label: string }[] = [
-  { id: "vet_clinic", label: "🏥 동물병원" },
-  { id: "living_room", label: "🛋️ 거실" },
-  { id: "entrance", label: "🚪 현관" },
-  { id: "bedroom", label: "🛏️ 침실" },
-  { id: "cafe", label: "☕ 카페" },
-  { id: "office", label: "💼 사무실" },
-  { id: "solid_color", label: "🎨 단색 배경" },
+const DEFAULT_LOCATIONS: { id: BackgroundPreset; label: string }[] = [
+  { id: "living_room", label: "거실" },
+  { id: "bedroom", label: "침실" },
+  { id: "cafe", label: "카페" },
+  { id: "office", label: "사무실" },
+  { id: "vet_clinic", label: "동물병원" },
+  { id: "entrance", label: "현관" },
+  { id: "solid_color", label: "단색 배경" },
 ];
 
 const SOLID_COLOR_PALETTE = [
@@ -573,34 +825,242 @@ const SOLID_COLOR_PALETTE = [
   { hex: "#FFFFFF", label: "화이트" },
 ];
 
+/** 노션 스타일 장소/배경 태그 선택기 */
+function LocationTagPicker({
+  background,
+  allCustomLocations,
+  onSelectPreset,
+  onSelectCustom,
+  onSelectSolidColor,
+  onAddCustomLocation,
+}: {
+  background?: CutBackground;
+  allCustomLocations: string[];
+  onSelectPreset: (preset: BackgroundPreset) => void;
+  onSelectCustom: (customName: string) => void;
+  onSelectSolidColor: (hex: string) => void;
+  onAddCustomLocation: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const isSolid = background?.preset === "solid_color";
+  const custom = background?.customName;
+  const currentLabel = isSolid
+    ? `단색: ${SOLID_COLOR_PALETTE.find((c) => c.hex === background?.colorHex)?.label ?? "아이보리"}`
+    : custom
+      ? `장소: ${custom}`
+      : `장소: ${DEFAULT_LOCATIONS.find((l) => l.id === background?.preset)?.label ?? "거실"}`;
+
+  const q = query.trim().toLowerCase();
+  const filteredPresets = DEFAULT_LOCATIONS.filter((l) =>
+    l.label.toLowerCase().includes(q),
+  );
+  const filteredCustom = allCustomLocations.filter(
+    (c) => c.toLowerCase().includes(q) && !DEFAULT_LOCATIONS.some((p) => p.label === c),
+  );
+  const hasExactMatch =
+    DEFAULT_LOCATIONS.some((l) => l.label.toLowerCase() === q) ||
+    allCustomLocations.some((c) => c.toLowerCase() === q);
+
+  const canCreate = q.length > 0 && !hasExactMatch && q !== "단색 배경";
+
+  function handleCreate() {
+    if (!canCreate) return;
+    const name = query.trim();
+    onAddCustomLocation(name);
+    onSelectCustom(name);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative inline-block" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink hover:border-border-control transition-colors"
+      >
+        {isSolid && (
+          <span
+            className="size-2.5 rounded-full border border-black/15"
+            style={{ backgroundColor: background?.colorHex ?? "#FFF9F0" }}
+          />
+        )}
+        <span>{currentLabel}</span>
+        <span className="text-[10px] text-ink-muted">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-lg border border-border bg-surface-card p-2 shadow-lg">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (canCreate) handleCreate();
+              }
+            }}
+            placeholder="장소 검색 또는 새 장소 입력..."
+            className="mb-2 h-7 w-full rounded border border-border bg-surface-sunken px-2 text-caption text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
+          />
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="mb-1.5 flex w-full items-center justify-between rounded bg-brand-subtle px-2 py-1.5 text-left text-caption font-semibold text-brand hover:bg-brand-tint transition-colors"
+            >
+              <span>+ &quot;{query.trim()}&quot; 추가</span>
+              <kbd className="text-[10px] font-normal text-ink-subtle">Enter</kbd>
+            </button>
+          )}
+
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+            {filteredPresets.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  if (opt.id === "solid_color") {
+                    onSelectSolidColor(background?.colorHex ?? "#FFF9F0");
+                  } else {
+                    onSelectPreset(opt.id);
+                  }
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between rounded px-2 py-1 text-left text-caption transition-colors",
+                  !custom && background?.preset === opt.id
+                    ? "bg-surface-sunken font-bold text-brand"
+                    : "text-ink hover:bg-surface-sunken",
+                )}
+              >
+                <span>{opt.label}</span>
+                {!custom && background?.preset === opt.id && <span>✓</span>}
+              </button>
+            ))}
+
+            {filteredCustom.length > 0 && (
+              <div className="my-1 border-t border-border-subtle pt-1">
+                <span className="block px-2 py-0.5 text-[10px] font-bold text-ink-subtle">직접 추가한 장소</span>
+                {filteredCustom.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      onSelectCustom(c);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded px-2 py-1 text-left text-caption transition-colors",
+                      custom === c
+                        ? "bg-surface-sunken font-bold text-brand"
+                        : "text-ink hover:bg-surface-sunken",
+                    )}
+                  >
+                    <span>{c}</span>
+                    {custom === c && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {isSolid && (
+            <div className="mt-2 border-t border-border-subtle pt-2">
+              <span className="block mb-1 px-1 text-[10px] font-bold text-ink-subtle">단색 배경 색상</span>
+              <div className="grid grid-cols-6 gap-1">
+                {SOLID_COLOR_PALETTE.map((pal) => (
+                  <button
+                    key={pal.hex}
+                    type="button"
+                    title={`${pal.label} (${pal.hex})`}
+                    onClick={() => {
+                      onSelectSolidColor(pal.hex);
+                      setOpen(false);
+                    }}
+                    style={{ backgroundColor: pal.hex }}
+                    className={cn(
+                      "size-6 rounded border transition-transform hover:scale-110",
+                      background?.colorHex === pal.hex
+                        ? "border-brand ring-2 ring-brand"
+                        : "border-border",
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CutCard({
   cut,
+  characters,
+  allCustomLocations,
   nameOf,
   total,
   selected,
-  hookText,
-  ctaText,
   onSelect,
   onMove,
   onRemove,
   onAddAfter,
-  onChangeLine,
-  onChangeNarration,
+  onChangeScene,
+  onChangeEmotion,
+  onChangeCamera,
   onChangeBackground,
+  onAddCustomLocation,
+  onAddLine,
+  onRemoveLine,
+  onChangeLine,
+  onChangeLineSpeaker,
+  onChangeLineBalloon,
+  onAddNarration,
+  onRemoveNarration,
+  onChangeNarration,
 }: {
   cut: StoryboardCut;
+  characters: StoryboardCharacter[];
+  allCustomLocations: string[];
   nameOf: (key: string | null) => string;
   total: number;
   selected: boolean;
-  hookText?: string;
-  ctaText?: string;
   onSelect: () => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   onAddAfter: () => void;
-  onChangeLine: (lineId: string, text: string) => void;
-  onChangeNarration: (text: string) => void;
+  onChangeScene: (scene: string) => void;
+  onChangeEmotion: (emotion: CutEmotion) => void;
+  onChangeCamera: (camera: CameraShot) => void;
   onChangeBackground: (bg: CutBackground) => void;
+  onAddCustomLocation: (name: string) => void;
+  onAddLine: () => void;
+  onRemoveLine: (lineId: string) => void;
+  onChangeLine: (lineId: string, text: string) => void;
+  onChangeLineSpeaker: (lineId: string, speakerId: string | null) => void;
+  onChangeLineBalloon: (lineId: string, balloon: BalloonKind) => void;
+  onAddNarration: () => void;
+  onRemoveNarration: () => void;
+  onChangeNarration: (text: string) => void;
 }) {
   return (
     <article
@@ -612,56 +1072,63 @@ function CutCard({
           : "border border-border hover:border-border-control",
       )}
     >
+      {/* 컷 헤더: 번호, 후킹/CTA 뱃지, 감정/카메라/장소 드롭다운, 순서/삭제 버튼 */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
           {cut.index}
         </span>
-        {cut.index === 1 && <Badge tone="brand">후킹</Badge>}
-        {cut.index === total && <Badge tone="brand">CTA</Badge>}
-        <Badge>{EMOTION_LABEL[cut.emotion]}</Badge>
-        <Badge>{CAMERA_LABEL[cut.camera]}</Badge>
+        {cut.index === 1 && <Badge tone="brand">후킹 컷</Badge>}
+        {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
 
-        {/* 배경 선택 드롭다운 */}
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {/* 감정 선택 */}
+        <div onClick={(e) => e.stopPropagation()}>
           <select
-            value={cut.background?.preset ?? "living_room"}
-            onChange={(e) =>
-              onChangeBackground({
-                preset: e.target.value as BackgroundPreset,
-                colorHex: cut.background?.colorHex ?? "#FFF9F0",
-              })
-            }
-            aria-label={`${cut.index}컷 배경`}
-            className="rounded-md border border-border bg-surface-sunken px-2 py-1 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+            value={cut.emotion}
+            onChange={(e) => onChangeEmotion(e.target.value as CutEmotion)}
+            aria-label={`${cut.index}컷 감정`}
+            className="h-7 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
           >
-            {BG_PRESET_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
+            {Object.entries(EMOTION_LABEL).map(([val, label]) => (
+              <option key={val} value={val}>
+                {label}
               </option>
             ))}
           </select>
-
-          {cut.background?.preset === "solid_color" && (
-            <select
-              value={cut.background?.colorHex ?? "#FFF9F0"}
-              onChange={(e) =>
-                onChangeBackground({
-                  preset: "solid_color",
-                  colorHex: e.target.value,
-                })
-              }
-              aria-label={`${cut.index}컷 배경 색상`}
-              className="rounded-md border border-border bg-surface-sunken px-1.5 py-1 text-caption font-medium text-ink focus:border-brand focus:outline-none"
-            >
-              {SOLID_COLOR_PALETTE.map((c) => (
-                <option key={c.hex} value={c.hex}>
-                  {c.label} ({c.hex})
-                </option>
-              ))}
-            </select>
-          )}
         </div>
 
+        {/* 카메라 구도 선택 */}
+        <div onClick={(e) => e.stopPropagation()}>
+          <select
+            value={cut.camera}
+            onChange={(e) => onChangeCamera(e.target.value as CameraShot)}
+            aria-label={`${cut.index}컷 카메라 구도`}
+            className="h-7 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+          >
+            {Object.entries(CAMERA_LABEL).map(([val, label]) => (
+              <option key={val} value={val}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 장소 노션 태그 선택기 */}
+        <LocationTagPicker
+          background={cut.background}
+          allCustomLocations={allCustomLocations}
+          onSelectPreset={(preset) =>
+            onChangeBackground({ preset, customName: undefined })
+          }
+          onSelectCustom={(customName) =>
+            onChangeBackground({ preset: "auto", customName })
+          }
+          onSelectSolidColor={(colorHex) =>
+            onChangeBackground({ preset: "solid_color", colorHex })
+          }
+          onAddCustomLocation={onAddCustomLocation}
+        />
+
+        {/* 컷 이동 및 추가/삭제 버튼 */}
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
             ↑
@@ -682,54 +1149,133 @@ function CutCard({
         </div>
       </div>
 
-      {hookText && <Copy tone="hook" text={hookText} />}
-
-      <p className="text-body text-ink">
-        {cut.scene || (
-          <span className="text-ink-subtle">장면을 적어주세요. 비어 있으면 생성하지 않아요.</span>
-        )}
-      </p>
-
-      {cut.dialogue.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {cut.dialogue.map((line) => (
-            <li key={line.id} className="flex items-start gap-2">
-              <span className="mt-1 shrink-0 text-caption font-semibold text-ink-subtle">
-                {nameOf(line.speakerId)}
-                <span className="ml-1 font-normal">· {BALLOON_LABEL[line.balloon]}</span>
-              </span>
-              <input
-                value={line.text}
-                onChange={(e) => onChangeLine(line.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`${cut.index}컷 대사`}
-                className="h-control-sm min-w-0 flex-1 rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {cut.narration != null && (
-        <input
-          value={cut.narration}
-          onChange={(e) => onChangeNarration(e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-          aria-label={`${cut.index}컷 나레이션`}
-          className="h-control-sm rounded-md border border-dashed border-border-control bg-surface-sunken px-3 text-label text-ink-muted focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+      {/* 장면 묘사 (그림 프롬프트 초안) - 이모티콘 없이 깔끔한 텍스트 */}
+      <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <label className="text-caption font-semibold text-ink-muted">
+            장면 묘사
+          </label>
+          <span className="text-[11px] text-ink-subtle">AI 이미지 생성 프롬프트</span>
+        </div>
+        <textarea
+          value={cut.scene}
+          onChange={(e) => onChangeScene(e.target.value)}
+          placeholder="장면 묘사를 입력해주세요 (예: 카페 창가 자리에서 심각한 표정으로 스마트폰을 보는 주인공)"
+          rows={2}
+          aria-label={`${cut.index}컷 장면 묘사`}
+          className="w-full resize-y rounded-md border border-border-control bg-surface-card p-2.5 text-body-sm text-ink placeholder:text-ink-subtle focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
         />
-      )}
+      </div>
 
-      {ctaText && <Copy tone="cta" text={ctaText} />}
+      {/* 대사 및 말풍선 관리 - 이모티콘 제거 */}
+      <div className="flex flex-col gap-2 pt-1 border-t border-border-subtle" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <span className="text-caption font-semibold text-ink-muted">
+            대사 {cut.dialogue.length > 0 && `(${cut.dialogue.length})`}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onAddLine}
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-caption font-semibold text-brand hover:bg-brand-tint transition-colors"
+            >
+              + 대사 추가
+            </button>
+            {cut.narration == null && (
+              <button
+                type="button"
+                onClick={onAddNarration}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-caption font-semibold text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors"
+              >
+                + 나레이션 추가
+              </button>
+            )}
+          </div>
+        </div>
+
+        {cut.dialogue.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {cut.dialogue.map((line) => (
+              <li key={line.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-sunken/40 p-2">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* 화자 선택 */}
+                  <select
+                    value={line.speakerId ?? ""}
+                    onChange={(e) => onChangeLineSpeaker(line.id, e.target.value ? e.target.value : null)}
+                    aria-label="화자 선택"
+                    className="h-control-sm rounded border border-border bg-surface-card px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+                  >
+                    <option value="">화자 없음</option>
+                    {characters.map((ch) => (
+                      <option key={ch.key} value={ch.key}>
+                        {ch.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* 말풍선 종류 선택 */}
+                  <select
+                    value={line.balloon}
+                    onChange={(e) => onChangeLineBalloon(line.id, e.target.value as BalloonKind)}
+                    aria-label="말풍선 종류"
+                    className="h-control-sm rounded border border-border bg-surface-card px-1.5 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+                  >
+                    {Object.entries(BALLOON_LABEL).map(([kind, label]) => (
+                      <option key={kind} value={kind}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 대사 텍스트 입력 */}
+                <input
+                  value={line.text}
+                  onChange={(e) => onChangeLine(line.id, e.target.value)}
+                  placeholder="대사를 입력하세요"
+                  aria-label={`${cut.index}컷 대사`}
+                  className="h-control-sm min-w-0 flex-1 rounded border border-border-control bg-surface-card px-2.5 text-body-sm text-ink placeholder:text-ink-subtle focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+                />
+
+                {/* 대사 삭제 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => onRemoveLine(line.id)}
+                  title="대사 삭제"
+                  aria-label="대사 삭제"
+                  className="grid size-control-sm shrink-0 place-items-center rounded text-caption text-ink-muted hover:bg-surface-sunken hover:text-danger"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* 나레이션 박스 관리 - 이모티콘 제거 */}
+        {cut.narration != null && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-dashed border-border-control bg-surface-sunken p-2">
+            <span className="shrink-0 text-caption font-semibold text-ink-muted">나레이션</span>
+            <input
+              value={cut.narration}
+              onChange={(e) => onChangeNarration(e.target.value)}
+              placeholder="나레이션 문구를 입력하세요"
+              aria-label={`${cut.index}컷 나레이션`}
+              className="h-control-sm min-w-0 flex-1 rounded border border-border-control bg-surface-card px-2.5 text-body-sm text-ink focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+            />
+            <button
+              type="button"
+              onClick={onRemoveNarration}
+              title="나레이션 삭제"
+              aria-label="나레이션 삭제"
+              className="grid size-control-sm shrink-0 place-items-center rounded text-caption text-ink-muted hover:bg-surface-sunken hover:text-danger"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
     </article>
-  );
-}
-
-function Copy({ tone, text }: { tone: "hook" | "cta"; text: string }) {
-  return (
-    <p className="rounded-md bg-brand-tint px-3 py-2 text-body font-semibold text-brand-ink">
-      {tone === "hook" ? "후킹" : "CTA"} · {text}
-    </p>
   );
 }
 

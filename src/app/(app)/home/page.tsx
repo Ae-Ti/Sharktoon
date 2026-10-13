@@ -4,6 +4,7 @@ import { Badge, ButtonLink, EmptyState } from "@/components/ui";
 import { getRepository, type EpisodeStatus } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
+import { Plus } from "lucide-react";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
 
@@ -27,7 +28,13 @@ export default async function Page() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
+        <ButtonLink href="/onboarding/character" size="sm" variant="primary" className="flex items-center gap-1.5 shadow-2xs">
+          <Plus className="size-4" />
+          <span>새 인스타툰 만들기</span>
+        </ButtonLink>
+      </div>
 
       <AttendanceBanner
         checkedInToday={attendance.checkedInToday}
@@ -42,7 +49,8 @@ export default async function Page() {
           <EmptyState
             title="아직 시리즈가 없어요"
             description="첫 화를 만들면 같은 캐릭터로 다음 화를 이어갈 수 있어요."
-            actionLabel="첫 화 만들기"
+            actionLabel="첫 화 만들기 (온보딩)"
+            actionHref="/onboarding/character"
           />
         ) : (
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">

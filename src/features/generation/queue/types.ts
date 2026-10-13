@@ -10,7 +10,7 @@ import type { CutEditIntent, GenerationJob, GenerationJobCut } from "@/contracts
 /** 잡을 등록할 때 같이 넘기는 생성 재료. */
 export interface JobContext {
   /** 컷마다 이미지 지시문과 수정 동작. */
-  cuts: Record<string, { prompt: string; intent: CutEditIntent }>;
+  cuts: Record<string, { prompt: string; intent: CutEditIntent; skipFaceLock?: boolean; maskUrl?: string }>;
   /**
    * 고정 레퍼런스. Supabase 큐는 에셋 id 만 저장하고 꺼낼 때 다시 서명한다(서명 URL 은 만료된다).
    * 인메모리 큐는 지금 받은 URL 을 그대로 쓴다.
@@ -31,6 +31,10 @@ export interface CutWork {
   characterSheetRefs: string[];
   assetRefs: string[];
   seriesRule: Record<string, unknown>;
+  /** 얼굴 인식이 실패했거나 사용자가 임의 AI 얼굴 생성을 원할 때 */
+  skipFaceLock?: boolean;
+  /** 부분 수정(인페인팅) 마스크 이미지 (Data URL 또는 URL) */
+  maskUrl?: string;
   /** 이전 작업자가 죽으면서 남긴 hold. 새로 잡기 전에 돌려준다. */
   staleHoldId?: string;
   /** hold 를 잡으면 알린다. 큐가 기록해 두었다가 작업자가 죽으면 위의 staleHoldId 로 쓴다. */
@@ -55,7 +59,7 @@ export interface JobQueue {
   requeue(
     jobId: string,
     cutId: string,
-    change?: { intent: CutEditIntent; request?: string },
+    change?: { intent: CutEditIntent; request?: string; skipFaceLock?: boolean; maskUrl?: string },
   ): Promise<void>;
   /** 화면이 보는 현재 상태. 소유자 확인은 부르는 쪽이 한다. */
   get(jobId: string): Promise<GenerationJob | null>;

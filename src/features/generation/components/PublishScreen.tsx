@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { BookOpen } from "lucide-react";
 import { Badge, Button, ButtonLink, Field } from "@/components/ui";
+import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
 import {
   generatePostPackageAction,
@@ -55,6 +57,7 @@ export function PublishScreen(props: PublishScreenProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [published, setPublished] = useState(props.published);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [pending, start] = useTransition();
   const started = useRef(false);
 
@@ -161,6 +164,14 @@ export function PublishScreen(props: PublishScreenProps) {
                   </button>
                 ))}
               </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setViewerOpen(true)}
+              >
+                <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+                웹툰 뷰어로 보기
+              </Button>
             </div>
 
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -370,6 +381,19 @@ export function PublishScreen(props: PublishScreenProps) {
           )}
         </aside>
       </main>
+
+      <WebtoonComicViewer
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        title={`${props.seriesTitle} - ${props.episodeTitle}`}
+        caption={pkg ? pkg.captions[caption] : undefined}
+        hashtags={tags}
+        cuts={props.slides.map((s) => ({
+          cutId: s.cutId,
+          imageUrl: s.imageUrl ?? undefined,
+          index: s.index,
+        }))}
+      />
     </div>
   );
 }

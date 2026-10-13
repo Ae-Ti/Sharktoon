@@ -23,8 +23,56 @@ import {
 import { bodyConfig, tailConfigs, textConfig } from "./nodeConfig";
 import { ensureToonFont } from "./fonts";
 
+import { cn } from "@/lib/cn";
+
 // 두 손가락 확대 중에도 노드 판정이 돌아야 핀치가 끊기지 않는다(konva 다중 터치 안내).
 Konva.hitOnDragEnabled = true;
+
+export interface MaskLine {
+  tool: "brush" | "eraser";
+  points: number[];
+  size: number;
+}
+
+/**
+ * 마스크 선들을 AI 인페인팅 표준 규격(흑백 바이너리 PNG) Data URL로 내보냅니다.
+ * - 검은색(#000000): 보존 영역 (원래 이미지 유지)
+ * - 흰색(#ffffff): 부분 재생성 대상 영역
+ */
+export function exportMaskToDataUrl(
+  maskLines: MaskLine[],
+  width: number,
+  height: number,
+): string {
+  if (typeof document === "undefined") return "";
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+
+  // 1. 전체 보존 영역: 검은색(#000000)
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 2. 스트로크 렌더링
+  for (const line of maskLines) {
+    if (line.points.length < 2) continue;
+    ctx.lineWidth = line.size;
+    ctx.strokeStyle = line.tool === "eraser" ? "#000000" : "#ffffff";
+    ctx.beginPath();
+    ctx.moveTo(line.points[0], line.points[1]);
+    for (let i = 2; i < line.points.length; i += 2) {
+      ctx.lineTo(line.points[i], line.points[i + 1]);
+    }
+    ctx.stroke();
+  }
+
+  return canvas.toDataURL("image/png");
+}
 
 export interface EditorCanvasProps {
   tree: CutLayerTree;
@@ -40,6 +88,12 @@ export interface EditorCanvasProps {
   onCommit: () => void;
   /** 캔버스가 차지할 화면 폭(px). 부모가 재어서 준다. */
   size: number;
+  /** 부분 수정 마스크 페인팅 모드 */
+  isMaskMode?: boolean;
+  brushTool?: "brush" | "eraser";
+  brushSize?: number;
+  maskLines?: MaskLine[];
+  onMaskLinesChange?: (lines: MaskLine[]) => void;
 }
 
 /** 스냅 거리(화면 px). 캔버스 배율로 나눠 원본 좌표로 바꾼다. */
@@ -64,6 +118,11 @@ export function EditorCanvas({
   onPreviewTail,
   onCommit,
   size,
+  isMaskMode = false,
+  brushTool = "brush",
+  brushSize = 40,
+  maskLines = [],
+  onMaskLinesChange,
 }: EditorCanvasProps) {
   const fit = size / tree.canvas.width;
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
@@ -73,16 +132,61 @@ export function EditorCanvas({
   const nodeRefs = useRef(new Map<string, Konva.Node>());
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const pinch = useRef<{ dist: number; center: { x: number; y: number } } | null>(null);
+  const isDrawing = useRef(false);
   const fontEpoch = useFontEpoch(tree);
 
-  // 선택이 바뀌면 변형 핸들을 그 노드에 붙인다.
+  // 선택이 바뀌면 변형 핸들을 그 노드에 붙인다 (마스크 모드일 때는 핸들 해제).
   useEffect(() => {
     const tr = trRef.current;
     if (!tr) return;
+    if (isMaskMode) {
+      tr.nodes([]);
+      tr.getLayer()?.batchDraw();
+      return;
+    }
     const node = selectedId ? nodeRefs.current.get(selectedId) : null;
     tr.nodes(node ? [node] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, tree.layers, fontEpoch]);
+  }, [selectedId, tree.layers, fontEpoch, isMaskMode]);
+
+  function getCanvasPointer(stage: Konva.Stage | null) {
+    if (!stage) return null;
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+    return {
+      x: (pos.x - view.x) / scale,
+      y: (pos.y - view.y) / scale,
+    };
+  }
+
+  function handleDrawStart(stage: Konva.Stage | null) {
+    if (!isMaskMode) return;
+    const pt = getCanvasPointer(stage);
+    if (!pt) return;
+    isDrawing.current = true;
+    const newLine: MaskLine = {
+      tool: brushTool,
+      size: brushSize,
+      points: [pt.x, pt.y, pt.x, pt.y],
+    };
+    onMaskLinesChange?.([...maskLines, newLine]);
+  }
+
+  function handleDrawMove(stage: Konva.Stage | null) {
+    if (!isMaskMode || !isDrawing.current) return;
+    const pt = getCanvasPointer(stage);
+    if (!pt || maskLines.length === 0) return;
+    const lastLine = maskLines[maskLines.length - 1];
+    const updatedLine = {
+      ...lastLine,
+      points: [...lastLine.points, pt.x, pt.y],
+    };
+    onMaskLinesChange?.([...maskLines.slice(0, -1), updatedLine]);
+  }
+
+  function handleDrawEnd() {
+    isDrawing.current = false;
+  }
 
   function register(id: string, node: Konva.Node | null) {
     if (node) nodeRefs.current.set(id, node);
@@ -189,7 +293,7 @@ export function EditorCanvas({
 
   const selected = tree.layers.find((l) => l.id === selectedId) ?? null;
   const tailHandle =
-    selected && isVectorTextLayer(selected) && selected.tail && !selected.locked
+    !isMaskMode && selected && isVectorTextLayer(selected) && selected.tail && !selected.locked
       ? selected
       : null;
 
@@ -202,18 +306,45 @@ export function EditorCanvas({
         x={view.x}
         y={view.y}
         onWheel={onWheel}
-        onTouchMove={onTouchMove}
+        onMouseDown={(e) => {
+          if (isMaskMode) {
+            handleDrawStart(e.target.getStage());
+          } else {
+            if (e.target === e.target.getStage()) onSelect(null);
+          }
+        }}
+        onMouseMove={(e) => {
+          if (isMaskMode) {
+            handleDrawMove(e.target.getStage());
+          }
+        }}
+        onMouseUp={handleDrawEnd}
+        onTouchStart={(e) => {
+          if (isMaskMode) {
+            if (e.evt.touches.length === 1) {
+              handleDrawStart(e.target.getStage());
+            }
+          } else {
+            if (e.target === e.target.getStage()) onSelect(null);
+          }
+        }}
+        onTouchMove={(e) => {
+          if (e.evt.touches.length === 2) {
+            onTouchMove(e);
+            return;
+          }
+          if (isMaskMode) {
+            handleDrawMove(e.target.getStage());
+          }
+        }}
         onTouchEnd={() => {
           pinch.current = null;
+          handleDrawEnd();
         }}
-        // 빈 곳을 누르면 선택을 푼다. 터치에서도 같아야 한다.
-        onMouseDown={(e) => {
-          if (e.target === e.target.getStage()) onSelect(null);
-        }}
-        onTouchStart={(e) => {
-          if (e.target === e.target.getStage()) onSelect(null);
-        }}
-        className="touch-none rounded-lg"
+        className={cn(
+          "touch-none rounded-lg",
+          isMaskMode ? "cursor-crosshair" : "cursor-default",
+        )}
       >
         <KonvaLayer>
           {tree.layers.map((layer) => {
@@ -221,9 +352,13 @@ export function EditorCanvas({
 
             const common = {
               id: layer.id,
-              draggable: !layer.locked,
-              onMouseDown: () => onSelect(layer.id),
-              onTouchStart: () => onSelect(layer.id),
+              draggable: !isMaskMode && !layer.locked,
+              onMouseDown: () => {
+                if (!isMaskMode) onSelect(layer.id);
+              },
+              onTouchStart: () => {
+                if (!isMaskMode) onSelect(layer.id);
+              },
               onDragStart: onBeginDrag,
               onTransformStart: onBeginDrag,
               onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -293,18 +428,20 @@ export function EditorCanvas({
             />
           ))}
 
-          <Transformer
-            ref={trRef}
-            rotateEnabled
-            // 44px 터치 규칙(디자인 가이드). 캔버스 배율을 거슬러 화면상 크기를 맞춘다.
-            anchorSize={12 / scale}
-            anchorCornerRadius={3 / scale}
-            borderStrokeWidth={1.5 / scale}
-            // 너무 작아지면 다시 잡을 수 없다.
-            boundBoxFunc={(oldBox, newBox) =>
-              newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
-            }
-          />
+          {!isMaskMode && (
+            <Transformer
+              ref={trRef}
+              rotateEnabled
+              // 44px 터치 규칙(디자인 가이드). 캔버스 배율을 거슬러 화면상 크기를 맞춘다.
+              anchorSize={12 / scale}
+              anchorCornerRadius={3 / scale}
+              borderStrokeWidth={1.5 / scale}
+              // 너무 작아지면 다시 잡을 수 없다.
+              boundBoxFunc={(oldBox, newBox) =>
+                newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
+              }
+            />
+          )}
 
           {tailHandle && (
             <Circle
@@ -325,6 +462,27 @@ export function EditorCanvas({
             />
           )}
         </KonvaLayer>
+
+        {/* 부분 수정 마스크 브러시 레이어 (반투명 붉은색 오버레이) */}
+        {maskLines && maskLines.length > 0 && (
+          <KonvaLayer id="mask-layer" listening={false}>
+            {maskLines.map((line, i) => (
+              <Line
+                key={`mask-line-${i}`}
+                points={line.points}
+                stroke={line.tool === "eraser" ? "#ffffff" : "#ef4444"}
+                opacity={line.tool === "eraser" ? 1.0 : 0.65}
+                strokeWidth={line.size}
+                tension={0.5}
+                lineCap="round"
+                lineJoin="round"
+                globalCompositeOperation={
+                  line.tool === "eraser" ? "destination-out" : "source-over"
+                }
+              />
+            ))}
+          </KonvaLayer>
+        )}
       </Stage>
 
       {view.zoom > 1 && (

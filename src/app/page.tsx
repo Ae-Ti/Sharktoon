@@ -1,44 +1,65 @@
 import Link from "next/link";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { LoginButtons } from "@/features/platform/auth/LoginButtons";
-import { DevEmailLogin } from "@/features/platform/auth/DevEmailLogin";
+import { redirect } from "next/navigation";
+import { ButtonLink } from "@/components/ui";
+import { getSession } from "@/features/platform/auth/session";
+import { Sparkles, ArrowRight } from "lucide-react";
 
-export default function Page() {
-  const configured = isSupabaseConfigured();
-  // 로컬에서 실제 저장소를 테스트할 때만 보인다.
-  const showDevLogin = process.env.NODE_ENV !== "production" && configured;
+export default async function Page() {
+  const session = await getSession();
+  if (session) {
+    redirect("/home");
+  }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pt-16 pb-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[40px] leading-none font-extrabold tracking-[-0.04em]">
-          샥툰
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-between px-6 pt-16 pb-8">
+      <div className="flex flex-col gap-2.5">
+        <div className="inline-flex items-center gap-1.5 w-fit rounded-full bg-brand-tint px-3 py-1 text-caption font-semibold text-brand">
+          <Sparkles className="size-3.5" />
+          <span>AI 인스타툰 크리에이터</span>
+        </div>
+        <h1 className="text-[44px] leading-none font-extrabold tracking-[-0.04em] text-ink">
+          샥<span className="text-brand">툰</span>
         </h1>
-        <p className="text-body text-ink-muted">사연 한 줄로, 오늘 저녁 첫 인스타툰</p>
+        <p className="text-body font-medium text-ink-muted">
+          사연 한 줄로, 오늘 저녁 첫 인스타툰을 발행해 보세요.
+        </p>
       </div>
 
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex flex-1 items-center justify-center py-6">
         <div className="flex items-center gap-3" aria-hidden>
-          <div className="h-[105px] w-[84px] rounded-lg border border-border bg-skeleton" />
-          <div className="grid h-[165px] w-[132px] place-items-center rounded-lg border border-border bg-skeleton text-caption text-ink-subtle">
-            예시 컷
+          <div className="h-[120px] w-[96px] rounded-xl border border-border/80 bg-surface-sunken shadow-2xs rotate-[-4deg] opacity-70" />
+          <div className="flex h-[184px] w-[148px] flex-col items-center justify-center gap-2.5 rounded-2xl border border-brand/20 bg-surface-card p-4 shadow-lg ring-4 ring-brand/5">
+            <div className="grid size-12 place-items-center rounded-xl bg-brand-tint text-brand">
+              <Sparkles className="size-6" />
+            </div>
+            <span className="text-center text-xs font-bold text-ink">
+              나만의 4컷 만화
+            </span>
+            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-center text-[10px] font-semibold text-brand">
+              AI 자동 생성
+            </span>
           </div>
-          <div className="h-[105px] w-[84px] rounded-lg border border-border bg-skeleton" />
+          <div className="h-[120px] w-[96px] rounded-xl border border-border/80 bg-surface-sunken shadow-2xs rotate-[4deg] opacity-70" />
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
-        <LoginButtons configured={configured} />
-        {showDevLogin && <DevEmailLogin />}
-        <p className="text-center text-body-sm text-ink-muted">
-          가입하면 <Link href="/terms" className="text-brand-ink underline">이용약관</Link>과{" "}
-          <Link href="/privacy" className="text-brand-ink underline">개인정보 처리방침</Link>에 동의하게 돼요.
-          <br />
+        <ButtonLink href="/login?mode=signup" size="lg" variant="primary" block className="group flex items-center justify-center gap-1.5 shadow-sm">
+          <span>지금 무료로 시작하기</span>
+          <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+        </ButtonLink>
+        <ButtonLink href="/login?mode=signin" size="lg" variant="secondary" block>
+          이미 계정이 있어요 (로그인)
+        </ButtonLink>
+
+        <p className="mt-2 text-center text-body-sm text-ink-muted">
           가입 즉시 8크레딧을 드려요.
+          <br />
+          <Link href="/terms" className="text-brand underline">이용약관</Link>과{" "}
+          <Link href="/privacy" className="text-brand underline">개인정보 처리방침</Link>
         </p>
-        {/* AI 기본법 제31조 제1항 — 생성형 AI 기반 서비스라는 사실을 이용 전에 알린다. */}
         <p className="text-center text-caption text-ink-subtle">
-          샥툰은 생성형 AI로 콘티·그림·캡션을 만들어요. 만든 이미지에는 AI 생성 표시가 들어가요.
+          샥툰은 생성형 AI로 콘티·그림·캡션을 만들어요.
         </p>
       </div>
     </main>

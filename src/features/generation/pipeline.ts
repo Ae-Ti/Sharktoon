@@ -91,6 +91,13 @@ const runCut: CutRunner = async (work: CutWork) => {
   await work.onHold?.(holdId);
 
   try {
+    let baseImageUrl: string | undefined;
+    if (work.intent === "inpaint_mask") {
+      const existingCuts = await store.listCuts(work.job.episodeId);
+      const existing = existingCuts.find((c) => c.cutId === work.cut.cutId);
+      baseImageUrl = existing?.imageUrl ?? undefined;
+    }
+
     const result = await getImageGenerator(work.job.tier).generateCut({
       cutId: work.cut.cutId,
       index: work.cut.index,
@@ -101,6 +108,9 @@ const runCut: CutRunner = async (work: CutWork) => {
       characterSheetRefs: work.characterSheetRefs,
       assetRefs: work.assetRefs,
       seriesRule: work.seriesRule,
+      skipFaceLock: work.skipFaceLock,
+      maskUrl: work.maskUrl,
+      baseImageUrl,
     });
     // 저장까지 끝나야 성공이다. 저장이 실패하면 사용자는 컷을 못 보므로 환불한다.
     const saved = await store.workerSaveCutImage({
@@ -268,6 +278,8 @@ export async function regenerateCut(input: {
   cutId: string;
   intent: CutEditIntent;
   prompt?: string;
+  skipFaceLock?: boolean;
+  maskUrl?: string;
 }): Promise<{ ok: boolean; message?: string }> {
   if (input.prompt) {
     const verdict = screenText(input.prompt);
@@ -289,6 +301,8 @@ export async function regenerateCut(input: {
   await (await getQueue()).requeue(input.jobId, input.cutId, {
     intent: input.intent,
     request: input.prompt,
+    skipFaceLock: input.skipFaceLock,
+    maskUrl: input.maskUrl,
   });
   return { ok: true };
 }
@@ -297,6 +311,7 @@ export async function regenerateCut(input: {
 export async function retryFailedCuts(input: {
   jobId: string;
   userId: string;
+  skipFaceLock?: boolean;
 }): Promise<{ ok: boolean; message?: string }> {
   const job = await ownedJob(input.jobId, input.userId);
   if (!job) return { ok: false, message: "이 생성 기록을 찾지 못했어요" };
@@ -308,7 +323,13 @@ export async function retryFailedCuts(input: {
   if (balance < required) throw new InsufficientCreditError(required, balance);
 
   const queue = await getQueue();
-  for (const cut of failed) await queue.requeue(input.jobId, cut.cutId);
+  for (const cut of failed) {
+    await queue.requeue(
+      input.jobId,
+      cut.cutId,
+      input.skipFaceLock ? { intent: "regenerate", skipFaceLock: true } : undefined,
+    );
+  }
   return { ok: true };
 }
 
@@ -331,6 +352,8 @@ export function buildCutPrompt(storyboard: Storyboard, cutId: string): string {
   if (cut.background) {
     if (cut.background.preset === "solid_color") {
       bgDesc = `배경: 단색 컬러 (${cut.background.colorHex || "#FFF9F0"})`;
+    } else if (cut.background.customName && cut.background.customName.trim()) {
+      bgDesc = `배경: ${cut.background.customName.trim()}`;
     } else if (cut.background.preset !== "auto") {
       bgDesc = `배경: ${BACKGROUND_PRESET_LABEL[cut.background.preset] || cut.background.preset}`;
     }

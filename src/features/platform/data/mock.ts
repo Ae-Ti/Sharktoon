@@ -120,7 +120,7 @@ const SEED_SERIES: SeriesDetail[] = [
     rule: {
       stylePreset: "심플 라인",
       defaultCutCount: 6,
-      aspectRatio: "4:5",
+      aspectRatio: "1:1",
       tone: "반말 · 자조적",
       fixedHashtags: ["#직장상사빌런", "#샥툰"],
     },
@@ -173,7 +173,7 @@ const MOCK_POLICY: CreditPolicy = {
 const DEFAULT_RULE: SeriesRule = {
   stylePreset: "심플 라인",
   defaultCutCount: 6,
-  aspectRatio: "4:5",
+  aspectRatio: "1:1",
   tone: null,
   fixedHashtags: [],
 };

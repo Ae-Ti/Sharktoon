@@ -28,23 +28,23 @@ export function resolveStylePrompt(style?: string): string {
   switch (style) {
     case "파스텔":
     case "pastel":
-      return "soft pastel flat cel colors with uniform 1.5px black ink outlines, warm cozy Korean slice-of-life manhwa style";
+      return "soft pastel flat cel colors, uniform 1.5px smooth dark-grey ink outlines, warm cozy Korean slice-of-life manhwa style, flat 2D coloring, zero 3D rendering, zero gradients";
     case "굵은 선":
     case "bold_line":
-      return "bold crisp black ink outlines with uniform 2.5px stroke weight, punchy vibrant flat solid cel shading, modern expressive manhwa style";
+      return "bold crisp black ink outlines with uniform 2.5px stroke weight, punchy vibrant flat solid cel shading, graphic novel modern comic manhwa style, zero gradients, zero 3D rendering";
     case "명랑 코믹":
     case "cheerful_comic":
-      return "vibrant cheerful comic style, dynamic expressive comic ink outlines, bright bouncy pop colors, lighthearted Korean comedy webtoon manhwa aesthetic";
+      return "vibrant cheerful comedy webtoon style, dynamic expressive comic ink outlines, bright bouncy pop solid colors, lighthearted Korean comedy webtoon manhwa aesthetic, flat cel shading";
     case "감성 색연필":
     case "colored_pencil":
-      return "warm colored pencil and soft watercolor texture manhwa style, gentle textured pencil outlines, cozy aesthetic slice-of-life essay webtoon";
+      return "warm soft textured pencil contour outlines, gentle watercolor flat fills, cozy aesthetic slice-of-life essay webtoon manhwa style, clean comic aesthetic";
     case "모던 K-웹툰":
     case "modern_manhwa":
-      return "sleek modern Korean romance drama webtoon manhwa style, refined delicate 1.2px ink contour lineart, trendy stylish cel shading, aesthetic character rendering";
+      return "sleek modern Korean romance drama webtoon manhwa style, refined delicate 1.3px ink contour lineart, trendy stylish cel shading, crisp shadow edges, aesthetic character rendering";
     case "심플 라인":
     case "simple_line":
     default:
-      return "clean black ink contour lineart with uniform 1.5px stroke weight, flat solid cel shading with crisp hard shadow boundaries, zero gradients, modern Korean webtoon manhwa style";
+      return "clean black ink contour lineart with uniform 1.5px stroke weight, flat solid cel shading with crisp hard shadow boundaries, zero gradients, zero 3D rendering, modern Korean slice-of-life webtoon manhwa style";
   }
 }
 
@@ -54,7 +54,9 @@ export function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number
   for (let i = 0; i < episodeId.length; i++) {
     hash = (hash * 31 + episodeId.charCodeAt(i)) >>> 0;
   }
-  return (hash + (cutIndex - 1) * 37) % 2147483647;
+  const baseSeed = hash % 2000000000;
+  // Sequential latent clustering: use tight seed step (x 3) so cuts in the same episode share the same artistic manifold
+  return (baseSeed + (cutIndex - 1) * 3) % 2147483647;
 }
 
 export function enhancePropsAndActions(text: string): string {
@@ -185,8 +187,14 @@ export class FalFluxGenerator implements ImageGenerator {
     } else if (cutText.includes("사무실") || cutText.includes("회사") || cutText.includes("office")) {
       backgroundPrompt = `[Environment & Background]: Fully illustrated modern corporate office interior setting with architectural depth. Office desks, monitors, office partition, water cooler in background, professional interior lighting, strictly NO empty background, NO plain white void.`;
     } else {
-      // 거실 또는 기본 인테리어
-      backgroundPrompt = `[Environment & Background]: Fully illustrated cozy modern Korean apartment living room interior setting with architectural depth. Warm light wooden flooring with subtle grain, fabric sofa and cushions in the background, low coffee table, baseboards, window blinds with ambient daylight, lived-in interior props, strictly NO empty background, NO plain white void.`;
+      const customBgMatch = cutText.match(/배경:\s*([^/]+)/);
+      const customBg = customBgMatch ? customBgMatch[1].trim() : "";
+      if (customBg && !customBg.includes("단색") && !customBg.includes("거실")) {
+        backgroundPrompt = `[Environment & Background]: Fully illustrated detailed ${customBg} setting with architectural depth and environmental props, strictly NO empty background, NO plain white void.`;
+      } else {
+        // 거실 또는 기본 인테리어
+        backgroundPrompt = `[Environment & Background]: Fully illustrated cozy modern Korean apartment living room interior setting with architectural depth. Warm light wooden flooring with subtle grain, fabric sofa and cushions in the background, low coffee table, baseboards, window blinds with ambient daylight, lived-in interior props, strictly NO empty background, NO plain white void.`;
+      }
     }
 
     // 3. 동물 일관성 및 의상 오류 방지
@@ -198,11 +206,11 @@ export class FalFluxGenerator implements ImageGenerator {
     const seed = getEpisodeSeed(req.episodeId, req.index);
 
     const negative_prompt = [
-      "semi-realistic, 3d render, photorealistic, realistic photo, hyperrealistic, oil painting",
+      "photorealistic, 3d render, cgi, octane render, unreal engine, volumetric lighting, airbrushed skin, skin pores, realistic photography, oil painting",
+      "semi-realistic, 3d model, computer graphics, realistic human face, soft focus, blurry lines",
+      "inconsistent art style, varying stroke weight, sketch, rough draft, messy lines, painterly, watercolor wash, airbrush gradients",
       "chibi, SD, super deformed, oversized head, dwarf, tiny body, toddler proportions, baby body, distorted anatomy, short stubby limbs",
       "giant eyes, huge bug eyes covering half of face, oversized anime doll eyes, baby face, toddler face, infant cheeks, compressed jaw",
-      "soft shading, painterly, uneven linework, sketchy, messy lines, scratchy lineart, varying line weight",
-      "smooth airbrush, gradients, volumetric lighting, watercolor, colored pencil, blurry lines, soft focus",
       "high bun, topknot, hair bun, messy bun, hair scrunchie, hair updo, chignon, wearing hood over head, hood pulled up, hood covering head, altered hairstyle, different hairstyle, white hair on protagonist, grey hair on protagonist",
       "cat ears on human, animal ears on human, animal headband, tail on human",
       "human clothes on cat, hoodie on cat, clothes zipper on cat, giant oversized cat, mutated animal paws",
@@ -237,74 +245,102 @@ export class FalFluxGenerator implements ImageGenerator {
     }
 
     const prompt = [
-      `A single panel from a 2D Korean webcomic manhwa, soft line art style.`,
-      `Art Style: soft line art, ${stylePrompt}, clean ink lineart, flat solid cel shading with crisp shadow boundaries, zero gradients, clean digital webtoon comic aesthetic.`,
-      `[Key Dynamic Action & Poses]: ${visualScene}.`,
+      `[MASTER EPISODE ART ANCHOR: 2D KOREAN WEBCOMIC MANHWA]`,
+      `Art Direction & Style: ${stylePrompt}.`,
+      `Strict Medium & Rendering Constraints: 100% 2D flat digital graphic novel illustration, uniform clean 1.8px black contour lineart, flat solid cel shading fills with zero smooth airbrush gradients, zero 3D rendering, zero photorealism. Strictly identical color grading, identical line stroke weight, and identical visual aesthetic across all panels in this episode.`,
+      `[Scene Dynamic Action & Composition]: ${visualScene}.`,
       emotionCue,
       propInteractionCue,
       `[Camera & Composition]: ${cameraFraming}.`,
       backgroundPrompt,
-      `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult human proportions, anatomically correct Korean manhwa anatomy, slender young adult female silhouette, natural limb lengths, normal head-to-body ratio, strictly NO chibi, NO super-deformed (SD) style, NO oversized head, NO dwarfism.`,
-      `[Facial Proportions]: Delicate, proportionate Korean manhwa facial features, natural eye size fitting modern webtoon aesthetics (NOT oversized bug-eyes, NOT chibi doll eyes), well-defined slender jawline, refined small nose, natural lips, mature 20-year-old female face structure.`,
-      `[Protagonist (Main Character)]: 20-year-old Korean human girl with natural human ears (STRICTLY NO animal ears, NO cat ears, NO headband, NO animal costume, NO tail). Exact same hairstyle across all cuts: black hair tied back loosely into a low ponytail behind the neck with two distinct side curtain bangs framing her face/cheekbones, forehead partially visible, strictly NO top bun, NO hair scrunchie, NO hair updo. Exact same signature outfit: dark grey oversized zip-up hoodie (hood resting down on shoulders, NEVER pulled over head) over a dark t-shirt, dark pants, sneakers.`,
+      `[Body & Anatomy]: Natural adult 6.8 heads tall Korean webtoon anatomy, slender human silhouette, normal head-to-body ratio, strictly NO chibi, NO SD, NO oversized head.`,
+      `[Protagonist Identity Lock]: 20-year-old Korean civilian girl with natural human ears (STRICTLY NO animal ears, NO cat ears, NO headband, NO animal costume, NO tail). Exact same hairstyle across all cuts: black hair tied back loosely into a low ponytail behind the neck with two distinct side curtain bangs framing her cheekbones, forehead partially visible. Exact same signature outfit across all cuts: oversized charcoal-grey hoodie (#373737, hood down) over plain white t-shirt, dark pants, sneakers.`,
       humanPresenceRule,
       animalRule,
-      characterAppearance ? `[Asset & Character References]: ${characterAppearance}.` : "",
-      `[Lighting & Color]: Soft neutral indoor ambient daylight, clear balanced lighting, crisp hard cel-shading shadow boundaries, consistent color temperature across all panels, strictly zero neon lighting reflection, zero dramatic rim light, zero photographic reflections.`,
+      characterAppearance ? `[Asset Reference]: ${characterAppearance}.` : "",
+      `[Lighting & Color Contract]: Soft warm interior ambient daylight (#FFFDF8 highlights), uniform color palette across all panels, zero neon lighting, zero photographic specular reflections.`,
       `[Strict Negative Constraints]: Under NO circumstances should any human character have cat ears, animal ears, or animal headbands. The female protagonist is strictly a civilian pet owner; she must NEVER wear a white lab coat, doctor coat, medical scrubs, or stethoscope. ${
         !hasVetInCut
           ? "STRICTLY NO veterinarian, NO doctor, NO male characters in this panel. There is ONLY one person: the female protagonist."
           : ""
       }`,
-      `Requirements: Clean composition, consistent 6.5-head adult webtoon anatomy, strictly identical face and hairstyle as character reference sheet, no speech bubbles, no text, no captions.`,
+      `Requirements: Clean composition, consistent 6.8-head adult webtoon anatomy, strictly identical face and art style as character reference sheet, no speech bubbles, no text, no captions.`,
     ].filter(Boolean).join("\n");
 
     console.log(`\n🎨 [FLUX Cut ${req.index}] Final Prompt:\n${prompt}\n`);
     console.log(`🛑 [FLUX Cut ${req.index}] Negative Prompt:\n${negative_prompt}\n`);
 
     // 고정 레퍼런스 이미지 (캐릭터 시트 정면/전신 뷰 또는 사용자 에셋 레퍼런스)
-    const referenceImageUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
+    const rawRefUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
+    // SVG data URI 또는 빈 값은 PuLID facexlib에서 얼굴 인식이 불가능하므로 제외 (HTTP/HTTPS URL 또는 래스터 base64만 허용)
+    const isValidRasterUrl = Boolean(
+      rawRefUrl &&
+      !rawRefUrl.startsWith("data:image/svg") &&
+      !rawRefUrl.endsWith(".svg") &&
+      (rawRefUrl.startsWith("http://") || rawRefUrl.startsWith("https://") || rawRefUrl.startsWith("data:image/jpeg") || rawRefUrl.startsWith("data:image/png"))
+    );
+    const referenceImageUrl = isValidRasterUrl ? rawRefUrl : undefined;
 
     // 레퍼런스 이미지가 있고 dev 모델인 경우 PuLID(Plug-and-Play Identity)를 사용하여 얼굴/인물/화풍을 완전 고정
-    const usePuLID = Boolean(referenceImageUrl && this.variant === "dev");
-    const endpoint = usePuLID
-      ? "https://fal.run/fal-ai/flux-pulid"
-      : `https://fal.run/fal-ai/flux/${this.variant}`;
+    // 사용자가 명시적으로 임의 AI 얼굴(skipFaceLock)을 원하지 않는 한 고정 레퍼런스를 적용합니다.
+    let usePuLID = Boolean(referenceImageUrl && this.variant === "dev" && !req.skipFaceLock);
 
+    // LoRA 적용: fal-ai/flux-lora 엔드포인트는 실제 LoRA 가중치를 로드하여 일관된 2D 웹툰 라인아트를 강제합니다.
     const loras = [
       {
         path: "alvdansen/soft-line-flux",
-        scale: 0.75,
+        scale: 0.9,
       },
     ];
 
-    const body: Record<string, unknown> = usePuLID
+    const isInpainting = req.intent === "inpaint_mask" && Boolean(req.maskUrl) && Boolean(req.baseImageUrl);
+
+    let endpoint = isInpainting
+      ? "https://fal.run/fal-ai/flux-lora/inpainting"
+      : usePuLID
+        ? "https://fal.run/fal-ai/flux-pulid"
+        : this.variant === "dev"
+          ? "https://fal.run/fal-ai/flux-lora"
+          : `https://fal.run/fal-ai/flux/${this.variant}`;
+
+    const makeBaseBody = () => ({
+      prompt,
+      negative_prompt,
+      image_size,
+      num_inference_steps: this.variant === "schnell" ? 4 : 28,
+      num_images: 1,
+      seed,
+      enable_safety_checker: true,
+      ...(this.variant === "dev" ? { loras, guidance_scale: 3.5 } : {}),
+    });
+
+    const body: Record<string, unknown> = isInpainting
       ? {
           prompt,
-          negative_prompt,
-          reference_image_url: referenceImageUrl,
-          id_weight: 0.75, // Goldilocks ratio: 0.75 maintains strict face/hair identity lock while granting rich emotional expression and pose freedom
-          guidance_scale: 3.8, // 4.5 -> 3.8로 안정화
-          true_cfg: 1.0,
-          max_sequence_length: "512",
+          image_url: req.baseImageUrl,
+          mask_url: req.maskUrl,
           num_inference_steps: 28,
+          guidance_scale: 3.5,
           seed,
-          width: image_size.width,
-          height: image_size.height,
           loras,
         }
-      : {
-          prompt,
-          negative_prompt,
-          image_size,
-          num_inference_steps: this.variant === "schnell" ? 4 : 28,
-          num_images: 1,
-          seed,
-          enable_safety_checker: true,
-          loras,
-        };
+      : usePuLID
+        ? {
+            prompt,
+            negative_prompt,
+            reference_image_url: referenceImageUrl,
+            id_weight: 0.72, // 0.72: 얼굴 ID를 견고하게 유지하면서 2D 웹툰 화풍 프롬프트가 이목구비에 정상 반영되도록 보장
+            guidance_scale: 3.5,
+            true_cfg: 2.2, // true_cfg 2.2: negative_prompt를 활성화하여 3D/실사 질감을 강력하게 억제하고 2D 셀채색 화풍을 강제
+            max_sequence_length: "512",
+            num_inference_steps: 28,
+            seed,
+            width: image_size.width,
+            height: image_size.height,
+          }
+        : makeBaseBody();
 
-    const res = await fetch(endpoint, {
+    let res = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Key ${apiKey}`,
@@ -312,6 +348,27 @@ export class FalFluxGenerator implements ImageGenerator {
       },
       body: JSON.stringify(body),
     });
+
+    // PuLID 얼굴 인식 실패(400: no face detected / facexlib align face fail) 감지 시
+    // 임의의 얼굴을 그리는 표준 모델로 몰래 자동 폴백하지 않고, 사용자에게 정면 사진 등록 필요성을 정확히 안내합니다.
+    if (!res.ok && usePuLID) {
+      const errText = await res.text();
+      const isFaceRecognitionFailure =
+        errText.includes("no face detected") ||
+        errText.includes("align face fail") ||
+        errText.includes("ID embeddings");
+
+      if (isFaceRecognitionFailure) {
+        console.error(
+          `❌ [Fal.ai] PuLID 안면 인식 실패 (facexlib align face fail). 자동 폴백 대신 사용자에게 얼굴 인식 실패를 안내합니다.`
+        );
+        throw new Error(
+          "캐릭터 사진에서 얼굴 인식을 실패했습니다 (facexlib align face fail: 정면 얼굴 감지 불가). 이목구비가 가려지지 않고 선명한 정면 사진을 등록해 주세요."
+        );
+      } else {
+        throw new Error(`Fal.ai Flux (${this.variant}) 실패 (${res.status}): ${errText}`);
+      }
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -484,6 +541,6 @@ export class FalFluxGenerator implements ImageGenerator {
   }
 
   supportsInpainting(): boolean {
-    return this.variant === "dev";
+    return true;
   }
 }

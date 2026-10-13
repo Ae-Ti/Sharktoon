@@ -2,6 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  RefreshCw,
+  Sparkles,
+  UserX,
+  ExternalLink,
+  Wand2,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -11,6 +22,7 @@ import {
   Modal,
   Tabs,
 } from "@/components/ui";
+import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
 import {
@@ -76,6 +88,7 @@ export function GenerationScreen({
   const [prompt, setPrompt] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [shortfall, setShortfall] = useState<{ required: number; available: number } | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const s = summarizeJob(job);
@@ -83,6 +96,12 @@ export function GenerationScreen({
   const failedCuts = job.cuts.filter((c) => c.status === "failed");
   const refundedCount = failedCuts.filter((c) => c.refunded).length;
   const allDone = !live && doneCuts.length === job.cuts.length;
+  const hasFaceRecognitionError = failedCuts.some(
+    (c) =>
+      c.error?.includes("얼굴 인식") ||
+      c.error?.includes("facexlib") ||
+      c.error?.includes("no face detected"),
+  );
 
   /** 액션 결과를 화면 상태로 옮긴다. 크레딧 부족만 시트를 연다. */
   function handle<T>(result: ActionResult<T>) {
@@ -117,13 +136,25 @@ export function GenerationScreen({
         current="generate"
         credits={balance}
         action={
-          <Button
-            size="sm"
-            disabled={doneCuts.length === 0}
-            onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}
-          >
-            편집기로
-          </Button>
+          <div className="flex items-center gap-2">
+            {doneCuts.length > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setViewerOpen(true)}
+              >
+                <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+                웹툰 뷰어
+              </Button>
+            )}
+            <Button
+              size="sm"
+              disabled={doneCuts.length === 0}
+              onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}
+            >
+              편집기로
+            </Button>
+          </div>
         }
       />
 
@@ -282,48 +313,173 @@ export function GenerationScreen({
         </section>
 
         {failedCuts.length > 0 && (
-          <section className="flex flex-col gap-3 rounded-xl border border-danger bg-danger-tint p-4">
-            <h2 className="text-label font-semibold text-danger">
-              못 만든 컷 {failedCuts.length}개
-            </h2>
-            <ul className="flex flex-col gap-2">
-              {failedCuts.map((c) => (
-                <li
-                  key={c.cutId}
-                  className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-card px-3 py-2"
-                >
-                  <span className="text-label font-bold tabular-nums">{c.index}컷</span>
-                  <span className="min-w-0 flex-1 text-body-sm text-ink-muted">{c.error}</span>
-                  {c.attempt > MAX_AUTO_ATTEMPTS && (
-                    <Badge tone="warning">{c.attempt}번 시도함</Badge>
-                  )}
+          <motion.section
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col gap-4 rounded-2xl border border-danger/30 bg-danger-tint/50 p-5 shadow-sm backdrop-blur-sm"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-danger">
+                <AlertTriangle className="h-5 w-5" />
+                <h2 className="text-label font-bold">
+                  못 만든 컷 {failedCuts.length}개
+                </h2>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={pending}
+                onClick={() =>
+                  startTransition(async () =>
+                    handle(
+                      await retryFailedCutsAction({
+                        episodeId: job.episodeId,
+                        jobId: job.id,
+                      }),
+                    ),
+                  )
+                }
+              >
+                전체 다시 만들기
+              </Button>
+            </div>
+
+            {/* 얼굴 인식 실패인 경우 사용자 안내 및 명시적 해결 옵션 제공 */}
+            {hasFaceRecognitionError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col gap-3 rounded-xl border border-amber-300/60 bg-amber-50/90 p-4 dark:border-amber-800/60 dark:bg-amber-950/30"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                    <UserX className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <h3 className="text-sm font-bold text-ink">
+                      캐릭터 얼굴 인식 실패 안내
+                    </h3>
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      등록된 캐릭터 사진에서 정면 얼굴의 이목구비(눈, 코, 입)를 인식하지 못했습니다 (facexlib align face fail).<br />
+                      AI가 캐릭터의 얼굴을 고정(PuLID)하려면 이목구비가 가려지지 않고 선명한 <strong>정면 실물 사진</strong>이 필요합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200/50 dark:border-amber-800/40">
                   <Button
                     size="sm"
                     variant="secondary"
+                    onClick={() => router.push("/assets")}
+                  >
+                    <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                    정면 캐릭터 사진으로 변경하기
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={pending}
                     onClick={() =>
                       startTransition(async () =>
                         handle(
-                          await regenerateCutAction({
+                          await retryFailedCutsAction({
                             episodeId: job.episodeId,
                             jobId: job.id,
-                            cutId: c.cutId,
-                            intent: "regenerate",
+                            skipFaceLock: true,
                           }),
                         ),
                       )
                     }
                   >
-                    다시
+                    <Wand2 className="mr-1 h-3.5 w-3.5 text-brand" />
+                    얼굴 고정 없이 AI 임의 얼굴로 생성하기
                   </Button>
-                </li>
-              ))}
+                </div>
+              </motion.div>
+            )}
+
+            <ul className="flex flex-col gap-2.5">
+              {failedCuts.map((c) => {
+                const isFaceFail =
+                  c.error?.includes("얼굴 인식") ||
+                  c.error?.includes("facexlib") ||
+                  c.error?.includes("no face detected");
+
+                return (
+                  <li
+                    key={c.cutId}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-surface-card p-3 shadow-sm"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-danger/10 text-caption font-bold text-danger">
+                      {c.index}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-body-sm font-medium text-ink">
+                        {isFaceFail ? "얼굴 인식 실패" : "이미지 생성 실패"}
+                      </div>
+                      <div className="text-caption text-ink-muted truncate">
+                        {c.error}
+                      </div>
+                    </div>
+                    {c.attempt > MAX_AUTO_ATTEMPTS && (
+                      <Badge tone="warning">{c.attempt}번 시도함</Badge>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {isFaceFail && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          loading={pending}
+                          onClick={() =>
+                            startTransition(async () =>
+                              handle(
+                                await regenerateCutAction({
+                                  episodeId: job.episodeId,
+                                  jobId: job.id,
+                                  cutId: c.cutId,
+                                  intent: "regenerate",
+                                  skipFaceLock: true,
+                                }),
+                              ),
+                            )
+                          }
+                        >
+                          <Wand2 className="mr-1 h-3 w-3" />
+                          임의 얼굴로
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={pending}
+                        onClick={() =>
+                          startTransition(async () =>
+                            handle(
+                              await regenerateCutAction({
+                                episodeId: job.episodeId,
+                                jobId: job.id,
+                                cutId: c.cutId,
+                                intent: "regenerate",
+                              }),
+                            ),
+                          )
+                        }
+                      >
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                        다시
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+
             <p className="text-caption text-ink-muted">
               {refundedCount > 0
                 ? `실패한 컷에 쓴 크레딧 ${refundedCount}개는 돌려드렸어요. 다시 만들 때 새로 차감돼요.`
                 : "실패한 컷에는 크레딧을 쓰지 않았어요. 다시 만들 때 차감돼요."}
             </p>
-          </section>
+          </motion.section>
         )}
 
         <section className="flex flex-col gap-3">
@@ -362,6 +518,17 @@ export function GenerationScreen({
             <Button onClick={() => router.push("/home")}>출석하고 받기</Button>
           </>
         }
+      />
+
+      <WebtoonComicViewer
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        title={`${seriesTitle} - ${episodeTitle}`}
+        cuts={job.cuts.map((c) => ({
+          cutId: c.cutId,
+          imageUrl: c.imageUrl,
+          index: c.index,
+        }))}
       />
     </div>
   );

@@ -17,7 +17,7 @@ const RATIOS: SeriesRule["aspectRatio"][] = ["1:1", "4:5"];
 const DEFAULT_RULE: SeriesRule = {
   stylePreset: "심플 라인",
   defaultCutCount: 6,
-  aspectRatio: "4:5",
+  aspectRatio: "1:1",
   tone: null,
   fixedHashtags: [],
 };

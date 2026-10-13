@@ -99,6 +99,8 @@ export function createMemoryQueue(runner: CutRunner, hooks: MemoryQueueHooks = {
         characterSheetRefs: context.characterSheetRefs,
         assetRefs: context.assetRefs,
         seriesRule: context.seriesRule,
+        skipFaceLock: work.skipFaceLock,
+        maskUrl: work.maskUrl,
       });
       patchCut(jobId, cutId, {
         status: "done",
@@ -144,7 +146,12 @@ export function createMemoryQueue(runner: CutRunner, hooks: MemoryQueueHooks = {
 
       const prev = context.cuts[cutId];
       if (prev && change) {
-        context.cuts[cutId] = { intent: change.intent, prompt: withRequest(prev.prompt, change.request) };
+        context.cuts[cutId] = {
+          intent: change.intent,
+          prompt: withRequest(prev.prompt, change.request),
+          skipFaceLock: change.skipFaceLock ?? prev.skipFaceLock,
+          maskUrl: change.maskUrl ?? prev.maskUrl,
+        };
       }
 
       jobs.set(jobId, {

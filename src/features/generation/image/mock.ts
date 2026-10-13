@@ -44,9 +44,12 @@ export class MockImageGenerator implements ImageGenerator {
     }
 
     const height = req.seriesRule.aspectRatio === "4:5" ? 1350 : 1080;
+    const label = req.intent === "inpaint_mask"
+      ? `부분수정:${req.prompt.slice(0, 10)}`
+      : req.prompt.slice(0, 18);
     return {
       cutId: req.cutId,
-      imageUrl: mockCutImageUrl(req.index, req.prompt.slice(0, 18), height),
+      imageUrl: mockCutImageUrl(req.index, label, height),
       metadata: {
         model: "mock-image-generator",
         generatedAt: new Date().toISOString(),
@@ -72,9 +75,9 @@ export class MockImageGenerator implements ImageGenerator {
     };
   }
 
-  /** 오픈 이슈 3 이 끝나기 전까지는 꺼 둔다. 화면이 이 값으로 부분 재생성 UI 를 감춘다. */
+  /** 부분 재생성(인페인팅) 지원 여부 */
   supportsInpainting(): boolean {
-    return false;
+    return true;
   }
 }
 

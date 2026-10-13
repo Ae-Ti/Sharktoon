@@ -1,4 +1,5 @@
 import { Button } from "./Button";
+import { ButtonLink } from "./ButtonLink";
 
 export interface EmptyStateProps {
   /** 제목은 사실, 설명은 이득, 버튼은 행동. */
@@ -6,6 +7,7 @@ export interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  actionHref?: string;
 }
 
 export function EmptyState({
@@ -13,6 +15,7 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  actionHref,
 }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-control bg-surface-sunken px-6 py-12 text-center">
@@ -20,7 +23,12 @@ export function EmptyState({
       {description && (
         <p className="max-w-[380px] text-body-sm text-ink-muted">{description}</p>
       )}
-      {actionLabel && <Button onClick={onAction}>{actionLabel}</Button>}
+      {actionLabel &&
+        (actionHref ? (
+          <ButtonLink href={actionHref}>{actionLabel}</ButtonLink>
+        ) : (
+          <Button onClick={onAction}>{actionLabel}</Button>
+        ))}
     </div>
   );
 }

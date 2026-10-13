@@ -26,10 +26,11 @@ export default async function Page({
   if (!context) notFound();
 
   const store = await getGenerationStore();
-  const [saved, records, credit] = await Promise.all([
+  const [saved, records, credit, latestJob] = await Promise.all([
     store.getStoryboard(episodeId),
     store.listCuts(episodeId),
     (await getRepository()).getCredit(),
+    store.getLatestJob(episodeId),
   ]);
   if (!saved) redirect(`/episodes/${episodeId}/storyboard`);
 
@@ -67,6 +68,7 @@ export default async function Page({
       // 컷을 바꾸면 편집기 상태(이력·선택)를 새로 시작한다.
       key={open.cutId}
       episodeId={episodeId}
+      jobId={latestJob?.id ?? null}
       cuts={strip}
       tree={tree}
       credits={credit.balance}

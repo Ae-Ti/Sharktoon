@@ -72,13 +72,13 @@ export type BackgroundPreset =
 
 export const BACKGROUND_PRESET_LABEL: Record<BackgroundPreset, string> = {
   auto: "자동 추천 배경",
-  vet_clinic: "🏥 동물병원 진료실",
-  living_room: "🛋️ 아파트 거실",
-  entrance: "🚪 아파트 현관",
-  bedroom: "🛏️ 아늑한 침실",
-  cafe: "☕ 감성 카페",
-  office: "💼 회사 사무실",
-  solid_color: "🎨 단색 배경",
+  vet_clinic: "동물병원 진료실",
+  living_room: "거실",
+  entrance: "현관",
+  bedroom: "침실",
+  cafe: "카페",
+  office: "사무실",
+  solid_color: "단색 배경",
 };
 
 export interface CutBackground {
@@ -166,11 +166,10 @@ export function reindexCuts(cuts: StoryboardCut[]): StoryboardCut[] {
   return cuts.map((cut, i) => (cut.index === i + 1 ? cut : { ...cut, index: i + 1 }));
 }
 
-/** 이미지 생성으로 넘어갈 수 있는지. 후킹·CTA 를 안 고르면 막는다. */
+/** 이미지 생성으로 넘어갈 수 있는지. 최소 1개 이상의 컷과 유효한 장면 묘사가 있어야 한다. */
 export function canGenerate(storyboard: Storyboard): boolean {
   return (
     storyboard.cuts.length > 0 &&
-    storyboard.selectedHookId !== null &&
-    storyboard.selectedCtaId !== null
+    storyboard.cuts.every((c) => Boolean(c.scene && c.scene.trim().length > 0))
   );
 }
