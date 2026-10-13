@@ -64,10 +64,28 @@ export function buildLayerTree(input: {
     top += 190;
   }
 
-  // 대사는 위에서부터 좌우로 엇갈려 놓는다. 꼬리는 아래쪽 가운데를 가리킨다 — 인물이 대개 거기 있다.
+  // 스마트 대사 배치: 화자 및 인물 위치(좌/우/반려동물)를 감지하여 얼굴 가림 방지 및 꼬리 방향 자동 조절
   cut.dialogue.forEach((line, i) => {
-    const left = i % 2 === 0;
-    const box = { x: left ? 70 : W - 70 - 470, y: top + i * 200, width: 470, height: 160 };
+    const speaker = (line.speakerId || "").toLowerCase();
+    const isSecondary = speaker.includes("vet") || speaker.includes("doctor") || speaker.includes("boss") || speaker.includes("의사");
+    const isPet = speaker.includes("cat") || speaker.includes("고양이") || speaker.includes("반려");
+
+    // 조연은 좌측, 주인공은 우측(다중 대사 시 엇갈림)
+    let left = i % 2 === 0;
+    if (isSecondary) {
+      left = true;
+    } else if (speaker.includes("me") || speaker.includes("나")) {
+      left = false;
+    }
+
+    const boxWidth = Math.min(480, W - 140);
+    const box = {
+      x: left ? 70 : W - 70 - boxWidth,
+      y: top + i * 190,
+      width: boxWidth,
+      height: 160,
+    };
+
     if (!line.speakerId || line.balloon === "none") {
       layers.push(textLayer({
         id: `ly_line_${line.id}`,
@@ -81,6 +99,15 @@ export function buildLayerTree(input: {
       }));
       return;
     }
+
+    // 꼬리 위치: 좌측 화자는 좌하단, 우측 화자는 우하단, 동물은 중앙 아래로 자연스럽게 지향
+    const tailX = isPet
+      ? box.x + box.width / 2
+      : left
+        ? box.x + 100
+        : box.x + box.width - 100;
+    const tailY = box.y + box.height + 115;
+
     layers.push({
       ...textLayer({
         id: `ly_line_${line.id}`,
@@ -91,7 +118,7 @@ export function buildLayerTree(input: {
         fontSize: 40,
       }),
       balloon: line.balloon,
-      tail: { x: box.x + box.width / 2 + (left ? 90 : -90), y: box.y + box.height + 110 },
+      tail: { x: tailX, y: tailY },
     });
   });
 

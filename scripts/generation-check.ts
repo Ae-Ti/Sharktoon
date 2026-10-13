@@ -156,6 +156,22 @@ async function main() {
     );
     const fixed = mockStoryboard({ episodeId: "e", seriesId: "s", story, cutCount: 4, fixedCharacters: ["민지"] });
     ok(characterName(fixed, fixed.cuts[1].characterIds[0]) === "민지", "고정 캐릭터 이름을 쓴다");
+
+    // 카카오톡/메신저 대화록 다중 캐릭터 및 화자 분리 검증
+    const chatStory = `[김팀장] [오전 9:30] 대리님 이번 주 보고서 언제까지 됩니까?
+[나] [오전 9:31] 오늘 4시 전까지 완료하겠습니다!
+[김팀장] [오후 3:55] 지금 어디까지 됐어요?
+[나] [오후 3:56] 1분 뒤에 바로 메일 드립니다!`;
+    const chatSb = mockStoryboard({ episodeId: "e", seriesId: "s", story: chatStory, cutCount: 4 });
+    ok(chatSb.characters.length === 2, "카톡 대화록에서 2명 이상의 등장인물 자동 추출");
+    ok(chatSb.characters.some((c) => c.name === "김팀장"), "상대방 캐릭터(김팀장)가 등록됨");
+    ok(chatSb.cuts.some((c) => c.dialogue.some((d) => d.speakerId !== chatSb.characters[0].key)), "화자별 대사가 올바른 캐릭터에 귀속됨");
+
+    // 장문 일기/소설 기승전결 배분 검증
+    const longStory = `월요일 아침 출근길에 커피를 쏟았다. 옷을 갈아입으러 집으로 되돌아갔다. 지하철을 겨우 탔는데 연착되었다. 회사에 도착하니 회의가 시작되어 있었다. 팀장님이 날 쳐다보셨다. 심장이 덜컥 내려앉았다. 알고 보니 내 생일 축하 깜짝 파티였다. 다 함께 케이크를 나눠 먹었다.`;
+    const longSb = mockStoryboard({ episodeId: "e", seriesId: "s", story: longStory, cutCount: 4 });
+    ok(longSb.cuts[0].scene.includes("출근길") || longSb.cuts[0].scene.includes("커피"), "1컷은 사연의 시작(후킹)");
+    ok(longSb.cuts[3].scene.includes("케이크") || longSb.cuts[3].scene.includes("파티"), "4컷은 사연의 결말부(해결)");
   }
 
   // --- 레이어 트리: 콘티의 글은 이미지에 굽지 않고 벡터 레이어로 얹는다

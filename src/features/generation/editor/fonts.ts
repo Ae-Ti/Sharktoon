@@ -50,8 +50,8 @@ export const TOON_FONTS: ToonFont[] = [
   { family: "Diphylleia", label: "디필레이아", tone: "장식" },
 ];
 
-/** 새 레이어의 기본 글꼴. 손글씨 계열이 인스타툰에 가장 흔하다. */
-export const DEFAULT_TOON_FONT = "Gaegu";
+/** 새 레이어의 기본 글꼴. 가독성 높고 단정한 고운돋움(Gowun Dodum). */
+export const DEFAULT_TOON_FONT = "Gowun Dodum";
 
 const requested = new Set<string>();
 

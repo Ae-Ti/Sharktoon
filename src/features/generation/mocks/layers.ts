@@ -12,7 +12,7 @@ import { mockCutImageUrl } from "./cutImage";
 const CANVAS = { width: 1080, height: 1080 };
 
 /** 작품 안 글꼴. UI 폰트(Pretendard)와 별개로 관리한다(디자인 가이드). */
-const TOON_FONT = "Gaegu";
+const TOON_FONT = "Gowun Dodum";
 
 export const MOCK_LAYER_TREE: CutLayerTree = {
   cutId: "cut_5",

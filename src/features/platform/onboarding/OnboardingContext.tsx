@@ -9,13 +9,23 @@ import {
 } from "react";
 
 export type CharacterMethod = "selfie" | "tags" | "default";
-export type StylePreset = "simple_line" | "pastel" | "bold_line";
+
+export type StylePreset =
+  | "simple_line"
+  | "pastel"
+  | "bold_line"
+  | "cheerful_comic"
+  | "colored_pencil"
+  | "modern_manhwa";
 
 /** 시리즈 규칙에는 화면에 보이는 이름 그대로 저장한다(시리즈 설정 화면과 같은 값). */
 export const STYLE_LABEL: Record<StylePreset, string> = {
   simple_line: "심플 라인",
   pastel: "파스텔",
   bold_line: "굵은 선",
+  cheerful_comic: "명랑 코믹",
+  colored_pencil: "감성 색연필",
+  modern_manhwa: "모던 K-웹툰",
 };
 
 export interface OnboardingState {

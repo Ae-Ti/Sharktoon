@@ -47,3 +47,6 @@ next-env.d.ts
 
 # E2E 테스트 산출물
 /output
+
+# editor
+.vscode/

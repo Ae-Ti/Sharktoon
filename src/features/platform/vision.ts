@@ -17,7 +17,8 @@ export async function extractCharacterFeaturesFromSelfie(input: {
   if (!apiKey) return null;
 
   try {
-    const base64 = Buffer.from(input.buffer).toString("base64");
+    const buf = Buffer.isBuffer(input.buffer) ? input.buffer : Buffer.from(new Uint8Array(input.buffer));
+    const base64 = buf.toString("base64");
     const mimeType = input.mimeType || "image/jpeg";
 
     const prompt = [

@@ -130,29 +130,75 @@ function extractSpeakerId(speaker: unknown): string | null {
   if (!speaker || speaker === "") return null;
   if (typeof speaker === "string") {
     if (speaker.includes("object Object")) return "ch_me";
-    return speaker;
+    return speaker.trim();
   }
   if (typeof speaker === "object") {
     const obj = speaker as Record<string, unknown>;
-    if (typeof obj.key === "string" && !obj.key.includes("object Object")) return obj.key;
-    if (typeof obj.name === "string" && !obj.name.includes("object Object")) return obj.name;
+    if (typeof obj.key === "string" && !obj.key.includes("object Object")) return obj.key.trim();
+    if (typeof obj.name === "string" && !obj.name.includes("object Object")) return obj.name.trim();
     const firstKey = Object.keys(obj)[0];
-    if (firstKey) return firstKey;
+    if (firstKey) return firstKey.trim();
   }
+  return "ch_me";
+}
+
+function normalizeSpeakerId(
+  rawSpeaker: unknown,
+  characters: { key: string; name: string }[],
+  registerUnknown = true,
+): string | null {
+  const extracted = extractSpeakerId(rawSpeaker);
+  if (!extracted) return null;
+
+  // 1. 이미 존재하는 key 와 일치하는 경우
+  const matchByKey = characters.find((c) => c.key === extracted);
+  if (matchByKey) return matchByKey.key;
+
+  // 2. '나' 또는 '주인공'인 경우 항상 ch_me
+  if (extracted === "나" || extracted === "주인공" || extracted.toLowerCase() === "me") {
+    return "ch_me";
+  }
+
+  // 3. 캐릭터 이름과 일치하거나 부분 포함되는 경우 (예: '수의사' ➡️ '수의사 선생님')
+  const matchByName = characters.find(
+    (c) => c.name === extracted || c.name.includes(extracted) || extracted.includes(c.name),
+  );
+  if (matchByName) return matchByName.key;
+
+  // 4. 새로운 인물일 경우 캐릭터 목록에 자동 등록
+  if (registerUnknown) {
+    const clean = extracted.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    const candidate = clean ? `ch_${clean}` : `ch_${characters.length + 1}`;
+    const newKey = characters.some((c) => c.key === candidate)
+      ? `ch_${characters.length + 1}`
+      : candidate;
+    characters.push({ key: newKey, name: extracted });
+    return newKey;
+  }
+
   return "ch_me";
 }
 
 function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
   return cuts.map((cut) => {
     let scene = cut.scene;
-    let charIds = [...cut.characterIds];
+    let charIds = (Array.isArray(cut.characterIds) ? cut.characterIds : [])
+      .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c))));
+
+    // 0. 대사에 참여한 화자가 컷의 characterIds에 빠져있으면 자동 보강
+    for (const d of cut.dialogue) {
+      if (d.speakerId && !charIds.includes(d.speakerId)) {
+        charIds.push(d.speakerId);
+      }
+    }
+    if (charIds.length === 0) {
+      charIds.push("ch_me");
+    }
 
     // 1. 대사에 수의사나 병원 관련 대사가 있는데 씬에 의사가 빠진 경우 명시 추가
     const hasVetDialogue = cut.dialogue.some(
       (d) =>
-        d.speakerId?.includes("vet") ||
-        d.speakerId?.includes("doctor") ||
-        d.speakerId?.includes("수의사") ||
+        (typeof d.speakerId === "string" && (d.speakerId.includes("vet") || d.speakerId.includes("doctor") || d.speakerId.includes("수의사"))) ||
         d.text.includes("순해요") ||
         d.text.includes("진료")
     );
@@ -164,7 +210,7 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
     // 2. 씬에 수의사나 의사가 전혀 없으면 charIds에서도 수의사 제외 (집 씬 등으로 이동 시 조연 퇴장)
     const hasVetInScene = scene.includes("수의사") || scene.includes("의사");
     if (!hasVetInScene) {
-      charIds = charIds.filter((id) => !id.includes("vet") && !id.includes("doctor"));
+      charIds = charIds.filter((id) => typeof id === "string" && !id.includes("vet") && !id.includes("doctor"));
     }
 
     // 3. 주인공 서술 통일: 중복 수식어 제거 후 단일화 및 조연 '백발' 번짐 방지
@@ -193,6 +239,8 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
         bg = { preset: "bedroom" };
       } else if (scene.includes("카페")) {
         bg = { preset: "cafe" };
+      } else if (scene.includes("회사") || scene.includes("사무실") || scene.includes("회의") || scene.includes("팀장") || scene.includes("출근") || scene.includes("퇴근")) {
+        bg = { preset: "office" };
       } else {
         bg = { preset: "living_room" };
       }
@@ -202,13 +250,13 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
     let emotion = cut.emotion;
     if (!emotion || emotion === "calm") {
       if (scene.includes("식은땀") || scene.includes("당황") || scene.includes("놀란") || scene.includes("깜짝") || scene.includes("어리둥절")) {
-        emotion = "surprise";
+        emotion = "surprised";
       } else if (scene.includes("하악질") || scene.includes("화난") || scene.includes("짜증") || scene.includes("분노") || scene.includes("경계")) {
-        emotion = "anger";
+        emotion = "angry";
       } else if (scene.includes("억울") || scene.includes("지친") || scene.includes("한숨") || scene.includes("슬픈") || scene.includes("울상")) {
-        emotion = "sadness";
+        emotion = "sad";
       } else if (scene.includes("츄르") || scene.includes("허겁지겁") || scene.includes("반짝") || scene.includes("감동") || scene.includes("순해")) {
-        emotion = "love";
+        emotion = "joy";
       } else if (scene.includes("결국") || scene.includes("바쳤다") || scene.includes("비장")) {
         emotion = "determined";
       }
@@ -295,17 +343,19 @@ function toStoryboard(
     : (res.cuts && typeof res.cuts === "object" ? Object.values(res.cuts) : []);
 
   const cutsSource = rawCutsList.length > 0 ? rawCutsList : mockStoryboard(input).cuts;
+  const characters = toCharacters(res.characters);
 
   const rawCuts: StoryboardCut[] = cutsSource.map((cut: any, i: number) => ({
     id: seq("cut"),
     index: i + 1,
     scene: cut.scene || "장면 묘사",
-    characterIds: Array.isArray(cut.characters) ? cut.characters : (cut.characterIds || ["ch_me"]),
+    characterIds: (Array.isArray(cut.characters) ? cut.characters : (cut.characterIds || ["ch_me"]))
+      .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c)))),
     emotion: cut.emotion || "calm",
     camera: cut.camera || "medium",
     dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => ({
       id: seq("ln"),
-      speakerId: extractSpeakerId(line.speaker ?? line.speakerId),
+      speakerId: normalizeSpeakerId(line.speaker ?? line.speakerId, characters),
       text: line.text || "",
       balloon: line.balloon || "normal",
     })),
@@ -313,7 +363,6 @@ function toStoryboard(
   }));
 
   const cuts = refineStoryboardCuts(rawCuts);
-  const characters = toCharacters(res.characters);
   const hooks = toHooks(res.hooks);
   const ctas = toCtas(res.ctas);
 

@@ -10,7 +10,7 @@ import {
 } from "@/features/platform/actions";
 import type { SeriesRule } from "@/features/platform/data/types";
 
-const STYLES = ["심플 라인", "파스텔", "굵은 선"];
+const STYLES = ["심플 라인", "파스텔", "굵은 선", "명랑 코믹", "감성 색연필", "모던 K-웹툰"];
 const CUTS = [4, 6, 8];
 const RATIOS: SeriesRule["aspectRatio"][] = ["1:1", "4:5"];
 

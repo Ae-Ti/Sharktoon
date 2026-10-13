@@ -112,6 +112,7 @@ export function CutEditorScreen({
         onRedo={editor.redo}
         onAddText={() => editor.add(newTextLayer(tree, "text"))}
         onAddBalloon={() => editor.add(newTextLayer(tree, "balloon"))}
+        onAddNarration={() => editor.add(newTextLayer(tree, "narration"))}
         onAddSfx={() => editor.add(newTextLayer(tree, "sfx"))}
         saveLabel={SAVE_LABEL[editor.saveState]}
         saveError={editor.saveState === "error"}
@@ -209,6 +210,44 @@ export function CutEditorScreen({
                     : l,
                 )
               }
+              onChangePosition={(pos) => {
+                editor.update(selected.id, (l) => {
+                  if (!isVectorTextLayer(l)) return l;
+                  const W = tree.canvas.width;
+                  const H = tree.canvas.height;
+                  const w = l.box.width;
+                  const h = l.box.height;
+                  let x = l.box.x;
+                  let y = l.box.y;
+                  if (pos === "top_left") {
+                    x = 60;
+                    y = 70;
+                  } else if (pos === "top_center") {
+                    x = Math.round((W - w) / 2);
+                    y = 70;
+                  } else if (pos === "top_right") {
+                    x = W - w - 60;
+                    y = 70;
+                  } else if (pos === "center") {
+                    x = Math.round((W - w) / 2);
+                    y = Math.round((H - h) / 2);
+                  } else if (pos === "bottom") {
+                    x = Math.round((W - w) / 2);
+                    y = H - h - 70;
+                  }
+                  const tail = l.tail
+                    ? {
+                        x: x + Math.round(w / 2),
+                        y: Math.min(H - 20, y + h + 110),
+                      }
+                    : undefined;
+                  return {
+                    ...l,
+                    box: { ...l.box, x, y },
+                    tail: tail ?? l.tail,
+                  };
+                });
+              }}
               onToggleLock={() =>
                 editor.update(selected.id, (l) => ({ ...l, locked: !l.locked }))
               }
@@ -276,6 +315,7 @@ function Toolbar({
   onRedo,
   onAddText,
   onAddBalloon,
+  onAddNarration,
   onAddSfx,
   saveLabel,
   saveError,
@@ -286,6 +326,7 @@ function Toolbar({
   onRedo: () => void;
   onAddText: () => void;
   onAddBalloon: () => void;
+  onAddNarration: () => void;
   onAddSfx: () => void;
   saveLabel: string;
   saveError: boolean;
@@ -304,6 +345,9 @@ function Toolbar({
       </ToolButton>
       <ToolButton label="말풍선 추가" onClick={onAddBalloon}>
         ◗
+      </ToolButton>
+      <ToolButton label="나레이션 추가" onClick={onAddNarration}>
+        N
       </ToolButton>
       <ToolButton label="효과음 추가" onClick={onAddSfx}>
         ✺
@@ -453,6 +497,7 @@ function LayerInspector({
   onChangeBalloon,
   onChangeFontSize,
   onChangeFont,
+  onChangePosition,
   onToggleLock,
   onDelete,
 }: {
@@ -461,6 +506,7 @@ function LayerInspector({
   onChangeBalloon: (balloon: BalloonKind) => void;
   onChangeFont: (family: string) => void;
   onChangeFontSize: (size: number) => void;
+  onChangePosition: (pos: "top_left" | "top_center" | "top_right" | "center" | "bottom") => void;
   onToggleLock: () => void;
   onDelete: () => void;
 }) {
@@ -499,6 +545,55 @@ function LayerInspector({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-label font-semibold text-ink">위치 정렬</span>
+            <div className="grid grid-cols-5 gap-1">
+              <button
+                type="button"
+                onClick={() => onChangePosition("top_left")}
+                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                title="상단 좌측"
+              >
+                ↖ 좌상
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangePosition("top_center")}
+                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                title="상단 중앙"
+              >
+                ↑ 상단
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangePosition("top_right")}
+                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                title="상단 우측"
+              >
+                ↗ 우상
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangePosition("center")}
+                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                title="가운데"
+              >
+                · 중앙
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangePosition("bottom")}
+                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                title="하단 중앙"
+              >
+                ↓ 하단
+              </button>
+            </div>
+            <p className="text-caption text-ink-subtle">
+              캔버스에서 직접 드래그하여 자유롭게 이동할 수도 있어요.
+            </p>
           </div>
 
           <label className="flex items-center gap-3 text-label">
@@ -560,26 +655,32 @@ function LayerInspector({
   );
 }
 
-/** 새 벡터 레이어. 캔버스 가운데에 놓아서 바로 보이게 한다. */
+/** 새 벡터 레이어. 캔버스에 적절한 위치로 생성한다. */
 function newTextLayer(
   tree: CutLayerTree,
-  kind: "text" | "balloon" | "sfx",
+  kind: "text" | "balloon" | "sfx" | "narration",
 ): VectorTextLayer {
-  const width = Math.round(tree.canvas.width * 0.44);
-  const height = Math.round(tree.canvas.height * 0.14);
+  const isNarr = kind === "narration";
+  const width = isNarr ? Math.round(tree.canvas.width - 120) : Math.round(tree.canvas.width * 0.44);
+  const height = isNarr ? 110 : Math.round(tree.canvas.height * 0.14);
   const preset = {
-    text: { name: "텍스트", text: "여기에 글", balloon: "none" as const, size: 38 },
-    balloon: { name: "말풍선", text: "대사를 적어요", balloon: "normal" as const, size: 38 },
-    sfx: { name: "효과음", text: "쾅", balloon: "none" as const, size: 72 },
+    text: { name: "텍스트", text: "여기에 글", balloon: "none" as const, size: 38, font: "Gowun Dodum" },
+    balloon: { name: "말풍선", text: "대사를 적어요", balloon: "normal" as const, size: 38, font: "Gowun Dodum" },
+    narration: { name: "나레이션", text: "상황을 설명하는 나레이션", balloon: "narration_box" as const, size: 34, font: "Gowun Dodum" },
+    sfx: { name: "효과음", text: "쾅", balloon: "none" as const, size: 72, font: "Do Hyeon" },
   }[kind];
+
+  const yPos = isNarr
+    ? tree.canvas.height - height - 70
+    : Math.round((tree.canvas.height - height) / 2);
 
   return {
     id: `ly_${kind}_${crypto.randomUUID().slice(0, 8)}`,
     name: preset.name,
-    kind,
+    kind: isNarr ? "narration" : kind,
     box: {
-      x: Math.round((tree.canvas.width - width) / 2),
-      y: Math.round((tree.canvas.height - height) / 2),
+      x: isNarr ? 60 : Math.round((tree.canvas.width - width) / 2),
+      y: yPos,
       width,
       height,
     },
@@ -590,10 +691,10 @@ function newTextLayer(
         ? { x: Math.round(tree.canvas.width / 2), y: Math.round((tree.canvas.height + height) / 2 + 100) }
         : undefined,
     style: {
-      fontFamily: DEFAULT_TOON_FONT,
+      fontFamily: preset.font,
       fontSize: preset.size,
       lineHeight: 1.4,
-      align: "center",
+      align: isNarr ? "left" : "center",
       color: "#121820",
       bold: kind === "sfx",
     },

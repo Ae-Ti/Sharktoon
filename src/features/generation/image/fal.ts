@@ -16,7 +16,7 @@ import {
   type ImageGenerator,
 } from "@/contracts/generation";
 
-function getApiKey(): string {
+export function getApiKey(): string {
   const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
   if (!key) {
     throw new Error("FAL_KEY 환경변수가 설정되지 않았습니다.");
@@ -24,7 +24,7 @@ function getApiKey(): string {
   return key;
 }
 
-function resolveStylePrompt(style?: string): string {
+export function resolveStylePrompt(style?: string): string {
   switch (style) {
     case "파스텔":
     case "pastel":
@@ -32,6 +32,15 @@ function resolveStylePrompt(style?: string): string {
     case "굵은 선":
     case "bold_line":
       return "bold crisp black ink outlines with uniform 2.5px stroke weight, punchy vibrant flat solid cel shading, modern expressive manhwa style";
+    case "명랑 코믹":
+    case "cheerful_comic":
+      return "vibrant cheerful comic style, dynamic expressive comic ink outlines, bright bouncy pop colors, lighthearted Korean comedy webtoon manhwa aesthetic";
+    case "감성 색연필":
+    case "colored_pencil":
+      return "warm colored pencil and soft watercolor texture manhwa style, gentle textured pencil outlines, cozy aesthetic slice-of-life essay webtoon";
+    case "모던 K-웹툰":
+    case "modern_manhwa":
+      return "sleek modern Korean romance drama webtoon manhwa style, refined delicate 1.2px ink contour lineart, trendy stylish cel shading, aesthetic character rendering";
     case "심플 라인":
     case "simple_line":
     default:
@@ -39,7 +48,7 @@ function resolveStylePrompt(style?: string): string {
   }
 }
 
-function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number {
+export function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number {
   if (!episodeId) return 42;
   let hash = 0;
   for (let i = 0; i < episodeId.length; i++) {
@@ -48,7 +57,7 @@ function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number {
   return (hash + (cutIndex - 1) * 37) % 2147483647;
 }
 
-function enhancePropsAndActions(text: string): string {
+export function enhancePropsAndActions(text: string): string {
   let res = text;
   if (res.includes("츄르")) {
     res = res.replace(/츄르(\s*두\s*개)?/g, "손가락으로 쥐고 짜주는 붉은색 스틱형 고양이 퓨레 간식 튜브 파우치(slender cat puree treat squeeze tube)");
@@ -62,7 +71,7 @@ function enhancePropsAndActions(text: string): string {
   return res;
 }
 
-async function translateToVisualEnglishPrompt(text: string, apiKey: string): Promise<string> {
+export async function translateToVisualEnglishPrompt(text: string, apiKey: string): Promise<string> {
   if (!/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) return text;
   const enhancedText = enhancePropsAndActions(text);
 

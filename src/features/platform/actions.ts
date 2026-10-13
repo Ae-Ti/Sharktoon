@@ -137,6 +137,8 @@ export async function createCharacterAction(
         effectiveTags = visionFeatures.tags;
         effectiveDesc = visionFeatures.description;
         await repo.updateAsset(asset.id, {
+          kind: asset.kind,
+          name: asset.name,
           tags: effectiveTags,
           description: effectiveDesc,
         });

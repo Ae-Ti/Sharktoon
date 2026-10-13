@@ -1,0 +1,177 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load Checkpoint (FLUX.1 Dev)" },
+    "inputs": {
+      "ckpt_name": "flux1-dev.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoader",
+    "_meta": { "title": "Load Webtoon Manhwa LoRA (alvdansen/soft-line-flux)" },
+    "inputs": {
+      "lora_name": "alvdansen_soft_line_flux.safetensors",
+      "strength_model": 0.75,
+      "strength_clip": 0.75,
+      "model": ["1", 0],
+      "clip": ["1", 1]
+    }
+  },
+  "3": {
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Character Sheet Reference Image" },
+    "inputs": {
+      "image": "character_reference_sheet.png",
+      "upload": "image"
+    }
+  },
+  "4": {
+    "class_type": "ApplyPuLID",
+    "_meta": { "title": "Apply PuLID Face & Identity Lock (id_weight: 0.75)" },
+    "inputs": {
+      "model": ["2", 0],
+      "image": ["3", 0],
+      "weight": 0.75,
+      "start_at": 0.0,
+      "end_at": 1.0
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Base Scene & Style Prompt" },
+    "inputs": {
+      "text": "A single panel from a 2D Korean webcomic manhwa, soft line art style, clean ink lineart, flat solid cel shading with crisp shadow boundaries, zero gradients, 6.5-head adult proportions.",
+      "clip": ["2", 1]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative Prompt (No Chibi, No High Bun, No Cat Ears)" },
+    "inputs": {
+      "text": "semi-realistic, 3d render, photorealistic, chibi, SD, super deformed, oversized head, dwarf, giant bug eyes, high bun, topknot, messy bun, hair scrunchie, cat ears on human, empty background, watermark",
+      "clip": ["2", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Regional Character Left: Veterinarian" },
+    "inputs": {
+      "text": "40-year-old Korean male doctor with neat short black hair and glasses, wearing blue shirt and clean white medical lab coat with stethoscope around neck examining cat.",
+      "clip": ["2", 1]
+    }
+  },
+  "8": {
+    "class_type": "ConditioningSetArea",
+    "_meta": { "title": "Regional Area Left (x:0, y:0, w:512, h:1024)" },
+    "inputs": {
+      "conditioning": ["7", 0],
+      "width": 512,
+      "height": 1024,
+      "x": 0,
+      "y": 0,
+      "strength": 1.0
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Regional Character Right: Protagonist" },
+    "inputs": {
+      "text": "20-year-old Korean civilian girl, black hair tied in low ponytail with side bangs, oversized dark grey hoodie, dark pants, standing and watching calmly.",
+      "clip": ["2", 1]
+    }
+  },
+  "10": {
+    "class_type": "ConditioningSetArea",
+    "_meta": { "title": "Regional Area Right (x:512, y:0, w:512, h:1024)" },
+    "inputs": {
+      "conditioning": ["9", 0],
+      "width": 512,
+      "height": 1024,
+      "x": 512,
+      "y": 0,
+      "strength": 1.0
+    }
+  },
+  "11": {
+    "class_type": "ConditioningCombine",
+    "_meta": { "title": "Combine Regional Characters (Left + Right)" },
+    "inputs": {
+      "conditioning_1": ["8", 0],
+      "conditioning_2": ["10", 0]
+    }
+  },
+  "12": {
+    "class_type": "ConditioningCombine",
+    "_meta": { "title": "Combine Regional with Global Scene Conditioning" },
+    "inputs": {
+      "conditioning_1": ["5", 0],
+      "conditioning_2": ["11", 0]
+    }
+  },
+  "13": {
+    "class_type": "ControlNetLoader",
+    "_meta": { "title": "Load OpenPose ControlNet" },
+    "inputs": {
+      "control_net_name": "flux-controlnet-openpose.safetensors"
+    }
+  },
+  "14": {
+    "class_type": "LoadImage",
+    "_meta": { "title": "OpenPose Skeleton Pose Map (Standing / Crouching / Falling / Kneeling)" },
+    "inputs": {
+      "image": "openpose_skeleton.png",
+      "upload": "image"
+    }
+  },
+  "15": {
+    "class_type": "ApplyControlNet",
+    "_meta": { "title": "Apply OpenPose Conditioning" },
+    "inputs": {
+      "conditioning": ["12", 0],
+      "control_net": ["13", 0],
+      "image": ["14", 0],
+      "strength": 0.85
+    }
+  },
+  "16": {
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "Empty Latent (1024x1024 or 1080x1350)" },
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "17": {
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler (Euler, sgm_uniform, 28 steps, cfg 3.8)" },
+    "inputs": {
+      "seed": 42,
+      "steps": 28,
+      "cfg": 3.8,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1.0,
+      "model": ["4", 0],
+      "positive": ["15", 0],
+      "negative": ["6", 0],
+      "latent_image": ["16", 0]
+    }
+  },
+  "18": {
+    "class_type": "VAEDecode",
+    "_meta": { "title": "Decode Latent to Image" },
+    "inputs": {
+      "samples": ["17", 0],
+      "vae": ["1", 2]
+    }
+  },
+  "19": {
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Generated Webtoon Cut" },
+    "inputs": {
+      "filename_prefix": "sharktoon_cut",
+      "images": ["18", 0]
+    }
+  }
+}

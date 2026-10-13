@@ -128,7 +128,7 @@ async function run() {
 
     // 제미나이 콘티 생성 완료 대기 (article 태그 로딩)
     console.log("⏳ 제미나이 AI 맞춤형 콘티 생성 중...");
-    await page.waitForSelector("article", { timeout: 45000 });
+    await page.waitForSelector("article", { timeout: 60000 });
     await new Promise((r) => setTimeout(r, 1200));
     await snap("05_storyboard_generated.png");
 
