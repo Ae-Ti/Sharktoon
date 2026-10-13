@@ -84,8 +84,12 @@ export interface CutGenerationRequest {
   assetRefs: string[];
   /** 시리즈 생성 규칙(그림체, 말투, 컷 비율)을 직렬화한 값. */
   seriesRule: Record<string, unknown>;
+  /** intent 가 inpaint_mask 일 때 원본 이미지 URL. */
+  baseImageUrl?: string;
   /** intent 가 inpaint_mask 일 때만. */
   maskUrl?: string;
+  /** 캐릭터 얼굴 고정(PuLID) 건너뛰기 여부 */
+  skipFaceLock?: boolean;
 }
 
 export interface CutGenerationResult {
