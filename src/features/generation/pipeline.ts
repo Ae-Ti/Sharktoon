@@ -20,6 +20,7 @@ import {
   type CutEditIntent,
   type GenerationJob,
   type GenerationMode,
+  type GenerationTier,
 } from "@/contracts/generation";
 import { getRepository } from "@/features/platform/data";
 import { dataSource } from "@/lib/supabase/env";
@@ -54,11 +55,12 @@ class CutFailure extends Error {
   }
 }
 
-function amountFor(intent: CutEditIntent) {
+function amountFor(intent: CutEditIntent, tier: GenerationTier = "standard") {
   const reason = CREDIT_REASON_BY_INTENT[intent];
+  const cutCost = tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage;
   return {
     reason,
-    amount: reason === "cut_image" ? CREDIT_COST.cutImage : CREDIT_COST.partialRegenerate,
+    amount: reason === "cut_image" ? cutCost : CREDIT_COST.partialRegenerate,
   };
 }
 
@@ -66,7 +68,7 @@ function amountFor(intent: CutEditIntent) {
 const runCut: CutRunner = async (work: CutWork) => {
   const repo = await getRepository();
   const store = await getGenerationStore();
-  const { reason, amount } = amountFor(work.intent);
+  const { reason, amount } = amountFor(work.intent, work.job.tier);
 
   // 앞선 작업자가 죽으면서 잡아 둔 크레딧. 이미 정산됐으면(SK002) 그냥 지나간다.
   if (work.staleHoldId) {
@@ -89,7 +91,7 @@ const runCut: CutRunner = async (work: CutWork) => {
   await work.onHold?.(holdId);
 
   try {
-    const result = await getImageGenerator().generateCut({
+    const result = await getImageGenerator(work.job.tier).generateCut({
       cutId: work.cut.cutId,
       index: work.cut.index,
       episodeId: work.job.episodeId,
@@ -167,6 +169,7 @@ export interface StartGenerationInput {
   userId: string;
   storyboard: Storyboard;
   mode: GenerationMode;
+  tier?: GenerationTier;
   characterAssetIds?: string[];
   assetIds?: string[];
   characterSheetRefs?: string[];
@@ -207,9 +210,10 @@ export async function startGeneration(
     };
   }
 
-  // 컷마다 hold 를 걸지만, 시작 전에 전체 비용을 먼저 본다. 안 그러면 3크레딧으로
-  // 6컷을 시작해 3컷만 나오고 나머지는 "크레딧 부족"으로 실패한다(2026-10-02 실 테스트).
-  const required = storyboard.cuts.length * CREDIT_COST.cutImage;
+  // 컷마다 hold 를 걸지만, 시작 전에 전체 비용을 먼저 본다.
+  const tier = input.tier ?? "standard";
+  const cutCost = tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage;
+  const required = storyboard.cuts.length * cutCost;
   const { balance } = await (await getRepository()).getCredit();
   if (balance < required) throw new InsufficientCreditError(required, balance);
 
@@ -220,6 +224,7 @@ export async function startGeneration(
     episodeId: storyboard.episodeId,
     seriesId: storyboard.seriesId,
     mode: input.mode,
+    tier,
     status: "queued",
     createdAt: now,
     cuts: storyboard.cuts.map((cut) => ({
@@ -277,7 +282,7 @@ export async function regenerateCut(input: {
     return { ok: false, message: "이 컷은 지금 만드는 중이에요" };
   }
 
-  const { amount } = amountFor(input.intent);
+  const { amount } = amountFor(input.intent, job.tier);
   const { balance } = await (await getRepository()).getCredit();
   if (balance < amount) throw new InsufficientCreditError(amount, balance);
 
@@ -297,7 +302,8 @@ export async function retryFailedCuts(input: {
   if (!job) return { ok: false, message: "이 생성 기록을 찾지 못했어요" };
 
   const failed = job.cuts.filter((c) => c.status === "failed");
-  const required = failed.length * CREDIT_COST.cutImage;
+  const cutCost = job.tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage;
+  const required = failed.length * cutCost;
   const { balance } = await (await getRepository()).getCredit();
   if (balance < required) throw new InsufficientCreditError(required, balance);
 

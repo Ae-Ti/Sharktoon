@@ -171,6 +171,8 @@ export interface GenerationJobCut {
   finishedAt?: string;
 }
 
+export type GenerationTier = "standard" | "pro";
+
 export interface GenerationJob {
   id: string;
   userId: string;
@@ -178,6 +180,7 @@ export interface GenerationJob {
   /** 시리즈 규칙과 고정 캐릭터를 모든 생성 요청에 주입하려면 잡이 시리즈를 알아야 한다. */
   seriesId: string;
   mode: GenerationMode;
+  tier?: GenerationTier;
   status: JobStatus;
   cuts: GenerationJobCut[];
   createdAt: string;

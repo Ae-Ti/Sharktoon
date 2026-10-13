@@ -105,7 +105,7 @@ export function GenerationScreen({
 
   const singleCost =
     CREDIT_REASON_BY_INTENT[intent] === "cut_image"
-      ? CREDIT_COST.cutImage
+      ? (job.tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage)
       : CREDIT_COST.partialRegenerate;
 
   return (
@@ -133,6 +133,22 @@ export function GenerationScreen({
             목 생성기로 돌고 있어요. 1차 모델이 정해지면(오픈 이슈 1) 그대로 갈아끼웁니다.
           </p>
         )}
+
+        <div className="flex items-center justify-between rounded-lg border border-border bg-surface-card px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <Badge tone={job.tier === "pro" ? "brand" : "neutral"}>
+              {job.tier === "pro" ? "💎 Pro ComfyUI 모드" : "⚡ 일반 Schnell 모드"}
+            </Badge>
+            <span className="text-body-sm font-medium text-ink">
+              {job.tier === "pro"
+                ? "상용급 고화질 (PuLID + LoRA + OpenPose) 엔진 가동 중"
+                : "초고속 시안 확인 엔진 가동 중"}
+            </span>
+          </div>
+          <span className="text-caption font-semibold text-brand">
+            {job.tier === "pro" ? "컷당 2 크레딧" : "컷당 1 크레딧"}
+          </span>
+        </div>
 
         {notice && (
           <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">{notice}</p>

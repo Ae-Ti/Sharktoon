@@ -7,9 +7,10 @@
  * 이 구조가 아니면 "차감했는데 생성이 죽은" 구간에서 원장이 틀어진다.
  */
 
-/** 이미지 1컷 1크레딧, 부분 재생성 0.5크레딧, 애니메이션 1화 5크레딧. */
+/** 이미지 1컷 일반 1크레딧, Pro 고화질 2크레딧, 부분 재생성 0.5크레딧, 애니메이션 1화 5크레딧. */
 export const CREDIT_COST = {
   cutImage: 1,
+  cutImagePro: 2,
   partialRegenerate: 0.5,
   animationEpisode: 5,
 } as const;

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
+import type { GenerationTier } from "@/contracts/generation";
 import {
   CAMERA_LABEL,
   EMOTION_LABEL,
@@ -159,6 +160,7 @@ function StoryboardEditor({
   const router = useRouter();
   const [sb, setSb] = useState(initial);
   const [story, setStory] = useState(initial.story);
+  const [tier, setTier] = useState<GenerationTier>("pro");
   const [notice, setNotice] = useState<string | null>(null);
   const [shortfall, setShortfall] = useState<{ required: number; available: number } | null>(
     null,
@@ -172,7 +174,8 @@ function StoryboardEditor({
   const isFirst = selected?.index === 1;
   const isLast = selected != null && selected.index === sb.cuts.length;
   const ready = canGenerate(sb);
-  const cost = sb.cuts.length * CREDIT_COST.cutImage;
+  const unitCost = tier === "pro" ? CREDIT_COST.cutImagePro : CREDIT_COST.cutImage;
+  const cost = sb.cuts.length * unitCost;
 
   /** 액션 결과를 화면 상태로 옮긴다. 크레딧 부족만 시트를 연다. */
   function handle<T>(result: ActionResult<T>): T | null {
@@ -221,7 +224,7 @@ function StoryboardEditor({
   /** PRD 3.1.1 — 전체 생성을 큐에 등록하고 진행률 화면으로 넘긴다. */
   function startGeneration() {
     startTransition(async () => {
-      const job = handle(await startGenerationAction(sb));
+      const job = handle(await startGenerationAction(sb, tier));
       if (job) router.push(`/episodes/${sb.episodeId}/generate?job=${job.id}`);
     });
   }
@@ -285,7 +288,7 @@ function StoryboardEditor({
             loading={pending}
             onClick={startGeneration}
           >
-            이미지 생성
+            {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
           </Button>
         }
       />
@@ -300,6 +303,8 @@ function StoryboardEditor({
           fixedCharacters={fixedCharacters}
           stylePreset={stylePreset}
           aspectRatio={aspectRatio}
+          tier={tier}
+          onTierChange={setTier}
         />
 
         <section aria-label="컷 목록" className="flex flex-col gap-3">
@@ -448,6 +453,8 @@ function StorySidebar({
   fixedCharacters,
   stylePreset,
   aspectRatio,
+  tier,
+  onTierChange,
 }: {
   story: string;
   cutCount: number;
@@ -457,9 +464,56 @@ function StorySidebar({
   fixedCharacters: string[];
   stylePreset: string;
   aspectRatio: string;
+  tier: GenerationTier;
+  onTierChange: (t: GenerationTier) => void;
 }) {
   return (
     <aside aria-label="사연" className="flex flex-col gap-4">
+      {/* 2티어 생성 품질 모드 선택기 */}
+      <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface-card p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-label font-semibold text-ink">생성 품질 모드</h2>
+          <span className="text-[11px] font-semibold text-brand">
+            {tier === "pro" ? "💎 Pro (컷당 2C)" : "⚡ 일반 (컷당 1C)"}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onTierChange("standard")}
+            className={cn(
+              "flex cursor-pointer flex-col items-start rounded-lg border p-2 text-left transition-all",
+              tier === "standard"
+                ? "border-brand bg-brand-subtle text-ink ring-1 ring-brand"
+                : "border-border bg-surface-sunken text-ink-muted hover:border-ink-muted hover:text-ink",
+            )}
+          >
+            <span className="text-[12px] font-bold text-ink">⚡ 일반 (Schnell)</span>
+            <span className="text-[11px] text-ink-muted">초고속 시안 확인</span>
+            <span className="mt-1 text-[11px] font-semibold text-brand">1 크레딧/컷</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTierChange("pro")}
+            className={cn(
+              "flex cursor-pointer flex-col items-start rounded-lg border p-2 text-left transition-all",
+              tier === "pro"
+                ? "border-brand bg-brand-subtle text-ink ring-1 ring-brand"
+                : "border-border bg-surface-sunken text-ink-muted hover:border-ink-muted hover:text-ink",
+            )}
+          >
+            <span className="text-[12px] font-bold text-ink">💎 Pro (ComfyUI)</span>
+            <span className="text-[11px] text-ink-muted">상용급 외모·디테일</span>
+            <span className="mt-1 text-[11px] font-semibold text-brand">2 크레딧/컷</span>
+          </button>
+        </div>
+        <p className="text-caption leading-tight text-ink-subtle">
+          {tier === "pro"
+            ? "ComfyUI 19노드 워크플로우(PuLID + LoRA + OpenPose)로 상용 웹툰급 최고 품질로 제작합니다."
+            : "FLUX Schnell 모델로 3~5초 내에 빠르게 구도와 콘티 시안을 검토합니다."}
+        </p>
+      </div>
+
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
         <h2 className="text-label font-semibold text-ink">입력한 사연</h2>
         <Field

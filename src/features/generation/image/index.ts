@@ -9,20 +9,35 @@
  * - "mock": 개발용 자리표시 목 생성기 (기본값)
  */
 
-import type { ImageGenerator } from "@/contracts/generation";
+import type { GenerationTier, ImageGenerator } from "@/contracts/generation";
 import { processSingleton } from "@/lib/singleton";
 import { ComfyUIGenerator } from "./comfy";
 import { FalFluxGenerator } from "./fal";
 import { GoogleImagenGenerator } from "./google";
 import { MockImageGenerator } from "./mock";
 
-export function getImageGenerator(): ImageGenerator {
+export function getImageGenerator(tier?: GenerationTier): ImageGenerator {
   const isCheckScript = process.argv.some((arg) => arg.includes("generation-check"));
   const provider = isCheckScript ? "mock" : (process.env.SHARKTOON_IMAGE_PROVIDER ?? "").toLowerCase().trim();
 
   if (provider === "mock") {
     return processSingleton("image-generator-mock", () => new MockImageGenerator());
   }
+
+  // 1. Tier 가 명시적으로 주어진 경우 (일반: Schnell vs Pro: ComfyUI)
+  if (tier === "standard") {
+    if (provider === "google") return new GoogleImagenGenerator();
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY || provider === "fal" || provider === "fal-schnell") {
+      return new FalFluxGenerator("schnell");
+    }
+  }
+
+  if (tier === "pro") {
+    if (provider === "google") return new GoogleImagenGenerator();
+    return new ComfyUIGenerator();
+  }
+
+  // 2. 환경변수 지정 생성기
   if (provider === "comfyui" || provider === "comfy" || provider === "fal-comfy") {
     return new ComfyUIGenerator();
   }
@@ -36,9 +51,9 @@ export function getImageGenerator(): ImageGenerator {
     return new FalFluxGenerator("dev");
   }
 
-  // 명시적 provider가 없을 때 등록된 키 우선순위로 자동 선택
+  // 3. 명시적 provider가 없을 때 등록된 키 우선순위로 자동 선택
   if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-    return new FalFluxGenerator("dev");
+    return tier === "standard" ? new FalFluxGenerator("schnell") : new ComfyUIGenerator();
   }
   if (process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY) {
     return new GoogleImagenGenerator();

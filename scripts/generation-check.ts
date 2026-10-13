@@ -281,6 +281,8 @@ async function main() {
     const jobId = started.job.id;
     const owner = { jobId, userId: USER };
 
+    ok(started.job.tier === "standard", "기본 생성 모드는 standard(일반)");
+
     ok((await getJob(jobId, "someone-else")) === null, "남의 잡은 안 보인다");
 
     const done = await settle(jobId);
@@ -369,6 +371,20 @@ async function main() {
       ok(e instanceof InsufficientCreditError && e.required === excessCuts && e.available === left, `잔량 부족이면 시작 전에 막는다 (필요 ${excessCuts}, 남음 ${left})`);
     }
     ok((await repo.getCredit()).balance === left, "막히면 한 크레딧도 안 잡는다");
+
+    // Pro 티어는 컷당 2크레딧을 계산한다
+    const halfLeft = Math.floor(left / 2) + 1;
+    try {
+      await startGeneration({
+        userId: USER,
+        storyboard: { ...MOCK_STORYBOARD, cuts: Array.from({ length: halfLeft }, (_, i) => ({ ...MOCK_STORYBOARD.cuts[0], id: `pro_${i}`, index: i + 1 })) },
+        mode: "agent",
+        tier: "pro",
+      });
+      ok(false, "Pro 모드 잔량 부족이면 시작 전에 막는다");
+    } catch (e) {
+      ok(e instanceof InsufficientCreditError && e.required === halfLeft * 2, `Pro 모드는 컷당 2크레딧 계산 (필요 ${halfLeft * 2}, 남음 ${left})`);
+    }
   }
 
   console.log(fail === 0 ? "\n전부 통과" : `\n실패 ${fail}건`);

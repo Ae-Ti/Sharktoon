@@ -24,7 +24,7 @@ export interface JobContext {
 
 /** 컷 한 번을 만드는 데 필요한 것 전부. 큐가 꺼내서 작업자에게 넘긴다. */
 export interface CutWork {
-  job: Pick<GenerationJob, "id" | "userId" | "episodeId" | "seriesId">;
+  job: Pick<GenerationJob, "id" | "userId" | "episodeId" | "seriesId" | "tier">;
   cut: Pick<GenerationJobCut, "cutId" | "index" | "attempt">;
   intent: CutEditIntent;
   prompt: string;

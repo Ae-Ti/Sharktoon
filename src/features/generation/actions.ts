@@ -11,7 +11,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { InsufficientCreditError } from "@/contracts/credit";
-import type { CutEditIntent, GenerationJob } from "@/contracts/generation";
+import type { CutEditIntent, GenerationJob, GenerationTier } from "@/contracts/generation";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext, type EpisodeContext } from "@/features/platform/episode";
 import { getGenerationStore, type PostPackage } from "./data";
@@ -144,6 +144,7 @@ export async function saveStoryboardAction(storyboard: Storyboard): Promise<Acti
 /** PRD 3.1.1 — 에이전트 모드 전체 생성. 지금 화면의 콘티를 저장하고 그 사본으로 돌린다. */
 export async function startGenerationAction(
   storyboard: Storyboard,
+  tier: GenerationTier = "standard",
 ): Promise<ActionResult<GenerationJob>> {
   try {
     const { context, userId } = await ownedEpisode(storyboard.episodeId);
@@ -157,6 +158,7 @@ export async function startGenerationAction(
       userId,
       storyboard: checked,
       mode: "agent",
+      tier,
       ...generationRefs(context),
     });
 
