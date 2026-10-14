@@ -3,6 +3,16 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  FileText,
+  Film,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Wand2,
+  Plus,
+} from "lucide-react";
+import {
   Badge,
   Button,
   ChoiceCard,
@@ -146,6 +156,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   );
 }
 
+export type StoryboardStep = "story" | "cuts" | "hook_cta";
+
 function StoryboardEditor({
   initial,
   usedMock,
@@ -161,6 +173,7 @@ function StoryboardEditor({
   onReplaced: (sb: Storyboard, usedMock: boolean) => void;
 }) {
   const router = useRouter();
+  const [step, setStep] = useState<StoryboardStep>("cuts");
   const [sb, setSb] = useState(initial);
   const [story, setStory] = useState(initial.story);
   const [tier, setTier] = useState<GenerationTier>("pro");
@@ -403,346 +416,718 @@ function StoryboardEditor({
         }
       />
 
-      <main className="mx-auto grid max-w-[1280px] grid-cols-1 gap-4 p-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <div className="order-2 lg:order-1">
-          <StorySidebar
-            story={story}
-            cutCount={sb.cuts.length}
-            pending={pending}
-            onChange={setStory}
-            onRegenerate={regenerateStoryboard}
-            characters={sb.characters}
-            onAddCharacter={addCharacter}
-            onRemoveCharacter={removeCharacter}
-          />
-        </div>
-
-        <section aria-label="컷 목록" className="order-1 flex flex-col gap-3 lg:order-2">
-          {usedMock && (
-            <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
-              모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
-            </p>
-          )}
-          {saveNote && (
-            <p aria-live="polite" className="text-right text-caption text-ink-subtle">
-              {saveNote}
-            </p>
-          )}
-          {notice && (
-            <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
-              {notice}
-            </p>
-          )}
-
-          {/* 인스타 피드 전용 독립 표지(커버) 컷 토글 바 */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-card px-4 py-3 shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
-                🌟
+      {/* 3단계 스텝 네비게이션 탭 바 */}
+      <div className="sticky top-0 z-20 border-b border-border bg-surface-card/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[880px] items-center justify-between px-4 py-2.5">
+          <nav aria-label="콘티 제작 단계" className="flex items-center gap-1 sm:gap-2">
+            {/* 1단계 */}
+            <button
+              type="button"
+              onClick={() => setStep("story")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                step === "story"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                  step === "story"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted",
+                )}
+              >
+                1
               </span>
-              <div className="flex flex-col">
+              <span>사연 & 캐릭터</span>
+            </button>
+
+            <span className="text-ink-subtle select-none font-bold">›</span>
+
+            {/* 2단계 */}
+            <button
+              type="button"
+              onClick={() => setStep("cuts")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                step === "cuts"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                  step === "cuts"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted",
+                )}
+              >
+                2
+              </span>
+              <span>컷별 콘티</span>
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                  step === "cuts"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted",
+                )}
+              >
+                {sb.cuts.length}컷
+              </span>
+            </button>
+
+            <span className="text-ink-subtle select-none font-bold">›</span>
+
+            {/* 3단계 */}
+            <button
+              type="button"
+              onClick={() => setStep("hook_cta")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                step === "hook_cta"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                  step === "hook_cta"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted",
+                )}
+              >
+                3
+              </span>
+              <span>후킹 & CTA</span>
+            </button>
+          </nav>
+
+          {/* 우측 자동 저장 알림 */}
+          {saveNote && (
+            <span
+              aria-live="polite"
+              className="text-caption text-ink-subtle hidden sm:inline-block"
+            >
+              {saveNote}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-[880px] p-4 pb-28 lg:pb-16 flex flex-col gap-5">
+        {saveNote && (
+          <p aria-live="polite" className="text-right text-caption text-ink-subtle sm:hidden">
+            {saveNote}
+          </p>
+        )}
+        {notice && (
+          <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
+            {notice}
+          </p>
+        )}
+
+        {/* 1단계: 사연 & 캐릭터 */}
+        {step === "story" && (
+          <div className="flex flex-col gap-5">
+            <div className="rounded-xl border border-border bg-surface-card p-4 sm:p-5 shadow-2xs">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
                 <div className="flex items-center gap-2">
-                  <span className="text-label font-bold text-ink">독립 표지(커버) 컷 포함</span>
-                  {hasCoverCut ? (
-                    <Badge tone="brand">포함됨 (피드 썸네일)</Badge>
-                  ) : (
-                    <Badge tone="neutral">미포함 (1컷이 표지)</Badge>
-                  )}
+                  <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
+                    📝
+                  </span>
+                  <div>
+                    <h2 className="text-label font-bold text-ink">1단계 · 원본 사연 & 등장인물 설정</h2>
+                    <p className="text-caption text-ink-muted">
+                      사연을 다듬거나 등장인물을 등록하세요. 사연을 수정하면 콘티를 새로 짤 수 있습니다.
+                    </p>
+                  </div>
                 </div>
-                <span className="text-caption text-ink-muted">
-                  인스타 피드 썸네일로 활용할 독립된 타이틀 표지 컷을 맨 앞에 추가합니다.
-                </span>
+              </div>
+
+              <div className="pt-4 flex flex-col gap-4">
+                <Field
+                  label="사연 내용"
+                  multiline
+                  rows={8}
+                  value={story}
+                  onChange={setStory}
+                  help={`이 사연을 바탕으로 현재 총 ${sb.cuts.length}컷의 콘티가 구성되어 있습니다.`}
+                  maxLength={1000}
+                />
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <p className="text-caption text-ink-subtle">
+                    다시 만들면 편집한 대사는 초기화됩니다. 콘티 재생성은 크레딧이 들지 않아요.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={pending}
+                    onClick={regenerateStoryboard}
+                    className="self-end sm:self-auto shrink-0"
+                  >
+                    🔄 사연으로 콘티 다시 짜기
+                  </Button>
+                </div>
               </div>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={hasCoverCut}
-                onChange={(e) => toggleCoverCut(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-surface-sunken peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand"></div>
-            </label>
-          </div>
 
-          {sb.cuts.length === 0 ? (
-            <EmptyState
-              title="컷이 하나도 없어요"
-              description="사연을 다시 넣으면 컷을 새로 만들어 드려요."
-              actionLabel="콘티 다시 만들기"
-            />
-          ) : (
-            sb.cuts.map((cut) => (
-              <CutCard
-                key={cut.id}
-                cut={cut}
-                hasCoverCut={hasCoverCut}
+            {/* 등장인물 관리 카드 */}
+            <div className="rounded-xl border border-border bg-surface-card p-4 sm:p-5 shadow-2xs flex flex-col gap-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="grid size-7 place-items-center rounded-lg bg-surface-sunken text-base font-bold">
+                    👥
+                  </span>
+                  <div>
+                    <h3 className="text-label font-bold text-ink">등장인물 관리</h3>
+                    <p className="text-caption text-ink-muted">
+                      대사에서 말풍선 화자로 지정할 수 있는 인물 목록입니다.
+                    </p>
+                  </div>
+                </div>
+                <Badge tone="neutral">{sb.characters.length}명</Badge>
+              </div>
+
+              <StoryCharacterManager
                 characters={sb.characters}
-                allCustomLocations={allCustomLocations}
-                nameOf={(key) => characterName(sb, key)}
-                total={sb.cuts.length}
-                selected={cut.id === selectedId}
-                onSelect={() => setSelectedId((prev) => (prev === cut.id ? null : cut.id))}
-                onMove={(dir) => moveCut(cut.id, dir)}
-                onRemove={() => removeCut(cut.id)}
-                onAddAfter={() => addCutAfter(cut.id)}
-                onChangeScene={(scene) => patchCut(cut.id, { scene })}
-                onChangeEmotion={(emotion) => patchCut(cut.id, { emotion })}
-                onChangeCamera={(camera) => patchCut(cut.id, { camera })}
-                onChangeBackground={(background) => patchCut(cut.id, { background })}
-                onAddCustomLocation={(name) =>
-                  setCustomLocations((prev) =>
-                    prev.includes(name) ? prev : [...prev, name],
-                  )
-                }
-                onAddLine={() =>
-                  patchCut(cut.id, {
-                    dialogue: [
-                      ...cut.dialogue,
-                      {
-                        id: `line_${crypto.randomUUID().slice(0, 8)}`,
-                        speakerId: sb.characters[0]?.key ?? null,
-                        text: "",
-                        balloon: "normal",
-                      },
-                    ],
-                  })
-                }
-                onRemoveLine={(lineId) =>
-                  patchCut(cut.id, {
-                    dialogue: cut.dialogue.filter((l) => l.id !== lineId),
-                  })
-                }
-                onChangeLine={(lineId, text) =>
-                  patchCut(cut.id, {
-                    dialogue: cut.dialogue.map((l) =>
-                      l.id === lineId ? { ...l, text } : l,
-                    ),
-                  })
-                }
-                onChangeLineSpeaker={(lineId, speakerId) => {
-                  setSb((s) => {
-                    const nextCuts = s.cuts.map((c) => {
-                      if (c.id !== cut.id) return c;
-                      const nextCharIds =
-                        speakerId && !c.characterIds.includes(speakerId)
-                          ? [...c.characterIds, speakerId]
-                          : c.characterIds;
-                      const nextDialogue = c.dialogue.map((l) =>
-                        l.id === lineId ? { ...l, speakerId } : l,
-                      );
-                      return {
-                        ...c,
-                        characterIds: nextCharIds,
-                        dialogue: nextDialogue,
-                      };
-                    });
-                    return { ...s, cuts: nextCuts };
-                  });
-                }}
-                onChangeLineBalloon={(lineId, balloon) =>
-                  patchCut(cut.id, {
-                    dialogue: cut.dialogue.map((l) =>
-                      l.id === lineId ? { ...l, balloon } : l,
-                    ),
-                  })
-                }
-                onAddNarration={() => patchCut(cut.id, { narration: "" })}
-                onRemoveNarration={() => patchCut(cut.id, { narration: undefined })}
-                onChangeNarration={(narration) => patchCut(cut.id, { narration })}
+                onAddCharacter={addCharacter}
+                onRemoveCharacter={removeCharacter}
               />
-            ))
-          )}
-        </section>
-
-        <aside aria-label="헤드라인 및 발행 문구" className="order-3 flex flex-col gap-4">
-          <OptionPanel
-            title="1컷 후킹"
-            caption="첫 컷 상단 헤드라인 배너 및 인스타 캡션 첫 줄로 반영됩니다."
-          >
-            <div className="flex items-center justify-between pb-1">
-              <span className="text-caption text-ink-muted">
-                {sb.selectedHookId
-                  ? "추천 문구 선택 또는 직접 수정"
-                  : "후킹 문구를 사용하지 않습니다."}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  setSb((s) => ({
-                    ...s,
-                    selectedHookId: s.selectedHookId
-                      ? null
-                      : s.hookOptions[0]?.id ?? null,
-                  }))
-                }
-                className="text-caption font-semibold text-brand hover:underline"
-              >
-                {sb.selectedHookId ? "후킹 끄기" : "후킹 켜기"}
-              </button>
             </div>
 
-            {sb.selectedHookId && (
-              <>
-                <div className="flex flex-col gap-2">
-                  {sb.hookOptions.map((o) => (
-                    <ChoiceCard
-                      key={o.id}
-                      title={o.text}
-                      selected={sb.selectedHookId === o.id}
-                      onClick={() => setSb((s) => ({ ...s, selectedHookId: o.id }))}
-                    />
-                  ))}
-                </div>
-
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
-                  <label className="text-caption font-semibold text-ink">
-                    후킹 문구 직접 수정
-                  </label>
-                  <input
-                    value={
-                      sb.hookOptions.find((h) => h.id === sb.selectedHookId)?.text ??
-                      ""
-                    }
-                    onChange={(e) => {
-                      const newText = e.target.value;
-                      setSb((s) => ({
-                        ...s,
-                        hookOptions: s.hookOptions.map((h) =>
-                          h.id === s.selectedHookId ? { ...h, text: newText } : h,
-                        ),
-                      }));
-                    }}
-                    placeholder="후킹 문구를 입력하세요"
-                    className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
-                  />
-                </div>
-              </>
-            )}
-          </OptionPanel>
-
-          <OptionPanel
-            title="마지막 컷 CTA"
-            caption="마지막 컷 하단 참여 배너 및 인스타 캡션 마무리 문구로 반영됩니다."
-          >
-            <div className="flex items-center justify-between pb-1">
-              <span className="text-caption text-ink-muted">
-                {sb.selectedCtaId
-                  ? "참여 유도 3안 중 선택 또는 직접 수정"
-                  : "CTA 문구를 사용하지 않습니다."}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  setSb((s) => ({
-                    ...s,
-                    selectedCtaId: s.selectedCtaId
-                      ? null
-                      : s.ctaOptions[0]?.id ?? null,
-                  }))
-                }
-                className="text-caption font-semibold text-brand hover:underline"
+            {/* 다음 단계 버튼 */}
+            <div className="flex justify-end pt-2">
+              <Button
+                size="lg"
+                onClick={() => setStep("cuts")}
+                className="font-bold px-6"
               >
-                {sb.selectedCtaId ? "CTA 끄기" : "CTA 켜기"}
-              </button>
+                다음: 컷별 콘티 다듬기 ({sb.cuts.length}컷) ➡️
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 2단계: 컷별 콘티 */}
+        {step === "cuts" && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-border bg-surface-card px-4 py-3 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
+                  🎬
+                </span>
+                <div>
+                  <h2 className="text-label font-bold text-ink">2단계 · 컷별 콘티 상세 연출 ({sb.cuts.length}컷)</h2>
+                  <p className="text-caption text-ink-muted">
+                    각 컷의 대사, 감정, 배경 및 구도를 검토하고 편집하세요.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("story")}
+                className="text-ink-muted hover:text-ink text-xs self-end sm:self-auto"
+              >
+                사연 다시 보기
+              </Button>
             </div>
 
-            {sb.selectedCtaId && (
-              <>
-                <div className="flex flex-col gap-2">
-                  {sb.ctaOptions.map((o) => (
-                    <ChoiceCard
-                      key={o.id}
-                      title={o.text}
-                      selected={sb.selectedCtaId === o.id}
-                      onClick={() => setSb((s) => ({ ...s, selectedCtaId: o.id }))}
-                    />
-                  ))}
-                </div>
-
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
-                  <label className="text-caption font-semibold text-ink">
-                    CTA 문구 직접 수정
-                  </label>
-                  <input
-                    value={
-                      sb.ctaOptions.find((c) => c.id === sb.selectedCtaId)?.text ??
-                      ""
-                    }
-                    onChange={(e) => {
-                      const newText = e.target.value;
-                      setSb((s) => ({
-                        ...s,
-                        ctaOptions: s.ctaOptions.map((c) =>
-                          c.id === s.selectedCtaId ? { ...c, text: newText } : c,
-                        ),
-                      }));
-                    }}
-                    placeholder="CTA 문구를 입력하세요"
-                    className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
-                  />
-                </div>
-              </>
+            {usedMock && (
+              <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
+                모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
+              </p>
             )}
-          </OptionPanel>
 
-          {!ready && (
-            <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
-              모든 컷의 장면 묘사를 입력하면 이미지 생성을 시작할 수 있어요.
-            </p>
-          )}
-        </aside>
+            {/* 인스타 피드 전용 독립 표지(커버) 컷 토글 바 */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-card px-4 py-3 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
+                  🌟
+                </span>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="text-label font-bold text-ink">독립 표지(커버) 컷 포함</span>
+                    {hasCoverCut ? (
+                      <Badge tone="brand">포함됨 (피드 썸네일)</Badge>
+                    ) : (
+                      <Badge tone="neutral">미포함 (1컷이 표지)</Badge>
+                    )}
+                  </div>
+                  <span className="text-caption text-ink-muted">
+                    인스타 피드 썸네일로 활용할 독립된 타이틀 표지 컷을 맨 앞에 추가합니다.
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={hasCoverCut}
+                  onChange={(e) => toggleCoverCut(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-surface-sunken peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand"></div>
+              </label>
+            </div>
+
+            {sb.cuts.length === 0 ? (
+              <EmptyState
+                title="컷이 하나도 없어요"
+                description="1단계에서 사연을 다시 넣으면 컷을 새로 만들어 드려요."
+                actionLabel="1단계 사연으로 가기"
+                onAction={() => setStep("story")}
+              />
+            ) : (
+              sb.cuts.map((cut) => (
+                <CutCard
+                  key={cut.id}
+                  cut={cut}
+                  hasCoverCut={hasCoverCut}
+                  characters={sb.characters}
+                  allCustomLocations={allCustomLocations}
+                  nameOf={(key) => characterName(sb, key)}
+                  total={sb.cuts.length}
+                  selected={cut.id === selectedId}
+                  onSelect={() => setSelectedId((prev) => (prev === cut.id ? null : cut.id))}
+                  onMove={(dir) => moveCut(cut.id, dir)}
+                  onRemove={() => removeCut(cut.id)}
+                  onAddAfter={() => addCutAfter(cut.id)}
+                  onChangeScene={(scene) => patchCut(cut.id, { scene })}
+                  onChangeEmotion={(emotion) => patchCut(cut.id, { emotion })}
+                  onChangeCamera={(camera) => patchCut(cut.id, { camera })}
+                  onChangeBackground={(background) => patchCut(cut.id, { background })}
+                  onAddCustomLocation={(name) =>
+                    setCustomLocations((prev) =>
+                      prev.includes(name) ? prev : [...prev, name],
+                    )
+                  }
+                  onAddLine={() =>
+                    patchCut(cut.id, {
+                      dialogue: [
+                        ...cut.dialogue,
+                        {
+                          id: `line_${crypto.randomUUID().slice(0, 8)}`,
+                          speakerId: sb.characters[0]?.key ?? null,
+                          text: "",
+                          balloon: "normal",
+                        },
+                      ],
+                    })
+                  }
+                  onRemoveLine={(lineId) =>
+                    patchCut(cut.id, {
+                      dialogue: cut.dialogue.filter((l) => l.id !== lineId),
+                    })
+                  }
+                  onChangeLine={(lineId, text) =>
+                    patchCut(cut.id, {
+                      dialogue: cut.dialogue.map((l) =>
+                        l.id === lineId ? { ...l, text } : l,
+                      ),
+                    })
+                  }
+                  onChangeLineSpeaker={(lineId, speakerId) => {
+                    setSb((s) => {
+                      const nextCuts = s.cuts.map((c) => {
+                        if (c.id !== cut.id) return c;
+                        const nextCharIds =
+                          speakerId && !c.characterIds.includes(speakerId)
+                            ? [...c.characterIds, speakerId]
+                            : c.characterIds;
+                        const nextDialogue = c.dialogue.map((l) =>
+                          l.id === lineId ? { ...l, speakerId } : l,
+                        );
+                        return {
+                          ...c,
+                          characterIds: nextCharIds,
+                          dialogue: nextDialogue,
+                        };
+                      });
+                      return { ...s, cuts: nextCuts };
+                    });
+                  }}
+                  onChangeLineBalloon={(lineId, balloon) =>
+                    patchCut(cut.id, {
+                      dialogue: cut.dialogue.map((l) =>
+                        l.id === lineId ? { ...l, balloon } : l,
+                      ),
+                    })
+                  }
+                  onAddNarration={() => patchCut(cut.id, { narration: "" })}
+                  onRemoveNarration={() => patchCut(cut.id, { narration: undefined })}
+                  onChangeNarration={(narration) => patchCut(cut.id, { narration })}
+                />
+              ))
+            )}
+
+            {/* 단계 이동 네비게이션 */}
+            <div className="flex items-center justify-between pt-4">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setStep("story")}
+              >
+                ⬅️ 1단계: 사연 & 캐릭터
+              </Button>
+              <Button
+                size="lg"
+                onClick={() => setStep("hook_cta")}
+                className="font-bold px-6"
+              >
+                다음: 후킹 & CTA 마무리 ➡️
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 3단계: 후킹 & CTA 및 생성 */}
+        {step === "hook_cta" && (
+          <div className="flex flex-col gap-5">
+            <div className="rounded-xl border border-border bg-surface-card p-4 sm:p-5 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
+                  🎯
+                </span>
+                <div>
+                  <h2 className="text-label font-bold text-ink">3단계 · 후킹 & CTA 및 생성 준비</h2>
+                  <p className="text-caption text-ink-muted">
+                    독자의 몰입을 높이는 1컷 헤드라인과 마지막 컷 참여 유도 문구를 고른 뒤 이미지를 생성하세요.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <OptionPanel
+              title="1컷 후킹"
+              caption="첫 컷 상단 헤드라인 배너 및 인스타 캡션 첫 줄로 반영됩니다."
+            >
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-caption text-ink-muted">
+                  {sb.selectedHookId
+                    ? "추천 문구 선택 또는 직접 수정"
+                    : "후킹 문구를 사용하지 않습니다."}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSb((s) => ({
+                      ...s,
+                      selectedHookId: s.selectedHookId
+                        ? null
+                        : s.hookOptions[0]?.id ?? null,
+                    }))
+                  }
+                  className="text-caption font-semibold text-brand hover:underline cursor-pointer"
+                >
+                  {sb.selectedHookId ? "후킹 끄기" : "후킹 켜기"}
+                </button>
+              </div>
+
+              {sb.selectedHookId && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {sb.hookOptions.map((o) => (
+                      <ChoiceCard
+                        key={o.id}
+                        title={o.text}
+                        selected={sb.selectedHookId === o.id}
+                        onClick={() => setSb((s) => ({ ...s, selectedHookId: o.id }))}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+                    <label className="text-caption font-semibold text-ink">
+                      후킹 문구 직접 수정
+                    </label>
+                    <input
+                      value={
+                        sb.hookOptions.find((h) => h.id === sb.selectedHookId)?.text ??
+                        ""
+                      }
+                      onChange={(e) => {
+                        const newText = e.target.value;
+                        setSb((s) => ({
+                          ...s,
+                          hookOptions: s.hookOptions.map((h) =>
+                            h.id === s.selectedHookId ? { ...h, text: newText } : h,
+                          ),
+                        }));
+                      }}
+                      placeholder="후킹 문구를 입력하세요"
+                      className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
+                    />
+                  </div>
+                </>
+              )}
+            </OptionPanel>
+
+            <OptionPanel
+              title="마지막 컷 CTA"
+              caption="마지막 컷 하단 참여 배너 및 인스타 캡션 마무리 문구로 반영됩니다."
+            >
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-caption text-ink-muted">
+                  {sb.selectedCtaId
+                    ? "참여 유도 3안 중 선택 또는 직접 수정"
+                    : "CTA 문구를 사용하지 않습니다."}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSb((s) => ({
+                      ...s,
+                      selectedCtaId: s.selectedCtaId
+                        ? null
+                        : s.ctaOptions[0]?.id ?? null,
+                    }))
+                  }
+                  className="text-caption font-semibold text-brand hover:underline cursor-pointer"
+                >
+                  {sb.selectedCtaId ? "CTA 끄기" : "CTA 켜기"}
+                </button>
+              </div>
+
+              {sb.selectedCtaId && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {sb.ctaOptions.map((o) => (
+                      <ChoiceCard
+                        key={o.id}
+                        title={o.text}
+                        selected={sb.selectedCtaId === o.id}
+                        onClick={() => setSb((s) => ({ ...s, selectedCtaId: o.id }))}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+                    <label className="text-caption font-semibold text-ink">
+                      CTA 문구 직접 수정
+                    </label>
+                    <input
+                      value={
+                        sb.ctaOptions.find((c) => c.id === sb.selectedCtaId)?.text ??
+                        ""
+                      }
+                      onChange={(e) => {
+                        const newText = e.target.value;
+                        setSb((s) => ({
+                          ...s,
+                          ctaOptions: s.ctaOptions.map((c) =>
+                            c.id === s.selectedCtaId ? { ...c, text: newText } : c,
+                          ),
+                        }));
+                      }}
+                      placeholder="CTA 문구를 입력하세요"
+                      className="h-control-sm rounded-md border border-border-control bg-surface-card px-3 text-label text-ink focus-visible:outline-2 focus-visible:outline-brand"
+                    />
+                  </div>
+                </>
+              )}
+            </OptionPanel>
+
+            {/* 최종 생성 확인 & 실행 카드 */}
+            <div className="rounded-xl border-2 border-brand/40 bg-surface-card p-5 shadow-md flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🚀</span>
+                  <h3 className="text-label font-bold text-ink">이미지 생성 준비 완료</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-caption text-ink-muted">내 보유 크레딧:</span>
+                  <Badge tone="brand">{credits}C</Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg bg-surface-sunken p-3 text-caption">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-muted">총 컷수</span>
+                  <span className="font-bold text-ink text-body-sm">
+                    {sb.cuts.length}컷 {hasCoverCut ? "(표지 포함)" : ""}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-muted">화면 비율</span>
+                  <span className="font-bold text-ink text-body-sm">{aspectRatio}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-muted">화풍 프리셋</span>
+                  <span className="font-bold text-ink text-body-sm">{stylePreset}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-muted">소요 크레딧</span>
+                  <span className="font-bold text-brand text-body-sm">{cost} 크레딧</span>
+                </div>
+              </div>
+
+              {/* 생성 품질 토글 */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                <div className="flex flex-col">
+                  <span className="text-label font-bold text-ink">생성 품질 엔진 선택</span>
+                  <span className="text-caption text-ink-muted">
+                    {tier === "pro"
+                      ? "💎 Pro: 캐릭터 디테일과 화질을 높인 고품질 생성 (컷당 2 크레딧)"
+                      : "⚡ 일반: 표준 모델 빠른 생성 (컷당 1 크레딧)"}
+                  </span>
+                </div>
+                <div
+                  role="radiogroup"
+                  aria-label="생성 품질"
+                  className="flex items-center self-start sm:self-auto rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={tier === "standard"}
+                    onClick={() => setTier("standard")}
+                    className={cn(
+                      "cursor-pointer rounded-md px-3 py-1.5 transition-all",
+                      tier === "standard"
+                        ? "bg-surface-card text-ink shadow-2xs font-bold"
+                        : "text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    ⚡ 일반 (1C)
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={tier === "pro"}
+                    onClick={() => setTier("pro")}
+                    className={cn(
+                      "cursor-pointer rounded-md px-3 py-1.5 transition-all",
+                      tier === "pro"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    💎 Pro (2C)
+                  </button>
+                </div>
+              </div>
+
+              {!ready && (
+                <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
+                  모든 컷의 장면 묘사를 입력하면 이미지 생성을 시작할 수 있어요. (2단계 컷별 콘티를 확인해 주세요)
+                </p>
+              )}
+
+              <Button
+                size="lg"
+                block
+                cost={cost}
+                disabled={!ready}
+                loading={pending}
+                onClick={startGeneration}
+                className="text-base font-bold py-3.5 shadow-sm"
+              >
+                {tier === "pro" ? "💎 Pro 이미지 생성 시작" : "⚡ 일반 이미지 생성 시작"}
+              </Button>
+            </div>
+
+            {/* 단계 이동 네비게이션 */}
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setStep("cuts")}
+              >
+                ⬅️ 2단계: 컷별 콘티로 돌아가기
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* 모바일 화면 하단 고정 생성 버튼 (lg 미만) */}
-      <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3.5 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
-        <div className="flex items-center gap-2">
-          <div
-            role="radiogroup"
-            aria-label="생성 품질"
-            className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={tier === "standard"}
-              onClick={() => setTier("standard")}
-              className={cn(
-                "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                tier === "standard"
-                  ? "bg-surface-card text-ink shadow-2xs font-bold"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              ⚡ 일반
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={tier === "pro"}
-              onClick={() => setTier("pro")}
-              className={cn(
-                "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                tier === "pro"
-                  ? "bg-brand text-on-brand shadow-2xs font-bold"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              💎 Pro
-            </button>
-          </div>
+      {/* 모바일 화면 하단 고정 네비게이션 바 (lg 미만) */}
+      <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
+        {step === "story" && (
           <Button
             size="md"
             block
-            cost={cost}
-            disabled={!ready}
-            loading={pending}
-            onClick={startGeneration}
-            className="flex-1 font-bold shadow-xs"
+            onClick={() => setStep("cuts")}
+            className="font-bold shadow-xs"
           >
-            {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
+            다음: 컷별 콘티 다듬기 ({sb.cuts.length}컷) ➡️
           </Button>
-        </div>
+        )}
+
+        {step === "cuts" && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="md"
+              variant="secondary"
+              onClick={() => setStep("story")}
+            >
+              ⬅️ 이전
+            </Button>
+            <Button
+              size="md"
+              block
+              onClick={() => setStep("hook_cta")}
+              className="flex-1 font-bold shadow-xs"
+            >
+              다음: 후킹 & CTA ➡️
+            </Button>
+          </div>
+        )}
+
+        {step === "hook_cta" && (
+          <div className="flex items-center gap-2">
+            <div
+              role="radiogroup"
+              aria-label="생성 품질"
+              className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "standard"}
+                onClick={() => setTier("standard")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  tier === "standard"
+                    ? "bg-surface-card text-ink shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                ⚡ 일반
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "pro"}
+                onClick={() => setTier("pro")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  tier === "pro"
+                    ? "bg-brand text-on-brand shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                💎 Pro
+              </button>
+            </div>
+            <Button
+              size="md"
+              block
+              cost={cost}
+              disabled={!ready}
+              loading={pending}
+              onClick={startGeneration}
+              className="flex-1 font-bold shadow-xs"
+            >
+              {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 크레딧이 모자라면 버튼을 막는 대신 여기서 막고 충전으로 보낸다(credit.ts 주석). */}
@@ -768,21 +1153,11 @@ function StoryboardEditor({
   );
 }
 
-function StorySidebar({
-  story,
-  cutCount,
-  pending,
-  onChange,
-  onRegenerate,
+function StoryCharacterManager({
   characters,
   onAddCharacter,
   onRemoveCharacter,
 }: {
-  story: string;
-  cutCount: number;
-  pending: boolean;
-  onChange: (value: string) => void;
-  onRegenerate: () => void;
   characters: StoryboardCharacter[];
   onAddCharacter: (name: string) => void;
   onRemoveCharacter: (key: string) => void;
@@ -798,81 +1173,52 @@ function StorySidebar({
   }
 
   return (
-    <aside aria-label="사연" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-        <h2 className="text-label font-semibold text-ink">입력한 사연</h2>
-        <Field
-          label="사연"
-          multiline
-          rows={7}
-          value={story}
-          onChange={onChange}
-          help={`이 사연에서 ${cutCount}컷을 만들었어요.`}
-          maxLength={500}
+    <div className="flex flex-col gap-3">
+      {/* 인물 추가 폼 */}
+      <form onSubmit={handleAdd} className="flex gap-2">
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="새 인물 이름 (예: 김팀장, 과장, 친구)"
+          maxLength={15}
+          className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface-card px-3 text-sm text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
         />
-        <Button variant="secondary" size="sm" block loading={pending} onClick={onRegenerate}>
-          사연 고쳐서 다시 만들기
+        <Button type="submit" size="sm" variant="secondary" disabled={!newName.trim()}>
+          인물 추가
         </Button>
-        <p className="text-caption text-ink-subtle">
-          다시 만들면 지금 고친 대사는 사라져요. 콘티 생성은 크레딧을 쓰지 않아요.
-        </p>
+      </form>
+
+      {/* 등록된 인물 칩 목록 */}
+      <div className="flex flex-wrap gap-2 pt-1">
+        {characters.map((ch) => {
+          const isMe = ch.key === "ch_me";
+          return (
+            <span
+              key={ch.key}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                isMe
+                  ? "border-brand/40 bg-brand-subtle text-brand font-bold"
+                  : "border-border bg-surface-sunken text-ink",
+              )}
+            >
+              <span>{ch.name}</span>
+              {characters.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => onRemoveCharacter(ch.key)}
+                  title={`${ch.name} 삭제`}
+                  className="cursor-pointer text-ink-muted hover:text-danger text-sm leading-none ml-1"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          );
+        })}
       </div>
-
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-ink">등장인물 관리</h2>
-          <span className="text-caption text-ink-muted">{characters.length}명</span>
-        </div>
-        <p className="text-caption text-ink-muted leading-relaxed">
-          회차에 등장하는 인물을 관리해요. 대사에서는 여기서 등록한 인물 중 선택할 수 있어요.
-        </p>
-
-        {/* 인물 추가 폼 */}
-        <form onSubmit={handleAdd} className="flex gap-1.5">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="새 인물 이름 (예: 김팀장)"
-            maxLength={15}
-            className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-surface-card px-2.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
-          />
-          <Button type="submit" size="sm" variant="secondary" disabled={!newName.trim()}>
-            추가
-          </Button>
-        </form>
-
-        {/* 등록된 인물 칩 목록 */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {characters.map((ch) => {
-            const isMe = ch.key === "ch_me";
-            return (
-              <span
-                key={ch.key}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                  isMe
-                    ? "border-brand/30 bg-brand-subtle text-brand font-semibold"
-                    : "border-border bg-surface-sunken text-ink",
-                )}
-              >
-                <span>{ch.name}</span>
-                {characters.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => onRemoveCharacter(ch.key)}
-                    title={`${ch.name} 삭제`}
-                    className="cursor-pointer text-ink-muted hover:text-danger text-sm leading-none"
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    </aside>
+    </div>
   );
 }
 
