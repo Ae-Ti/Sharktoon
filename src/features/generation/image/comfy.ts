@@ -332,7 +332,7 @@ export class ComfyUIGenerator implements ImageGenerator {
 
     // 2. Base Positive & Negative Prompts
     const positivePrompt = [
-      `A single panel from a 2D Korean webcomic manhwa, soft line art style.`,
+      `A clean 2D animation illustration, soft line art style, Korean webtoon aesthetic.`,
       `Art Style: soft line art, ${stylePrompt}, clean ink lineart, flat solid cel shading with crisp shadow boundaries, zero gradients.`,
       `[Key Dynamic Action & Poses]: ${visualScene}.`,
       `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult human proportions, strictly NO chibi, NO super-deformed.`,
@@ -341,12 +341,13 @@ export class ComfyUIGenerator implements ImageGenerator {
     ].join("\n");
 
     const negativePrompt = [
+      "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
       "semi-realistic, 3d render, photorealistic, chibi, SD, super deformed, oversized head, dwarf",
       "giant bug eyes, high bun, topknot, messy bun, hair scrunchie, cat ears on human, animal headband",
       "human clothes on cat, hoodie on cat, clothes zipper on cat",
       "doctor coat on protagonist, scrubs on protagonist, stethoscope on protagonist",
       !hasVetInCut ? "veterinarian, male doctor, medical coat, extra people" : "",
-      "empty background, white void, text, speech bubble, captions, watermark",
+      "empty background, white void, watermark",
     ].filter(Boolean).join(", ");
 
     const referenceImageUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];

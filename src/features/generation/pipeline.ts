@@ -365,7 +365,6 @@ export function buildCutPrompt(storyboard: Storyboard, cutId: string): string {
     `감정: ${EMOTION_LABEL[cut.emotion]}`,
     `카메라: ${CAMERA_LABEL[cut.camera]}`,
     bgDesc,
-    "말풍선과 글자는 그리지 않는다",
   ]
     .filter(Boolean)
     .join(" / ");

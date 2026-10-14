@@ -56,7 +56,7 @@ export class GoogleImagenGenerator implements ImageGenerator {
       `Korean webcomic illustration, single panel.`,
       `Scene description: ${req.prompt}.`,
       `Style: ${stylePrompt}.`,
-      `Requirements: 2D vector-like webtoon style, high quality digital illustration, no speech bubbles, no text, no captions.`,
+      `Requirements: 2D vector-like webtoon style, high quality digital illustration, textless pure artwork.`,
     ].join(" ");
 
     const endpoint = `${GOOGLE_API_HOST}/models/${this.modelName}:predict?key=${apiKey}`;

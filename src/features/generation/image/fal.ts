@@ -73,9 +73,21 @@ export function enhancePropsAndActions(text: string): string {
   return res;
 }
 
+export function cleanTextless(text: string): string {
+  return text
+    .replace(/말풍선[^\n/]*/g, "")
+    .replace(/대사[^\n/]*/g, "")
+    .replace(/나레이션[^\n/]*/g, "")
+    .replace(/글자[^\n/]*/g, "")
+    .replace(/자막[^\n/]*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function translateToVisualEnglishPrompt(text: string, apiKey: string): Promise<string> {
-  if (!/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) return text;
-  const enhancedText = enhancePropsAndActions(text);
+  const cleaned = cleanTextless(text);
+  if (!/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(cleaned)) return cleaned;
+  const enhancedText = enhancePropsAndActions(cleaned);
 
   try {
     const res = await fetch("https://fal.run/fal-ai/any-llm", {
@@ -86,7 +98,9 @@ export async function translateToVisualEnglishPrompt(text: string, apiKey: strin
       },
       body: JSON.stringify({
         system_prompt:
-          "You are an expert visual prompt engineer for 2D Korean webcomic manhwa image generation. Translate the user's Korean comic scene, character actions, and emotions into a clear English visual scene description sentence.\n" +
+          "You are an expert visual prompt engineer for 2D Korean webcomic animation image generation. Translate the user's Korean scene, character actions, and emotions into a clear English visual scene description sentence.\n" +
+          "CRITICAL INSTRUCTION FOR TEXTLESS VISUAL ART:\n" +
+          "Under NO circumstances should you output or describe speech bubbles, dialogue balloons, text, sound effects, subtitles, or captions. Do NOT use words like 'speech bubble', 'text', 'dialogue', 'balloon', or 'caption'. Focus EXCLUSIVELY on visual scene elements: character poses, hand gestures, facial expressions, and background objects.\n" +
           "CRITICAL RULES:\n" +
           "1. Protagonist identity: The main character is ALWAYS an ordinary civilian young woman with natural human ears (STRICTLY NO animal ears, NO cat ears headband, NO tail) in casual clothing (dark grey hoodie over white t-shirt, dark pants). NEVER dress the protagonist in professional uniforms (like a doctor's white coat or scrubs) and NEVER put a stethoscope on her.\n" +
           "2. Secondary characters: If a veterinarian or doctor is present, describe them distinctly as a separate male character (e.g. 'A separate male veterinarian in a white lab coat examines the cat while the female protagonist watches').\n" +
@@ -105,12 +119,12 @@ export async function translateToVisualEnglishPrompt(text: string, apiKey: strin
         prompt: enhancedText,
       }),
     });
-    if (!res.ok) return text;
+    if (!res.ok) return cleaned;
     const data = await res.json();
     const translated = String(data.output || "").trim();
-    return translated || text;
+    return translated || cleaned;
   } catch {
-    return text;
+    return cleaned;
   }
 }
 
@@ -206,6 +220,7 @@ export class FalFluxGenerator implements ImageGenerator {
     const seed = getEpisodeSeed(req.episodeId, req.index);
 
     const negative_prompt = [
+      "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
       "photorealistic, 3d render, cgi, octane render, unreal engine, volumetric lighting, airbrushed skin, skin pores, realistic photography, oil painting",
       "semi-realistic, 3d model, computer graphics, realistic human face, soft focus, blurry lines",
       "inconsistent art style, varying stroke weight, sketch, rough draft, messy lines, painterly, watercolor wash, airbrush gradients",
@@ -217,7 +232,6 @@ export class FalFluxGenerator implements ImageGenerator {
       "doctor coat on protagonist, scrubs on protagonist, stethoscope on protagonist, hoodie on doctor",
       !hasVetInCut ? "veterinarian, male doctor, medical coat, extra people, male characters" : "",
       !isSolidColor ? "empty background, blank background, simple background, white background, white void, solid color background, floating character, missing background, plain featureless wall, minimalist void" : "",
-      "text, speech bubble, dialogue box, captions, watermark, signature",
     ].filter(Boolean).join(", ");
 
     // 4. 감정에 따른 만화적 표정 큐 (극적이고 과장된 만화 리액션 강제)
@@ -245,7 +259,7 @@ export class FalFluxGenerator implements ImageGenerator {
     }
 
     const prompt = [
-      `[MASTER EPISODE ART ANCHOR: 2D KOREAN WEBCOMIC MANHWA]`,
+      `[MASTER EPISODE ART ANCHOR: 2D ANIMATION CEL ARTWORK, KOREAN WEBTOON AESTHETIC]`,
       `Art Direction & Style: ${stylePrompt}.`,
       `Strict Medium & Rendering Constraints: 100% 2D flat digital graphic novel illustration, uniform clean 1.8px black contour lineart, flat solid cel shading fills with zero smooth airbrush gradients, zero 3D rendering, zero photorealism. Strictly identical color grading, identical line stroke weight, and identical visual aesthetic across all panels in this episode.`,
       `[Scene Dynamic Action & Composition]: ${visualScene}.`,
@@ -264,7 +278,7 @@ export class FalFluxGenerator implements ImageGenerator {
           ? "STRICTLY NO veterinarian, NO doctor, NO male characters in this panel. There is ONLY one person: the female protagonist."
           : ""
       }`,
-      `Requirements: Clean composition, consistent 6.8-head adult webtoon anatomy, strictly identical face and art style as character reference sheet, no speech bubbles, no text, no captions.`,
+      `Requirements: Pure visual animation artwork, textless composition, clean drawing, consistent 6.8-head adult webtoon anatomy, strictly identical face and art style as character reference sheet.`,
     ].filter(Boolean).join("\n");
 
     console.log(`\n🎨 [FLUX Cut ${req.index}] Final Prompt:\n${prompt}\n`);
@@ -440,7 +454,7 @@ export class FalFluxGenerator implements ImageGenerator {
           "room, interior, bedroom, furniture, wall, colored background, complex background, shadow on wall",
           "cat ears on human, animal ears on human, animal headband, tail on human",
           "doctor coat, lab coat, medical scrubs, stethoscope",
-          "text, speech bubble, dialogue box, captions, watermark, signature",
+          "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, captions, watermark, signature",
         ].join(", ");
 
         const prompt = [
@@ -453,7 +467,7 @@ export class FalFluxGenerator implements ImageGenerator {
           `[Character Appearance]: 20-year-old Korean human girl with natural human ears (STRICTLY NO animal ears, NO cat ears, NO headband, NO animal costume, NO tail). Exact same hairstyle: black hair tied back loosely into a low ponytail behind the neck with two distinct side curtain bangs framing her face/cheekbones, forehead partially visible, strictly NO top bun, NO hair scrunchie. Casual signature outfit: dark grey oversized zip-up hoodie (hood resting down on shoulders, NEVER pulled over head) over a dark t-shirt, dark pants, sneakers.`,
           descPrompt,
           tagsPrompt,
-          `Strict Requirements: Clean 2D outline drawing, flat solid cel shading, pure white background, consistent 6.5-head adult proportions, no text, no speech bubbles, no watermark.`,
+          `Strict Requirements: Clean 2D outline drawing, flat solid cel shading, pure white background, consistent 6.5-head adult proportions, pure textless model reference.`,
         ]
           .filter(Boolean)
           .join("\n");

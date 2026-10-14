@@ -55,3 +55,4 @@ export function MobileNav({ seriesHref, streak = 0 }: MobileNavProps) {
     </nav>
   );
 }
+

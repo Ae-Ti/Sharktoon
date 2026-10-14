@@ -211,15 +211,11 @@ export function GenerationScreen({
                   <span className="flex-1 text-body font-semibold text-brand-ink">
                     {job.cuts.length}컷이 다 나왔어요.
                   </span>
-                  {episodeNumber === 1 && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => router.push(`/onboarding/result?episode=${job.episodeId}`)}
-                    >
-                      첫 화 결과 보기
-                    </Button>
-                  )}
-                  <Button onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}>
+                  <Button
+                    size="md"
+                    className="font-bold shadow-xs"
+                    onClick={() => router.push(`/episodes/${job.episodeId}/editor`)}
+                  >
                     대사 다듬으러 가기
                   </Button>
                 </div>
