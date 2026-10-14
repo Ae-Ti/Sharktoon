@@ -282,6 +282,33 @@ function StoryboardEditor({
     });
   }
 
+  const hasCoverCut = sb.cuts.some((c) => c.isCover);
+
+  function toggleCoverCut(enable: boolean) {
+    setSb((s) => {
+      if (enable) {
+        if (s.cuts.some((c) => c.isCover)) return s;
+        const hookText = s.hookOptions.find((h) => h.id === s.selectedHookId)?.text || "새로운 이야기";
+        const coverCut: StoryboardCut = {
+          id: `cut_cover_${Date.now()}`,
+          index: 1,
+          isCover: true,
+          scene: `[표지/타이틀 커버] "${hookText}" - 에피소드의 전체적인 테마와 주인공의 대표적인 매력을 보여주는 시선 강탈 표지 일러스트. 인스타 피드 썸네일 전용.`,
+          characterIds: s.characters.map((c) => c.key).slice(0, 1),
+          emotion: "joy",
+          camera: "medium",
+          dialogue: [],
+          narration: "",
+        };
+        const next = [coverCut, ...s.cuts];
+        return { ...s, cuts: reindexCuts(next), includeCover: true };
+      } else {
+        const withoutCover = s.cuts.filter((c) => !c.isCover);
+        return { ...s, cuts: reindexCuts(withoutCover), includeCover: false };
+      }
+    });
+  }
+
   function addCharacter(name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -406,6 +433,38 @@ function StoryboardEditor({
               {notice}
             </p>
           )}
+
+          {/* 인스타 피드 전용 독립 표지(커버) 컷 토글 바 */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-card px-4 py-3 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand">
+                🌟
+              </span>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-label font-bold text-ink">독립 표지(커버) 컷 포함</span>
+                  {hasCoverCut ? (
+                    <Badge tone="brand">포함됨 (피드 썸네일)</Badge>
+                  ) : (
+                    <Badge tone="neutral">미포함 (1컷이 표지)</Badge>
+                  )}
+                </div>
+                <span className="text-caption text-ink-muted">
+                  인스타 피드 썸네일로 활용할 독립된 타이틀 표지 컷을 맨 앞에 추가합니다.
+                </span>
+              </div>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={hasCoverCut}
+                onChange={(e) => toggleCoverCut(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-surface-sunken peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand"></div>
+            </label>
+          </div>
+
           {sb.cuts.length === 0 ? (
             <EmptyState
               title="컷이 하나도 없어요"
@@ -417,6 +476,7 @@ function StoryboardEditor({
               <CutCard
                 key={cut.id}
                 cut={cut}
+                hasCoverCut={hasCoverCut}
                 characters={sb.characters}
                 allCustomLocations={allCustomLocations}
                 nameOf={(key) => characterName(sb, key)}
@@ -1075,6 +1135,7 @@ function CutCard({
   onAddNarration,
   onRemoveNarration,
   onChangeNarration,
+  hasCoverCut,
 }: {
   cut: StoryboardCut;
   characters: StoryboardCharacter[];
@@ -1099,6 +1160,7 @@ function CutCard({
   onAddNarration: () => void;
   onRemoveNarration: () => void;
   onChangeNarration: (text: string) => void;
+  hasCoverCut?: boolean;
 }) {
   const bgLabel =
     cut.background?.preset === "solid_color"
@@ -1111,14 +1173,25 @@ function CutCard({
     return (
       <article
         onClick={onSelect}
-        className="group flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-surface-card p-3.5 transition-all hover:border-brand/50 hover:bg-surface-sunken/20 hover:shadow-2xs"
+        className={cn(
+          "group flex cursor-pointer flex-col gap-2 rounded-xl border bg-surface-card p-3.5 transition-all hover:border-brand/50 hover:bg-surface-sunken/20 hover:shadow-2xs",
+          cut.isCover
+            ? "border-brand/50 bg-brand-tint/15 shadow-2xs"
+            : "border-border",
+        )}
       >
         <div className="flex flex-wrap items-center gap-2">
           <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
-            {cut.index}
+            {cut.isCover ? "표지" : cut.index}
           </span>
-          {cut.index === 1 && <Badge tone="brand">후킹 컷</Badge>}
-          {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+          {cut.isCover ? (
+            <Badge tone="brand">🌟 표지 컷 (인스타 썸네일)</Badge>
+          ) : (
+            <>
+              {cut.index === (hasCoverCut ? 2 : 1) && <Badge tone="brand">후킹 컷</Badge>}
+              {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+            </>
+          )}
 
           <span className="rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
             {EMOTION_LABEL[cut.emotion]}
@@ -1221,15 +1294,24 @@ function CutCard({
 
   return (
     <article
-      className="flex flex-col gap-3 rounded-xl border-2 border-brand bg-surface-card p-[15px] shadow-sm transition-colors"
+      className={cn(
+        "flex flex-col gap-3 rounded-xl border-2 bg-surface-card p-[15px] shadow-sm transition-colors",
+        cut.isCover ? "border-brand ring-2 ring-brand/20 bg-brand-tint/5" : "border-brand",
+      )}
     >
       {/* 컷 헤더: 번호, 후킹/CTA 뱃지, 감정/카메라/장소 드롭다운, 순서/삭제 버튼 */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
-          {cut.index}
+          {cut.isCover ? "표지" : cut.index}
         </span>
-        {cut.index === 1 && <Badge tone="brand">후킹 컷</Badge>}
-        {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+        {cut.isCover ? (
+          <Badge tone="brand">🌟 표지 컷 (인스타 썸네일)</Badge>
+        ) : (
+          <>
+            {cut.index === (hasCoverCut ? 2 : 1) && <Badge tone="brand">후킹 컷</Badge>}
+            {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+          </>
+        )}
 
         {/* 감정 선택 */}
         <div onClick={(e) => e.stopPropagation()}>

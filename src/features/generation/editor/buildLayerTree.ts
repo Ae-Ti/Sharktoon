@@ -47,21 +47,22 @@ export function buildLayerTree(input: {
   layers.push(background);
 
   let top = 60;
-  const hook = isFirst
+  const isCover = cut.isCover === true;
+  const hook = (isFirst || isCover)
     ? storyboard.hookOptions.find((h) => h.id === storyboard.selectedHookId)?.text
     : undefined;
   if (hook) {
     layers.push(textLayer({
       id: `ly_hook_${cut.id}`,
-      name: "후킹",
+      name: isCover ? "표지 타이틀" : "후킹",
       kind: "text",
       text: hook,
-      box: { x: 60, y: top, width: W - 120, height: 150 },
-      fontSize: 56,
+      box: { x: 60, y: top, width: W - 120, height: isCover ? 180 : 150 },
+      fontSize: isCover ? 64 : 56,
       bold: true,
       stroke: true,
     }));
-    top += 190;
+    top += isCover ? 220 : 190;
   }
 
   // 스마트 대사 배치: 화자 및 인물 위치(좌/우/반려동물)를 감지하여 얼굴 가림 방지 및 꼬리 방향 자동 조절

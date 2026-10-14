@@ -102,6 +102,8 @@ export interface StoryboardCut {
   narration?: string;
   /** 컷 배경 설정 (장소 인테리어 프리셋 또는 단색) */
   background?: CutBackground;
+  /** 인스타 피드 썸네일 전용 표지(커버) 컷 여부 */
+  isCover?: boolean;
 }
 
 /** 첫 컷 후킹 / 마지막 컷 CTA 후보. 각각 3안을 준다(PRD 2.2). */
@@ -147,6 +149,8 @@ export interface Storyboard {
   selectedHookId: string | null;
   ctaOptions: CtaOption[];
   selectedCtaId: string | null;
+  /** 독립된 표지(커버) 컷 포함 여부 */
+  includeCover?: boolean;
   createdAt: string;
   updatedAt: string;
 }

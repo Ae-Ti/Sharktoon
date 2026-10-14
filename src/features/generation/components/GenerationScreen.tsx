@@ -138,16 +138,16 @@ export function GenerationScreen({
         credits={balance}
         action={
           <div className="flex items-center gap-2">
-            {doneCuts.length > 0 && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setViewerOpen(true)}
-              >
-                <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-                웹툰 뷰어
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={doneCuts.length === 0}
+              title={doneCuts.length > 0 ? undefined : "컷이 하나 이상 생성되면 볼 수 있어요"}
+              onClick={() => setViewerOpen(true)}
+            >
+              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+              웹툰 뷰어
+            </Button>
             <Button
               size="sm"
               disabled={doneCuts.length === 0}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Download } from "lucide-react";
 import { Badge, Button, ButtonLink, Field } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
@@ -64,8 +64,11 @@ export function PublishScreen(props: PublishScreenProps) {
   const [pending, start] = useTransition();
   const started = useRef(false);
 
-  const [thumbnailCutId, setThumbnailCutId] = useState<string>(props.slides[0]?.cutId ?? "");
-  const isFirstCutThumb = thumbnailCutId === (props.slides[0]?.cutId ?? "");
+  const coverSlide = props.slides.find((s) => s.cutId.includes("cover"));
+  const [thumbnailCutId, setThumbnailCutId] = useState<string>(
+    coverSlide?.cutId ?? props.slides[0]?.cutId ?? "",
+  );
+  const isFirstCutThumb = thumbnailCutId === (coverSlide?.cutId ?? props.slides[0]?.cutId ?? "");
 
   const missing = props.slides.filter((s) => !s.tree);
 
@@ -203,6 +206,27 @@ export function PublishScreen(props: PublishScreenProps) {
         episodeTitle={props.episodeTitle}
         current="publish"
         credits={props.credits}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={renderingViewer}
+              onClick={handleOpenViewer}
+            >
+              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+              웹툰 뷰어
+            </Button>
+            <Button
+              size="sm"
+              onClick={downloadZip}
+              loading={exporting !== null}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              {exporting ? `ZIP 내보내는 중 (${exporting})` : "캐러셀 ZIP 받기"}
+            </Button>
+          </div>
+        }
       />
 
       <main className="mx-auto grid max-w-[1080px] grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -293,7 +317,7 @@ export function PublishScreen(props: PublishScreenProps) {
                     </div>
                     <figcaption className="flex items-center justify-between text-caption">
                       <span className={cn(isThumb ? "font-bold text-brand" : "text-ink-muted")}>
-                        {s.index}컷
+                        {s.cutId.includes("cover") ? "🌟 표지" : `${s.index}컷`}
                       </span>
                       {isThumb ? (
                         <span className="text-[11px] font-bold text-brand">대표</span>
