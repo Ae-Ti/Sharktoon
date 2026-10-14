@@ -376,18 +376,20 @@ function StoryboardEditor({
       />
 
       <main className="mx-auto grid max-w-[1280px] grid-cols-1 gap-4 p-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <StorySidebar
-          story={story}
-          cutCount={sb.cuts.length}
-          pending={pending}
-          onChange={setStory}
-          onRegenerate={regenerateStoryboard}
-          characters={sb.characters}
-          onAddCharacter={addCharacter}
-          onRemoveCharacter={removeCharacter}
-        />
+        <div className="order-2 lg:order-1">
+          <StorySidebar
+            story={story}
+            cutCount={sb.cuts.length}
+            pending={pending}
+            onChange={setStory}
+            onRegenerate={regenerateStoryboard}
+            characters={sb.characters}
+            onAddCharacter={addCharacter}
+            onRemoveCharacter={removeCharacter}
+          />
+        </div>
 
-        <section aria-label="컷 목록" className="flex flex-col gap-3">
+        <section aria-label="컷 목록" className="order-1 flex flex-col gap-3 lg:order-2">
           {usedMock && (
             <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
               모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
@@ -492,7 +494,7 @@ function StoryboardEditor({
           )}
         </section>
 
-        <aside aria-label="헤드라인 및 발행 문구" className="flex flex-col gap-4">
+        <aside aria-label="헤드라인 및 발행 문구" className="order-3 flex flex-col gap-4">
           <OptionPanel
             title="1컷 후킹"
             caption="첫 컷 상단 헤드라인 배너 및 인스타 캡션 첫 줄로 반영됩니다."
@@ -630,6 +632,57 @@ function StoryboardEditor({
           )}
         </aside>
       </main>
+
+      {/* 모바일 화면 하단 고정 생성 버튼 (lg 미만) */}
+      <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3.5 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
+        <div className="flex items-center gap-2">
+          <div
+            role="radiogroup"
+            aria-label="생성 품질"
+            className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={tier === "standard"}
+              onClick={() => setTier("standard")}
+              className={cn(
+                "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                tier === "standard"
+                  ? "bg-surface-card text-ink shadow-2xs font-bold"
+                  : "text-ink-muted hover:text-ink",
+              )}
+            >
+              ⚡ 일반
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={tier === "pro"}
+              onClick={() => setTier("pro")}
+              className={cn(
+                "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                tier === "pro"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:text-ink",
+              )}
+            >
+              💎 Pro
+            </button>
+          </div>
+          <Button
+            size="md"
+            block
+            cost={cost}
+            disabled={!ready}
+            loading={pending}
+            onClick={startGeneration}
+            className="flex-1 font-bold shadow-xs"
+          >
+            {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
+          </Button>
+        </div>
+      </div>
 
       {/* 크레딧이 모자라면 버튼을 막는 대신 여기서 막고 충전으로 보낸다(credit.ts 주석). */}
       <Modal

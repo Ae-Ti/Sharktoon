@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { Badge, CreditPill } from "@/components/ui";
 import { getRepository, usingMockData } from "@/features/platform/data";
 import { SideNav } from "@/features/platform/shell/SideNav";
+import { MobileNav } from "@/features/platform/shell/MobileNav";
 import { getSession } from "@/features/platform/auth/session";
 import { logoutAction } from "@/features/platform/auth/actions";
-import { LogOut } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -24,17 +25,37 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const isAdmin = Boolean(session.isAdmin);
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-surface-page">
       {usingMockData() && (
         <p className="bg-warning-tint px-4 py-1.5 text-center text-caption text-warning">
           Supabase 미연결 · 목 데이터로 보고 있어요
         </p>
       )}
 
+      {/* 모바일 전용 상단 헤더 (md 미만) */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/80 bg-surface-card/95 px-4 py-3 backdrop-blur-md md:hidden">
+        <Link href="/home" className="text-title-lg font-extrabold tracking-[-0.03em] text-ink">
+          샥<span className="text-brand">툰</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <CreditPill balance={credit.balance} delta={credit.delta} />
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              title="로그아웃"
+              className="flex size-8 items-center justify-center rounded-lg border border-border/80 bg-surface-card text-ink-muted hover:text-danger hover:border-danger/40 transition-colors"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </form>
+        </div>
+      </header>
+
       <div className="flex flex-1 flex-col md:flex-row">
-        <header className="flex items-center justify-between gap-4 border-b border-border bg-surface-card px-4 py-3 md:w-56 md:flex-col md:items-stretch md:gap-5 md:border-r md:border-b-0 md:px-3 md:py-5">
+        {/* 데스크톱 전용 좌측 사이드바 (md 이상) */}
+        <aside className="hidden md:flex md:w-56 md:flex-col md:items-stretch md:gap-5 md:border-r md:border-border/80 md:bg-surface-card md:px-3 md:py-5">
           <Link href="/home" className="px-2.5 text-title-lg font-extrabold tracking-[-0.03em] text-ink">
-            샥툰
+            샥<span className="text-brand">툰</span>
           </Link>
           <SideNav seriesHref={seriesHref} isAdmin={isAdmin} />
 
@@ -66,10 +87,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               </button>
             </form>
           </div>
-        </header>
+        </aside>
 
-        <main className="flex-1 px-4 py-6 md:px-8">{children}</main>
+        {/* 본문 컨텐츠 (모바일 하단 내비게이션 바 높이 pb-24 확보) */}
+        <main className="flex-1 px-4 py-5 pb-24 md:px-8 md:py-6 md:pb-8">{children}</main>
       </div>
+
+      {/* 모바일 전용 하단 탭 내비게이션 바 (md 미만) */}
+      <MobileNav seriesHref={seriesHref} />
     </div>
   );
 }

@@ -95,6 +95,7 @@ export function CutEditorScreen({
   const [cutToDelete, setCutToDelete] = useState<EditorStripCut | null>(null);
   const [isDeletingCut, setIsDeletingCut] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"layers" | "inspector">("layers");
 
   async function handleConfirmDeleteCut() {
     if (!cutToDelete) return;
@@ -152,6 +153,7 @@ export function CutEditorScreen({
       const layer = buildLayerFromPreset(tree, presetId);
       editor.add(layer);
       editor.setSelectedId(layer.id);
+      setMobileTab("inspector");
     },
     [editor, tree],
   );
@@ -221,10 +223,39 @@ export function CutEditorScreen({
         </section>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-          <Panel
-            title={`레이어 (${rows.length})`}
-            caption="위에 있는 것이 앞에 그려져요. 추가는 상단 툴바에서 해요."
-          >
+          {/* 모바일 전용 레이어 목록 vs 속성 편집 탭 (lg 미만) */}
+          <div className="flex rounded-xl border border-border/80 bg-surface-sunken p-1 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileTab("layers")}
+              className={cn(
+                "flex-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer",
+                mobileTab === "layers"
+                  ? "bg-surface-card text-brand font-bold shadow-2xs"
+                  : "text-ink-muted hover:text-ink",
+              )}
+            >
+              레이어 목록 ({rows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("inspector")}
+              className={cn(
+                "flex-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer",
+                mobileTab === "inspector"
+                  ? "bg-surface-card text-brand font-bold shadow-2xs"
+                  : "text-ink-muted hover:text-ink",
+              )}
+            >
+              속성/대사 수정 {selected ? `(${selected.name})` : ""}
+            </button>
+          </div>
+
+          <div className={cn("flex flex-col gap-3", mobileTab === "layers" ? "block" : "hidden lg:block")}>
+            <Panel
+              title={`레이어 (${rows.length})`}
+              caption="위에 있는 것이 앞에 그려져요. 추가는 상단 툴바에서 해요."
+            >
               <div role="listbox" aria-label="레이어" className="flex flex-col">
                 {rows.map((layer, rowIndex) => {
                   const z = tree.layers.length - 1 - rowIndex;
@@ -234,7 +265,10 @@ export function CutEditorScreen({
                         <LayerRow
                           {...toLayerRowProps(layer)}
                           selected={layer.id === selectedId}
-                          onSelect={() => editor.setSelectedId(layer.id)}
+                          onSelect={() => {
+                            editor.setSelectedId(layer.id);
+                            setMobileTab("inspector");
+                          }}
                           onToggle={() =>
                             editor.update(layer.id, (l) => ({ ...l, hidden: !l.hidden }))
                           }
@@ -251,76 +285,82 @@ export function CutEditorScreen({
                 })}
               </div>
             </Panel>
+          </div>
 
-          {selected && (
-            <LayerInspector
-              layer={selected}
-              onChangeName={(name) =>
-                editor.update(selected.id, (l) => ({ ...l, name }))
-              }
-              onChangeText={(text) =>
-                editor.update(selected.id, (l) =>
-                  isVectorTextLayer(l) ? { ...l, text } : l,
-                )
-              }
-              onChangeFont={(fontFamily) => {
-                void ensureToonFont(fontFamily);
-                editor.update(selected.id, (l) =>
-                  isVectorTextLayer(l) ? { ...l, style: { ...l.style, fontFamily } } : l,
-                );
-              }}
-              onChangeFontSize={(fontSize) =>
-                editor.update(selected.id, (l) =>
-                  isVectorTextLayer(l)
-                    ? { ...l, style: { ...l.style, fontSize } }
-                    : l,
-                )
-              }
-              onChangePosition={(pos) => {
-                editor.update(selected.id, (l) => {
-                  if (!isVectorTextLayer(l)) return l;
-                  const W = tree.canvas.width;
-                  const H = tree.canvas.height;
-                  const w = l.box.width;
-                  const h = l.box.height;
-                  let x = l.box.x;
-                  let y = l.box.y;
-                  if (pos === "top_left") {
-                    x = 60;
-                    y = 70;
-                  } else if (pos === "top_center") {
-                    x = Math.round((W - w) / 2);
-                    y = 70;
-                  } else if (pos === "top_right") {
-                    x = W - w - 60;
-                    y = 70;
-                  } else if (pos === "center") {
-                    x = Math.round((W - w) / 2);
-                    y = Math.round((H - h) / 2);
-                  } else if (pos === "bottom") {
-                    x = Math.round((W - w) / 2);
-                    y = H - h - 70;
-                  }
-                  const tail = l.tail
-                    ? {
-                        x: x + Math.round(w / 2),
-                        y: Math.min(H - 20, y + h + 110),
-                      }
-                    : undefined;
-                  return {
-                    ...l,
-                    box: { ...l.box, x, y },
-                    tail: tail ?? l.tail,
-                  };
-                });
-              }}
-              onToggleLock={() =>
-                editor.update(selected.id, (l) => ({ ...l, locked: !l.locked }))
-              }
-              onDelete={() => setConfirmDelete(selected)}
-            />
-          )}
-
+          <div className={cn("flex flex-col gap-3", mobileTab === "inspector" ? "block" : "hidden lg:block")}>
+            {selected ? (
+              <LayerInspector
+                layer={selected}
+                onChangeName={(name) =>
+                  editor.update(selected.id, (l) => ({ ...l, name }))
+                }
+                onChangeText={(text) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, text } : l,
+                  )
+                }
+                onChangeFont={(fontFamily) => {
+                  void ensureToonFont(fontFamily);
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, style: { ...l.style, fontFamily } } : l,
+                  );
+                }}
+                onChangeFontSize={(fontSize) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l)
+                      ? { ...l, style: { ...l.style, fontSize } }
+                      : l,
+                  )
+                }
+                onChangePosition={(pos) => {
+                  editor.update(selected.id, (l) => {
+                    if (!isVectorTextLayer(l)) return l;
+                    const W = tree.canvas.width;
+                    const H = tree.canvas.height;
+                    const w = l.box.width;
+                    const h = l.box.height;
+                    let x = l.box.x;
+                    let y = l.box.y;
+                    if (pos === "top_left") {
+                      x = 60;
+                      y = 70;
+                    } else if (pos === "top_center") {
+                      x = Math.round((W - w) / 2);
+                      y = 70;
+                    } else if (pos === "top_right") {
+                      x = W - w - 60;
+                      y = 70;
+                    } else if (pos === "center") {
+                      x = Math.round((W - w) / 2);
+                      y = Math.round((H - h) / 2);
+                    } else if (pos === "bottom") {
+                      x = Math.round((W - w) / 2);
+                      y = H - h - 70;
+                    }
+                    const tail = l.tail
+                      ? {
+                          x: x + Math.round(w / 2),
+                          y: Math.min(H - 20, y + h + 110),
+                        }
+                      : undefined;
+                    return {
+                      ...l,
+                      box: { ...l.box, x, y },
+                      tail: tail ?? l.tail,
+                    };
+                  });
+                }}
+                onToggleLock={() =>
+                  editor.update(selected.id, (l) => ({ ...l, locked: !l.locked }))
+                }
+                onDelete={() => setConfirmDelete(selected)}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center text-caption text-ink-muted lg:hidden">
+                수정할 말풍선이나 텍스트 레이어를 먼저 선택해 주세요.
+              </div>
+            )}
+          </div>
         </aside>
       </div>
 

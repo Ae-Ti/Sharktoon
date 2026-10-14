@@ -28,13 +28,13 @@ export default async function Page() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
         <ButtonLink
           href="/onboarding/character"
           size="md"
           variant="primary"
-          className="h-11 px-5 shadow-xs hover:shadow transition-all"
+          className="h-11 px-5 shadow-xs hover:shadow transition-all w-full sm:w-auto justify-center"
         >
           <Plus className="size-5 shrink-0" />
           <span className="font-bold">새 인스타툰 만들기</span>
