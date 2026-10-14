@@ -1152,24 +1152,67 @@ function CutCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 text-caption text-ink-muted">
-          <p className="min-w-0 flex-1 truncate text-body-sm text-ink-muted">
-            <span className="mr-1.5 font-semibold text-ink">[장면]</span>
-            {cut.scene ? cut.scene : <span className="italic text-ink-subtle">장면 묘사 없음</span>}
+        {/* 장면 내용 */}
+        <div className="flex items-start gap-2 pt-1 text-body-sm">
+          <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
+            장면
+          </span>
+          <p className="flex-1 whitespace-pre-wrap text-ink-muted leading-relaxed">
+            {cut.scene ? cut.scene : <span className="italic text-ink-subtle">장면 묘사가 비어있어요.</span>}
           </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {cut.dialogue.length > 0 && (
-              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-caption font-medium text-ink">
-                대사 {cut.dialogue.length}개
+        </div>
+
+        {/* 대사 목록 내용 */}
+        {cut.dialogue.length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-lg bg-surface-sunken/40 p-2.5">
+            <div className="flex items-center gap-1.5 text-caption font-semibold text-ink-muted">
+              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
+                대사
               </span>
-            )}
-            {cut.narration && (
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-caption font-medium text-amber-700">
-                나레이션
-              </span>
-            )}
-            <span className="text-caption font-semibold text-brand">클릭하여 편집 ▾</span>
+              <span className="text-[11px] text-ink-subtle">({cut.dialogue.length})</span>
+            </div>
+            <ul className="flex flex-col gap-1.5">
+              {cut.dialogue.map((line) => {
+                const speaker = nameOf(line.speakerId);
+                return (
+                  <li key={line.id} className="flex items-start gap-2 text-body-sm">
+                    <span className="shrink-0 text-[13px] font-semibold text-ink">
+                      {speaker}:
+                    </span>
+                    <span className="flex-1 text-[13px] leading-snug text-ink-muted">
+                      &ldquo;{line.text || "(대사 없음)"}&rdquo;
+                    </span>
+                    <span className="shrink-0 rounded border border-border/80 bg-surface-card px-1.5 py-0.5 text-[10px] text-ink-subtle">
+                      {BALLOON_LABEL[line.balloon]}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
+        )}
+
+        {/* 나레이션 내용 */}
+        {cut.narration && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-body-sm">
+            <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">
+              나레이션
+            </span>
+            <p className="flex-1 whitespace-pre-wrap text-[13px] leading-snug text-amber-900">
+              {cut.narration}
+            </p>
+          </div>
+        )}
+
+        {/* 카드 하단 메타 및 클릭 안내 */}
+        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-caption">
+          <span className="text-[11px] text-ink-subtle">
+            {cut.dialogue.length > 0 ? `대사 ${cut.dialogue.length}개` : "대사 없음"}
+            {cut.narration ? " · 나레이션 포함" : ""}
+          </span>
+          <span className="text-[11px] font-semibold text-brand group-hover:underline">
+            클릭하여 편집 ▾
+          </span>
         </div>
       </article>
     );
