@@ -62,6 +62,9 @@ export function PublishScreen(props: PublishScreenProps) {
   const [pending, start] = useTransition();
   const started = useRef(false);
 
+  const [thumbnailCutId, setThumbnailCutId] = useState<string>(props.slides[0]?.cutId ?? "");
+  const isFirstCutThumb = thumbnailCutId === (props.slides[0]?.cutId ?? "");
+
   const missing = props.slides.filter((s) => !s.tree);
 
   // 패키지가 없으면 열자마자 만든다. 캡션 생성은 크레딧을 쓰지 않는다.
@@ -110,8 +113,12 @@ export function PublishScreen(props: PublishScreenProps) {
       // konva 는 window 를 쓴다. 누를 때만 불러온다.
       const { exportCarouselZip } = await import("../editor/exportCarousel");
       const trees = props.slides.map((s) => s.tree!).filter(Boolean);
-      const blob = await exportCarouselZip(trees, { ratio, watermark: props.watermark }, (done, total) =>
-        setExporting(`${done}/${total}컷`),
+      const thumbIndex = props.slides.findIndex((s) => s.cutId === thumbnailCutId);
+      const blob = await exportCarouselZip(
+        trees,
+        { ratio, watermark: props.watermark },
+        (done, total) => setExporting(`${done}/${total}컷`),
+        thumbIndex >= 0 ? thumbIndex : 0,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -144,12 +151,14 @@ export function PublishScreen(props: PublishScreenProps) {
             <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">{notice}</p>
           )}
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="flex-1 text-label font-semibold text-ink">
-                캐러셀 {props.slides.length}장
-              </h2>
-              <Badge tone="neutral">비율 {ratio}</Badge>
+          {/* 캐러셀 & 인스타 게시 통합 박스 */}
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface-card p-5 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-title font-bold text-ink">캐러셀 & 인스타 게시</h2>
+                <Badge tone="brand">총 {props.slides.length}컷</Badge>
+                <Badge tone="neutral">비율 {ratio}</Badge>
+              </div>
               <Button
                 size="sm"
                 variant="secondary"
@@ -160,137 +169,179 @@ export function PublishScreen(props: PublishScreenProps) {
               </Button>
             </div>
 
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {props.slides.map((s) => (
-                <figure key={s.cutId} className="flex w-32 shrink-0 flex-col gap-1">
-                  <div
-                    className={cn(
-                      "overflow-hidden rounded-lg border border-border bg-skeleton",
-                      ratio === "4:5" ? "aspect-[4/5]" : "aspect-square",
-                    )}
-                  >
-                    {s.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={s.imageUrl} alt={`${s.index}컷`} className="size-full object-cover" />
-                    ) : (
-                      <span className="grid size-full place-items-center text-caption text-ink-subtle">
-                        아직 없음
-                      </span>
-                    )}
-                  </div>
-                  <figcaption className="text-caption text-ink-muted">{s.index}컷</figcaption>
-                </figure>
-              ))}
-            </div>
-            <p className="text-caption text-ink-subtle">
-              미리보기는 생성 이미지예요. 내려받는 PNG 에는 편집기에서 얹은 대사·말풍선이 들어가요.
-            </p>
-          </div>
-
-          {published ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-brand/30 bg-brand-subtle/30 p-4">
+            {/* 대표 썸네일 설정 바 */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-sunken/60 px-3.5 py-2.5 text-caption">
               <div className="flex items-center gap-2">
-                <span className="grid size-6 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">
-                  ✓
+                <span className="font-semibold text-ink">대표 썸네일:</span>
+                <span className="font-bold text-brand">
+                  {props.slides.find((s) => s.cutId === thumbnailCutId)?.index ?? 1}번째 컷
                 </span>
-                <h2 className="text-label font-semibold text-ink">인스타그램에 게시 완료되었어요!</h2>
               </div>
-              <p className="text-body-sm text-ink-muted">
-                시리즈 타임라인에 게시된 화로 등록되었어요. 다음 화는 같은 캐릭터로 사연만 적으면 돼요.
-              </p>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <ButtonLink href={`/series/${props.seriesId}`} variant="primary" size="sm">
-                  시리즈에서 다음 화 만들기
-                </ButtonLink>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={exporting !== null}
-                  onClick={downloadZip}
-                >
-                  ZIP 다시 다운로드
-                </Button>
-                <ButtonLink
-                  href="https://www.instagram.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="ghost"
-                  size="sm"
-                >
-                  인스타그램 가기 ↗
-                </ButtonLink>
+              <div className="flex items-center gap-3">
+                <label className="flex cursor-pointer select-none items-center gap-1.5 font-medium text-ink hover:text-brand">
+                  <input
+                    type="checkbox"
+                    checked={isFirstCutThumb}
+                    onChange={(e) => {
+                      if (e.target.checked && props.slides[0]) {
+                        setThumbnailCutId(props.slides[0].cutId);
+                      }
+                    }}
+                    className="size-4 cursor-pointer rounded accent-brand"
+                  />
+                  <span>1번째 컷을 썸네일로 사용</span>
+                </label>
+                <span className="text-ink-subtle">|</span>
+                <span className="text-ink-subtle">원하는 컷을 클릭해 썸네일 변경 가능</span>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-label font-semibold text-ink">인스타그램 게시</h2>
-                <span className="text-caption text-ink-muted">1~3 순서대로 진행해 주세요</span>
-              </div>
 
-              {missing.length > 0 && (
-                <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
-                  {missing.map((m) => m.index).join(", ")}컷 이미지가 아직 없어요. 생성 화면에서 다시 만든 뒤 내보낼 수 있어요.
-                </p>
+            {/* 캐러셀 컷 슬라이드 */}
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+              {props.slides.map((s) => {
+                const isThumb = s.cutId === thumbnailCutId;
+                return (
+                  <figure
+                    key={s.cutId}
+                    onClick={() => setThumbnailCutId(s.cutId)}
+                    className="group relative flex w-32 shrink-0 cursor-pointer flex-col gap-1.5 transition-all"
+                  >
+                    <div
+                      className={cn(
+                        "relative overflow-hidden rounded-lg border bg-skeleton transition-all",
+                        ratio === "4:5" ? "aspect-[4/5]" : "aspect-square",
+                        isThumb
+                          ? "border-brand ring-2 ring-brand shadow-sm"
+                          : "border-border group-hover:border-ink-muted/50",
+                      )}
+                    >
+                      {s.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.imageUrl} alt={`${s.index}컷`} className="size-full object-cover" />
+                      ) : (
+                        <span className="grid size-full place-items-center text-caption text-ink-subtle">
+                          아직 없음
+                        </span>
+                      )}
+                      {isThumb && (
+                        <span className="absolute left-1.5 top-1.5 rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-on-brand shadow-2xs">
+                          썸네일
+                        </span>
+                      )}
+                    </div>
+                    <figcaption className="flex items-center justify-between text-caption">
+                      <span className={cn(isThumb ? "font-bold text-brand" : "text-ink-muted")}>
+                        {s.index}컷
+                      </span>
+                      {isThumb ? (
+                        <span className="text-[11px] font-bold text-brand">대표</span>
+                      ) : (
+                        <span className="text-[10px] text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100">
+                          선택
+                        </span>
+                      )}
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+
+            <p className="text-caption text-ink-subtle">
+              미리보기는 생성 이미지예요. 내려받는 PNG 에는 편집기에서 얹은 대사·말풍선이 들어가며, 대표 썸네일은 ZIP 내 <code className="rounded bg-surface-sunken px-1 font-mono text-[11px]">thumbnail.png</code>로도 함께 저장돼요.
+            </p>
+
+            {/* 인스타 게시 액션 영역 */}
+            <div className="border-t border-border/80 pt-4">
+              {published ? (
+                <div className="flex flex-col gap-3 rounded-xl border border-brand/30 bg-brand-subtle/30 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="grid size-6 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">
+                      ✓
+                    </span>
+                    <h3 className="text-label font-semibold text-ink">인스타그램에 게시 완료되었어요!</h3>
+                  </div>
+                  <p className="text-body-sm text-ink-muted">
+                    시리즈 타임라인에 게시된 화로 등록되었어요. 다음 화는 같은 캐릭터로 사연만 적으면 돼요.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <ButtonLink href={`/series/${props.seriesId}`} variant="primary" size="md">
+                      시리즈에서 다음 화 만들기
+                    </ButtonLink>
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      loading={exporting !== null}
+                      onClick={downloadZip}
+                    >
+                      ZIP 다시 다운로드
+                    </Button>
+                    <ButtonLink
+                      href="https://www.instagram.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      variant="ghost"
+                      size="md"
+                    >
+                      인스타그램 가기 ↗
+                    </ButtonLink>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {missing.length > 0 && (
+                    <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
+                      {missing.map((m) => m.index).join(", ")}컷 이미지가 아직 없어요. 생성 화면에서 다시 만든 뒤 내보낼 수 있어요.
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      loading={exporting !== null}
+                      onClick={downloadZip}
+                      disabled={missing.length > 0}
+                      className="flex-1 min-w-[160px] justify-center font-bold"
+                    >
+                      {exporting ? exporting : `${ratio} ZIP 다운로드`}
+                    </Button>
+
+                    <ButtonLink
+                      href="https://www.instagram.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      variant="secondary"
+                      size="md"
+                      className="flex-1 min-w-[160px] justify-center text-center font-bold"
+                    >
+                      인스타그램 열기 ↗
+                    </ButtonLink>
+
+                    <Button
+                      variant="primary"
+                      size="md"
+                      loading={pending}
+                      onClick={() =>
+                        start(async () => {
+                          const r = await markPublishedAction(props.episodeId);
+                          if (r.ok) setPublished(true);
+                          else setNotice(r.message);
+                        })
+                      }
+                      className="flex-1 min-w-[160px] justify-center font-bold"
+                    >
+                      인스타 올렸어요
+                    </Button>
+                  </div>
+
+                  <p className="text-caption text-ink-subtle">
+                    모든 이미지에 AI 생성 메타데이터가 포함됩니다.
+                    {props.watermark && " 무료 요금제는 오른쪽 아래에 작은 워터마크가 붙어요."}
+                  </p>
+                </div>
               )}
-
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken/40 p-3">
-                  <span className="text-[11px] font-bold text-ink-subtle">1단계</span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    loading={exporting !== null}
-                    onClick={downloadZip}
-                    disabled={missing.length > 0}
-                    className="w-full"
-                  >
-                    {exporting ? exporting : `${ratio} ZIP 다운로드`}
-                  </Button>
-                  <span className="text-[11px] text-ink-muted">합성 완료된 이미지 묶음</span>
-                </div>
-
-                <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken/40 p-3">
-                  <span className="text-[11px] font-bold text-ink-subtle">2단계</span>
-                  <ButtonLink
-                    href="https://www.instagram.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full text-center"
-                  >
-                    인스타그램 열기 ↗
-                  </ButtonLink>
-                  <span className="text-[11px] text-ink-muted">우측 본문 복사 후 붙여넣기</span>
-                </div>
-
-                <div className="flex flex-col gap-1.5 rounded-lg border border-brand/20 bg-brand-tint/20 p-3">
-                  <span className="text-[11px] font-bold text-brand">3단계</span>
-                  <Button
-                    size="sm"
-                    loading={pending}
-                    onClick={() =>
-                      start(async () => {
-                        const r = await markPublishedAction(props.episodeId);
-                        if (r.ok) setPublished(true);
-                        else setNotice(r.message);
-                      })
-                    }
-                    className="w-full"
-                  >
-                    인스타 올렸어요
-                  </Button>
-                  <span className="text-[11px] text-ink-muted">게시 완료 상태로 전환</span>
-                </div>
-              </div>
-
-              <p className="text-caption text-ink-subtle">
-                모든 이미지에 AI 생성 메타데이터가 포함됩니다.
-                {props.watermark && " 무료 요금제는 오른쪽 아래에 작은 워터마크가 붙어요."}
-              </p>
             </div>
-          )}
+          </div>
         </section>
 
         <aside className="flex flex-col gap-4">

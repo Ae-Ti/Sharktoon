@@ -37,16 +37,24 @@ export async function renderCutPng(tree: CutLayerTree, options: ExportOptions): 
   return withAiMetadata(new Uint8Array(await blob.arrayBuffer()));
 }
 
-/** 컷들을 순서대로 01.png, 02.png … 로 묶은 ZIP. */
+/** 컷들을 순서대로 01.png, 02.png … 로 묶은 ZIP. 지정된 썸네일이 있으면 thumbnail.png 도 함께 포함한다. */
 export async function exportCarouselZip(
   trees: CutLayerTree[],
   options: ExportOptions,
   onProgress?: (done: number, total: number) => void,
+  thumbnailIndex?: number,
 ): Promise<Blob> {
   const files: Record<string, Uint8Array> = {};
   for (const [i, tree] of trees.entries()) {
-    files[`${String(i + 1).padStart(2, "0")}.png`] = await renderCutPng(tree, options);
+    const png = await renderCutPng(tree, options);
+    files[`${String(i + 1).padStart(2, "0")}.png`] = png;
+    if (thumbnailIndex === i) {
+      files["thumbnail.png"] = png;
+    }
     onProgress?.(i + 1, trees.length);
+  }
+  if (thumbnailIndex !== undefined && trees[thumbnailIndex] && !files["thumbnail.png"]) {
+    files["thumbnail.png"] = await renderCutPng(trees[thumbnailIndex], options);
   }
   // PNG 는 이미 압축돼 있다. 다시 압축하면 시간만 든다.
   const zipped = zipSync(files, { level: 0 });

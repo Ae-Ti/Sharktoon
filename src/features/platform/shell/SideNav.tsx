@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { Home, BookOpen, Sparkles, Settings, ShieldAlert } from "lucide-react";
+import { Home, BookOpen, Sparkles, User, ShieldAlert } from "lucide-react";
 
 export interface SideNavProps {
   /** 가장 최근 시리즈. 없으면 시리즈 항목을 감춘다. */
   seriesHref: string | null;
   /** 관리자 계정에만 운영 페이지 링크를 노출한다. */
   isAdmin?: boolean;
+  /** 연속 출석 일수 */
+  streak?: number;
 }
 
-export function SideNav({ seriesHref, isAdmin = false }: SideNavProps) {
+export function SideNav({ seriesHref, isAdmin = false, streak = 0 }: SideNavProps) {
   const path = usePathname();
 
   const ITEMS = [
@@ -21,7 +23,7 @@ export function SideNav({ seriesHref, isAdmin = false }: SideNavProps) {
       ? [{ href: seriesHref, label: "시리즈", icon: BookOpen, match: "/series" }]
       : []),
     { href: "/assets", label: "에셋 라이브러리", icon: Sparkles, match: undefined },
-    { href: "/settings", label: "설정", icon: Settings, match: undefined },
+    { href: "/settings", label: "마이페이지", icon: User, match: undefined },
     ...(isAdmin ? [{ href: "/admin", label: "관리자 운영", icon: ShieldAlert, match: undefined }] : []),
   ];
 
@@ -41,7 +43,12 @@ export function SideNav({ seriesHref, isAdmin = false }: SideNavProps) {
             )}
           >
             <Icon className={cn("size-4 shrink-0", active ? "text-brand" : "text-ink-muted")} />
-            <span>{it.label}</span>
+            <span className="flex-1">{it.label}</span>
+            {it.href === "/settings" && streak > 0 ? (
+              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
+                🔥 {streak}일차
+              </span>
+            ) : null}
           </Link>
         );
       })}

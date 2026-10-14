@@ -67,7 +67,7 @@ function parseChatLines(story: string): ChatLine[] {
 export function mockStoryboard(input: MockStoryboardInput): Storyboard {
   const now = new Date().toISOString();
   const id = idMaker();
-  const count = Math.max(4, Math.min(10, input.cutCount));
+  const count = Math.max(1, Math.min(20, input.cutCount));
 
   const chatLines = parseChatLines(input.story);
   const isChat = chatLines.length >= 2;

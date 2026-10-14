@@ -16,10 +16,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const repo = await getRepository();
-  const [credit, series, profile] = await Promise.all([
+  const [credit, series, profile, attendance] = await Promise.all([
     repo.getCredit(),
     repo.listSeries(),
     repo.getProfile(),
+    repo.getAttendance(),
   ]);
   const seriesHref = "/series";
   const isAdmin = Boolean(session.isAdmin);
@@ -57,7 +58,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <Link href="/home" className="px-2.5 text-title-lg font-extrabold tracking-[-0.03em] text-ink">
             샥<span className="text-brand">툰</span>
           </Link>
-          <SideNav seriesHref={seriesHref} isAdmin={isAdmin} />
+          <SideNav seriesHref={seriesHref} isAdmin={isAdmin} streak={attendance.streak} />
 
           {/* 현재 로그인 세션 사용자 정보 & 로그아웃 & 크레딧 */}
           <div className="flex flex-col gap-2.5 border-t border-border/80 pt-3 md:mt-auto md:px-1.5">
@@ -73,6 +74,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <Badge tone={isAdmin ? "brand" : "neutral"}>
                 {isAdmin ? "관리자" : "일반"}
               </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
+                🔥 {attendance.streak}일차 출석
+              </span>
             </div>
 
             <CreditPill balance={credit.balance} delta={credit.delta} />
@@ -94,7 +101,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* 모바일 전용 하단 탭 내비게이션 바 (md 미만) */}
-      <MobileNav seriesHref={seriesHref} />
+      <MobileNav seriesHref={seriesHref} streak={attendance.streak} />
     </div>
   );
 }

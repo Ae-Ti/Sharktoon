@@ -99,12 +99,22 @@ export default function Page() {
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
-          <Layers className="size-4 text-ink-muted" />
-          <span>컷 수</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
+            <Layers className="size-4 text-ink-muted" />
+            <span>컷 수 선택 (최대 20컷)</span>
+          </div>
+          <span className="text-caption font-bold text-brand">현재 {cutCount}컷</span>
         </div>
-        <div role="group" aria-label="컷 수" className="grid grid-cols-3 gap-2.5">
-          {CUT_CONFIG.map((c) => {
+
+        {/* 빠른 추천 프리셋 */}
+        <div role="group" aria-label="빠른 컷 수 추천" className="grid grid-cols-4 gap-2">
+          {[
+            { count: 4, title: "4컷", desc: "인스타 피드", popular: true },
+            { count: 6, title: "6컷", desc: "기승전결", popular: false },
+            { count: 8, title: "8컷", desc: "풀 스토리", popular: false },
+            { count: 10, title: "10컷", desc: "롱 에피소드", popular: false },
+          ].map((c) => {
             const isSelected = cutCount === c.count;
             return (
               <button
@@ -113,27 +123,56 @@ export default function Page() {
                 aria-pressed={isSelected}
                 onClick={() => set("cutCount", c.count)}
                 className={cn(
-                  "relative flex flex-col items-start gap-0.5 rounded-xl border p-3.5 text-left transition-all cursor-pointer",
+                  "relative flex flex-col items-center justify-center gap-0.5 rounded-xl border p-2.5 text-center transition-all cursor-pointer",
                   isSelected
-                    ? "border-brand bg-brand-tint/40 shadow-xs ring-2 ring-brand/30"
+                    ? "border-brand bg-brand-tint/50 shadow-xs ring-2 ring-brand/30"
                     : "border-border/80 bg-surface-card hover:border-border-control hover:bg-surface-sunken"
                 )}
               >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-body font-bold text-ink">{c.title}</span>
-                  {c.recommend && (
-                    <Badge tone="brand" className="text-[10px] px-1.5 py-0">
-                      인기
-                    </Badge>
-                  )}
-                  {isSelected && !c.recommend && (
-                    <Check className="size-3.5 text-brand" />
-                  )}
-                </div>
-                <span className="text-caption text-ink-muted">{c.desc}</span>
+                <span className="text-body font-bold text-ink">{c.title}</span>
+                <span className="text-[10px] text-ink-muted">{c.desc}</span>
+                {c.popular && (
+                  <span className="absolute -top-1.5 right-1 rounded-full bg-brand px-1 py-0 text-[9px] font-bold text-on-brand shadow-2xs">
+                    인기
+                  </span>
+                )}
               </button>
             );
           })}
+        </div>
+
+        {/* 직접 컷 수 조절 스텝퍼 (1 ~ 20컷) */}
+        <div className="flex items-center justify-between rounded-xl border border-border/80 bg-surface-card p-3 shadow-2xs">
+          <span className="text-caption font-medium text-ink-muted">직접 컷 수 설정</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={cutCount <= 1}
+              onClick={() => set("cutCount", Math.max(1, cutCount - 1))}
+              className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-sunken text-body font-bold text-ink hover:bg-surface-card disabled:opacity-30 cursor-pointer"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={cutCount}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val >= 1 && val <= 20) set("cutCount", val);
+              }}
+              className="w-14 text-center font-bold text-title text-ink rounded-md border border-border bg-surface-card py-1 focus:border-brand focus:outline-hidden"
+            />
+            <button
+              type="button"
+              disabled={cutCount >= 20}
+              onClick={() => set("cutCount", Math.min(20, cutCount + 1))}
+              className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-sunken text-body font-bold text-ink hover:bg-surface-card disabled:opacity-30 cursor-pointer"
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
 

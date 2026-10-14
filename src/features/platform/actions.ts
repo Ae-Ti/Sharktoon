@@ -243,7 +243,7 @@ export async function startEpisodeAction(input: {
     const repo = await getRepository();
     const story = input.story.trim().slice(0, 500);
     if (!story) throw new Error("사연을 적어 주세요.");
-    if (![4, 6, 8].includes(input.cutCount)) throw new Error("컷 수는 4, 6, 8 중에서 골라 주세요.");
+    if (input.cutCount < 1 || input.cutCount > 20) throw new Error("컷 수는 1컷에서 최대 20컷 사이로 선택해 주세요.");
     const r = await repo.startEpisode({ ...input, story });
     revalidatePath("/home");
     return { ok: true, ...r };

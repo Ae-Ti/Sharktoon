@@ -33,7 +33,7 @@ export interface OnboardingState {
   style: StylePreset;
   tags: string;
   story: string;
-  cutCount: 4 | 6 | 8;
+  cutCount: number;
   /** 고른 셀카. 서버에 올리기 전까지 브라우저에만 있다. */
   selfie: File | null;
   /** 만들어진 캐릭터 에셋. 사연 단계에서 새 시리즈에 붙인다. */

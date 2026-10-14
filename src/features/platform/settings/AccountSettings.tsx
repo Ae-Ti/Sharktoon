@@ -35,13 +35,22 @@ export interface AccountSettingsProps {
   quote: RefundQuote;
   refund: RefundRequest | null;
   account: AccountStatus;
+  attendanceStreak?: number;
 }
 
 /**
- * 계정 설정 — 크레딧 내역, 환불, 탈퇴. 약관 제8조·제14조가 약속한 것을 화면으로 옮긴 것이다.
- * 탈퇴 전에 환불받을 수 있는 유료 크레딧을 먼저 보여준다(약관 제14조 제5항).
+ * 마이페이지 — 프로필, 출석 현황, 크레딧 내역, 환불, 탈퇴.
  */
-export function AccountSettings({ name, plan, credit, policy, quote, refund, account }: AccountSettingsProps) {
+export function AccountSettings({
+  name,
+  plan,
+  credit,
+  policy,
+  quote,
+  refund,
+  account,
+  attendanceStreak = 0,
+}: AccountSettingsProps) {
   const [pending, start] = useTransition();
   const [notice, setNotice] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -62,9 +71,9 @@ export function AccountSettings({ name, plan, credit, policy, quote, refund, acc
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <div>
-        <h1 className="text-title-lg font-bold">계정 설정</h1>
+        <h1 className="text-title-lg font-bold">마이페이지</h1>
         <p className="text-body-sm text-ink-muted">
-          크레딧 보유 현황, 환불 정책 및 계정 상태를 관리할 수 있습니다.
+          내 프로필과 출석 현황, 크레딧 보유량 및 계정 상태를 관리할 수 있습니다.
         </p>
       </div>
 
@@ -91,11 +100,18 @@ export function AccountSettings({ name, plan, credit, policy, quote, refund, acc
 
       <section className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-brand-tint text-brand">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-brand-tint text-brand">
               <User className="size-4" />
             </span>
-            <h2 className="text-title font-semibold">{name ?? "내 계정"}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-title font-semibold">{name ?? "내 계정"}</h2>
+              {attendanceStreak > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-caption font-bold text-brand">
+                  🔥 {attendanceStreak}일차 출석
+                </span>
+              )}
+            </div>
           </div>
           <Badge tone="brand">{PLAN_LABEL[plan]}</Badge>
         </div>

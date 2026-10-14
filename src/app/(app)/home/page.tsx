@@ -31,13 +31,13 @@ export default async function Page() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
         <ButtonLink
-          href="/onboarding/character"
-          size="md"
+          href={series.length > 0 ? "/episodes/new" : "/onboarding/character"}
+          size="lg"
           variant="primary"
-          className="h-11 px-5 shadow-xs hover:shadow transition-all w-full sm:w-auto justify-center"
+          className="h-12 px-6 text-body font-extrabold shadow-sm hover:shadow-md ring-4 ring-brand/15 transition-all w-full sm:w-auto justify-center"
         >
-          <Plus className="size-5 shrink-0" />
-          <span className="font-bold">새 인스타툰 만들기</span>
+          <Plus className="size-5 shrink-0 stroke-[2.5]" />
+          <span>새 인스타툰 만들기</span>
         </ButtonLink>
       </div>
 
@@ -60,7 +60,9 @@ export default async function Page() {
             </span>
             <ButtonLink
               href={`/episodes/${resumable.episodeId}/${RESUME[resumable.status].path}`}
-              size="sm"
+              size="md"
+              variant="primary"
+              className="h-11 px-6 font-bold shrink-0 shadow-xs"
             >
               {RESUME[resumable.status].label}
             </ButtonLink>
