@@ -59,7 +59,17 @@ export default async function Page({
   // 컷 스트립은 콘티 순서다. 아직 이미지가 없는 컷도 자리를 보여준다.
   const strip = saved.storyboard.cuts.map((c) => {
     const r = records.find((x) => x.cutId === c.id);
-    return { cutId: c.id, index: c.index, imageUrl: r?.imageUrl ?? null };
+    const cutTree = r?.imageUrl
+      ? r.layerTree
+        ? hydrateLayerTree(r.layerTree, c.id, r.imageUrl)
+        : buildLayerTree({
+            storyboard: saved.storyboard,
+            cut: c,
+            imageUrl: r.imageUrl,
+            aspectRatio: context.rule.aspectRatio,
+          })
+      : null;
+    return { cutId: c.id, index: c.index, imageUrl: r?.imageUrl ?? null, tree: cutTree };
   });
 
   return (

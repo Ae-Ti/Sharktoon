@@ -68,6 +68,7 @@ export interface EditorStripCut {
   cutId: string;
   index: number;
   imageUrl: string | null;
+  tree?: CutLayerTree | null;
 }
 
 export interface CutEditorScreenProps {
@@ -95,6 +96,8 @@ export function CutEditorScreen({
   const [cutToDelete, setCutToDelete] = useState<EditorStripCut | null>(null);
   const [isDeletingCut, setIsDeletingCut] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [renderingViewer, setRenderingViewer] = useState(false);
+  const [viewerCuts, setViewerCuts] = useState<{ cutId: string; imageUrl?: string; index: number }[]>([]);
   const [mobileTab, setMobileTab] = useState<"layers" | "inspector">("layers");
 
   async function handleConfirmDeleteCut() {
@@ -158,6 +161,42 @@ export function CutEditorScreen({
     [editor, tree],
   );
 
+  const handleOpenViewer = useCallback(async () => {
+    setRenderingViewer(true);
+    try {
+      const { renderCutDataUrl } = await import("../editor/exportCarousel");
+      const exportRatio = canvasH > canvasW ? "4:5" : "1:1";
+      const rendered = await Promise.all(
+        cuts.map(async (c) => {
+          const cutTree = c.cutId === initialTree.cutId ? editor.tree : c.tree;
+          if (cutTree) {
+            try {
+              const url = await renderCutDataUrl(cutTree, { ratio: exportRatio, watermark: false });
+              return { cutId: c.cutId, imageUrl: url, index: c.index };
+            } catch (err) {
+              console.error(`Failed to render cut ${c.index}:`, err);
+            }
+          }
+          return { cutId: c.cutId, imageUrl: c.imageUrl ?? undefined, index: c.index };
+        }),
+      );
+      setViewerCuts(rendered);
+      setViewerOpen(true);
+    } catch (e) {
+      console.error(e);
+      setViewerCuts(
+        cuts.map((c) => ({
+          cutId: c.cutId,
+          imageUrl: c.imageUrl ?? undefined,
+          index: c.index,
+        })),
+      );
+      setViewerOpen(true);
+    } finally {
+      setRenderingViewer(false);
+    }
+  }, [canvasH, canvasW, cuts, editor.tree, initialTree.cutId]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page">
       <EpisodeHeader
@@ -171,7 +210,8 @@ export function CutEditorScreen({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setViewerOpen(true)}
+              loading={renderingViewer}
+              onClick={handleOpenViewer}
             >
               <BookOpen className="mr-1.5 h-3.5 w-3.5" />
               웹툰 뷰어
@@ -416,11 +456,15 @@ export function CutEditorScreen({
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
         title={`${seriesTitle} - ${episodeTitle}`}
-        cuts={cuts.map((c) => ({
-          cutId: c.cutId,
-          imageUrl: c.imageUrl ?? undefined,
-          index: c.index,
-        }))}
+        cuts={
+          viewerCuts.length > 0
+            ? viewerCuts
+            : cuts.map((c) => ({
+                cutId: c.cutId,
+                imageUrl: c.imageUrl ?? undefined,
+                index: c.index,
+              }))
+        }
       />
     </div>
   );

@@ -37,6 +37,15 @@ export async function renderCutPng(tree: CutLayerTree, options: ExportOptions): 
   return withAiMetadata(new Uint8Array(await blob.arrayBuffer()));
 }
 
+/** 컷 하나를 PNG Data URL 로 변환 (대사·말풍선이 합성된 완성본). 웹툰/인스타 뷰어 미리보기용. */
+export async function renderCutDataUrl(tree: CutLayerTree, options?: Partial<ExportOptions>): Promise<string> {
+  const native = await renderTree(tree);
+  const ratio = options?.ratio ?? "1:1";
+  const watermark = options?.watermark ?? false;
+  const framed = frame(native, { ratio, watermark });
+  return framed.toDataURL("image/png");
+}
+
 /** 컷들을 순서대로 01.png, 02.png … 로 묶은 ZIP. 지정된 썸네일이 있으면 thumbnail.png 도 함께 포함한다. */
 export async function exportCarouselZip(
   trees: CutLayerTree[],
@@ -131,8 +140,8 @@ function frame(source: HTMLCanvasElement, { ratio, watermark }: ExportOptions): 
     ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     ctx.fillStyle = "rgba(18,24,32,0.55)";
-    ctx.strokeText("샥툰으로 만듦", width - 24, height - 20);
-    ctx.fillText("샥툰으로 만듦", width - 24, height - 20);
+    ctx.strokeText("샥툰", width - 24, height - 20);
+    ctx.fillText("샥툰", width - 24, height - 20);
   }
   return out;
 }

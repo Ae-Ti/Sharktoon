@@ -59,6 +59,8 @@ export function PublishScreen(props: PublishScreenProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [published, setPublished] = useState(props.published);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [renderingViewer, setRenderingViewer] = useState(false);
+  const [compositeUrls, setCompositeUrls] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const started = useRef(false);
 
@@ -66,6 +68,64 @@ export function PublishScreen(props: PublishScreenProps) {
   const isFirstCutThumb = thumbnailCutId === (props.slides[0]?.cutId ?? "");
 
   const missing = props.slides.filter((s) => !s.tree);
+
+  // 대사/말풍선이 합성된 완성본 썸네일/뷰어용 이미지를 백그라운드에서 점진적 합성
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { renderCutDataUrl } = await import("../editor/exportCarousel");
+        for (const s of props.slides) {
+          if (!active) break;
+          if (s.tree && !compositeUrls[s.cutId]) {
+            try {
+              const url = await renderCutDataUrl(s.tree, { ratio, watermark: false });
+              if (active) {
+                setCompositeUrls((prev) => ({ ...prev, [s.cutId]: url }));
+              }
+            } catch (err) {
+              console.error(`Failed to render composite for cut ${s.index}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load exportCarousel", err);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [props.slides, ratio]);
+
+  const handleOpenViewer = async () => {
+    setRenderingViewer(true);
+    try {
+      const { renderCutDataUrl } = await import("../editor/exportCarousel");
+      const updates: Record<string, string> = {};
+      await Promise.all(
+        props.slides.map(async (s) => {
+          if (compositeUrls[s.cutId]) return;
+          if (s.tree) {
+            try {
+              const url = await renderCutDataUrl(s.tree, { ratio, watermark: false });
+              updates[s.cutId] = url;
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        }),
+      );
+      if (Object.keys(updates).length > 0) {
+        setCompositeUrls((prev) => ({ ...prev, ...updates }));
+      }
+      setViewerOpen(true);
+    } catch (e) {
+      console.error(e);
+      setViewerOpen(true);
+    } finally {
+      setRenderingViewer(false);
+    }
+  };
 
   // 패키지가 없으면 열자마자 만든다. 캡션 생성은 크레딧을 쓰지 않는다.
   useEffect(() => {
@@ -162,7 +222,8 @@ export function PublishScreen(props: PublishScreenProps) {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setViewerOpen(true)}
+                loading={renderingViewer}
+                onClick={handleOpenViewer}
               >
                 <BookOpen className="mr-1.5 h-3.5 w-3.5" />
                 웹툰 뷰어로 보기
@@ -200,6 +261,7 @@ export function PublishScreen(props: PublishScreenProps) {
             <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
               {props.slides.map((s) => {
                 const isThumb = s.cutId === thumbnailCutId;
+                const thumbSrc = compositeUrls[s.cutId] || s.imageUrl;
                 return (
                   <figure
                     key={s.cutId}
@@ -215,9 +277,9 @@ export function PublishScreen(props: PublishScreenProps) {
                           : "border-border group-hover:border-ink-muted/50",
                       )}
                     >
-                      {s.imageUrl ? (
+                      {thumbSrc ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.imageUrl} alt={`${s.index}컷`} className="size-full object-cover" />
+                        <img src={thumbSrc} alt={`${s.index}컷`} className="size-full object-cover" />
                       ) : (
                         <span className="grid size-full place-items-center text-caption text-ink-subtle">
                           아직 없음
@@ -247,7 +309,7 @@ export function PublishScreen(props: PublishScreenProps) {
             </div>
 
             <p className="text-caption text-ink-subtle">
-              미리보기는 생성 이미지예요. 내려받는 PNG 에는 편집기에서 얹은 대사·말풍선이 들어가며, 대표 썸네일은 ZIP 내 <code className="rounded bg-surface-sunken px-1 font-mono text-[11px]">thumbnail.png</code>로도 함께 저장돼요.
+              대사·말풍선이 합성된 완성본 미리보기예요. 웹툰 뷰어에서 인스타 피드/웹툰 스크롤로 감상하고 ZIP으로 내려받으실 수 있어요. 대표 썸네일은 ZIP 내 <code className="rounded bg-surface-sunken px-1 font-mono text-[11px]">thumbnail.png</code>로도 함께 저장돼요.
             </p>
 
             {/* 인스타 게시 액션 영역 */}
@@ -521,7 +583,7 @@ export function PublishScreen(props: PublishScreenProps) {
         hashtags={tags}
         cuts={props.slides.map((s) => ({
           cutId: s.cutId,
-          imageUrl: s.imageUrl ?? undefined,
+          imageUrl: compositeUrls[s.cutId] || s.imageUrl || undefined,
           index: s.index,
         }))}
       />
