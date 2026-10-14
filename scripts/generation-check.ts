@@ -341,9 +341,14 @@ async function main() {
     });
     ok(one.ok, "한 컷 모드 재생성 요청");
     await settle(jobId);
+    const settledOneCutJob = await getJob(jobId, USER);
     ok(
-      (await getJob(jobId, USER))?.cuts[0].attempt === 2,
+      settledOneCutJob?.cuts[0].attempt === 2,
       "한 컷 모드도 시도 횟수를 센다",
+    );
+    ok(
+      settledOneCutJob?.cuts[0].status === "done" && Boolean(settledOneCutJob?.cuts[0].imageUrl),
+      "한 컷 모드로 재생성된 컷이 정상 완료되고 이미지를 갖는다",
     );
 
     const dirty = await regenerateCut({

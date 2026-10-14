@@ -101,6 +101,7 @@ const runCut: CutRunner = async (work: CutWork) => {
     const result = await getImageGenerator(work.job.tier).generateCut({
       cutId: work.cut.cutId,
       index: work.cut.index,
+      attempt: work.cut.attempt,
       episodeId: work.job.episodeId,
       seriesId: work.job.seriesId ?? "",
       intent: work.intent,

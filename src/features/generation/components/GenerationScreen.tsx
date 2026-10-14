@@ -104,11 +104,12 @@ export function GenerationScreen({
   );
 
   /** 액션 결과를 화면 상태로 옮긴다. 크레딧 부족만 시트를 연다. */
-  function handle<T>(result: ActionResult<T>) {
+  function handle<T>(result: ActionResult<T>, onSuccess?: () => void) {
     if (result.ok) {
       setNotice(null);
       // 끝난 잡은 폴링이 멈춰 있다. 다시 돌린 뒤 한 번 받아 오면 폴링이 다시 시작된다.
       void refresh();
+      onSuccess?.();
       return;
     }
     if (result.kind === "credit") {
@@ -331,17 +332,17 @@ export function GenerationScreen({
                 disabled={!pickedCut}
                 onClick={() =>
                   startTransition(async () => {
-                    handle(
-                      await regenerateCutAction({
-                        episodeId: job.episodeId,
-                        jobId: job.id,
-                        cutId: pickedCut,
-                        intent,
-                        prompt: prompt.trim() || undefined,
-                      }),
-                    );
-                    setPrompt("");
-                    setTab(0);
+                    const res = await regenerateCutAction({
+                      episodeId: job.episodeId,
+                      jobId: job.id,
+                      cutId: pickedCut,
+                      intent,
+                      prompt: prompt.trim() || undefined,
+                    });
+                    handle(res, () => {
+                      setPrompt("");
+                      setTab(0);
+                    });
                   })
                 }
               >

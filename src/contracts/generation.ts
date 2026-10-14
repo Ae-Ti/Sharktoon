@@ -72,6 +72,8 @@ export interface CutGenerationRequest {
   cutId: string;
   /** 1부터. 컷 순서. */
   index: number;
+  /** 시도 횟수(재생성 시 증가하여 다른 시드를 생성하도록 지원). */
+  attempt?: number;
   episodeId: string;
   seriesId: string;
   intent: CutEditIntent;

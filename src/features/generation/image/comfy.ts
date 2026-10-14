@@ -312,7 +312,7 @@ export class ComfyUIGenerator implements ImageGenerator {
     const is4to5 = req.seriesRule?.aspectRatio === "4:5";
     const width = is4to5 ? 1080 : 1024;
     const height = is4to5 ? 1350 : 1024;
-    const seed = getEpisodeSeed(req.episodeId, req.index);
+    const seed = getEpisodeSeed(req.episodeId, req.index, req.attempt ?? 1);
 
     const cutText = req.prompt;
     const visualScene = await translateToVisualEnglishPrompt(cutText, apiKey);

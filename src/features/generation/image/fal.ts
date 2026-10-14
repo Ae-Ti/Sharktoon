@@ -48,7 +48,7 @@ export function resolveStylePrompt(style?: string): string {
   }
 }
 
-export function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number {
+export function getEpisodeSeed(episodeId?: string, cutIndex: number = 1, attempt: number = 1): number {
   if (!episodeId) return 42;
   let hash = 0;
   for (let i = 0; i < episodeId.length; i++) {
@@ -56,7 +56,8 @@ export function getEpisodeSeed(episodeId?: string, cutIndex: number = 1): number
   }
   const baseSeed = hash % 2000000000;
   // Sequential latent clustering: use tight seed step (x 3) so cuts in the same episode share the same artistic manifold
-  return (baseSeed + (cutIndex - 1) * 3) % 2147483647;
+  // If attempt > 1 (one-cut regeneration), offset by prime stride to get fresh composition
+  return (baseSeed + (cutIndex - 1) * 3 + (attempt - 1) * 7919) % 2147483647;
 }
 
 export function enhancePropsAndActions(text: string): string {
@@ -217,7 +218,7 @@ export class FalFluxGenerator implements ImageGenerator {
       ? `[Animal Consistency]: A small adult domestic Korean shorthair orange tabby cat (white chest and paws, realistic quadruped cat anatomy, natural body size about 4kg, strictly NO clothes on cat, NO clothes zipper on cat, natural feline fur, natural paws).`
       : "";
 
-    const seed = getEpisodeSeed(req.episodeId, req.index);
+    const seed = getEpisodeSeed(req.episodeId, req.index, req.attempt ?? 1);
 
     const negative_prompt = [
       "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
