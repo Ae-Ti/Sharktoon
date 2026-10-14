@@ -495,7 +495,7 @@ export class ComfyUIGenerator implements ImageGenerator {
   }
 
   supportsInpainting(): boolean {
-    return true;
+    return false;
   }
 }
 

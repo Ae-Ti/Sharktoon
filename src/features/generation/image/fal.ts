@@ -541,6 +541,6 @@ export class FalFluxGenerator implements ImageGenerator {
   }
 
   supportsInpainting(): boolean {
-    return true;
+    return false;
   }
 }

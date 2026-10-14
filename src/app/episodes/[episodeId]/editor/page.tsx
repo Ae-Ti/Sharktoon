@@ -3,7 +3,6 @@ import { CutEditorScreen } from "@/features/generation/components/CutEditorScree
 import { getGenerationStore } from "@/features/generation/data";
 import { buildLayerTree, hydrateLayerTree } from "@/features/generation/editor/buildLayerTree";
 import { titlesOf } from "@/features/generation/episodeTitle";
-import { getImageGenerator } from "@/features/generation/image";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
 
@@ -72,7 +71,6 @@ export default async function Page({
       cuts={strip}
       tree={tree}
       credits={credit.balance}
-      supportsInpainting={getImageGenerator().supportsInpainting()}
       {...titlesOf(context)}
     />
   );

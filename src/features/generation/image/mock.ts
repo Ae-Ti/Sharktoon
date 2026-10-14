@@ -77,7 +77,7 @@ export class MockImageGenerator implements ImageGenerator {
 
   /** 부분 재생성(인페인팅) 지원 여부 */
   supportsInpainting(): boolean {
-    return true;
+    return false;
   }
 }
 

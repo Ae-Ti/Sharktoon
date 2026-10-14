@@ -76,10 +76,10 @@ function runVerification() {
 
   console.log("\n=== 2. ComfyUIGenerator 인스턴스 검증 ===");
   const generator = new ComfyUIGenerator();
-  if (!generator.supportsInpainting()) {
-    throw new Error("ComfyUIGenerator는 inpainting을 지원해야 합니다.");
+  if (generator.supportsInpainting()) {
+    throw new Error("ComfyUIGenerator는 inpainting이 비활성화(false)되어 있어야 합니다.");
   }
-  console.log("✅ ComfyUIGenerator supportsInpainting: true");
+  console.log("✅ ComfyUIGenerator supportsInpainting: false (비활성화 확인)");
   console.log("✅ 모든 테스트 성공 완료!\n");
 }
 

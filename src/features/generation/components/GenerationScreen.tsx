@@ -267,13 +267,6 @@ export function GenerationScreen({
                   />
                 ))}
               </div>
-
-              {!supportsInpainting && (
-                <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
-                  선택 영역만 다시 그리기는 모델 검증(오픈 이슈 3)이 끝나면 열립니다.
-                </p>
-              )}
-
               <Field
                 label="어떻게 바꿀까요"
                 multiline

@@ -6,9 +6,8 @@ import { useCallback, useMemo, useState } from "react";
 import { Badge, Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
-import { CREDIT_COST } from "@/contracts/credit";
-import { regenerateCutAction, saveLayerTreeAction } from "../actions";
-import { DEFAULT_TOON_FONT, TOON_FONTS, ensureToonFont } from "../editor/fonts";
+import { saveLayerTreeAction } from "../actions";
+import { TOON_FONTS, ensureToonFont } from "../editor/fonts";
 import {
   BALLOON_LABEL,
   isVectorTextLayer,
@@ -21,11 +20,9 @@ import {
 import { useEditor } from "../editor/useEditor";
 import { useMeasuredSize } from "../editor/useMeasuredSize";
 import {
-  ElementPalette,
   buildLayerFromPreset,
   type ElementPresetId,
 } from "../editor/ElementPalette";
-import { exportMaskToDataUrl, type MaskLine } from "../editor/EditorCanvas";
 import { motion } from "framer-motion";
 import {
   Undo2,
@@ -36,15 +33,12 @@ import {
   Flame,
   Zap,
   Type,
-  Layers,
+  PanelBottom,
+  Heading,
   Sparkles,
   ChevronUp,
   ChevronDown,
   BookOpen,
-  Paintbrush,
-  Eraser,
-  RotateCcw,
-  Loader2,
 } from "lucide-react";
 import { EpisodeHeader } from "./EpisodeHeader";
 
@@ -84,8 +78,6 @@ export interface CutEditorScreenProps {
   cuts: EditorStripCut[];
   tree: CutLayerTree;
   credits: number;
-  /** ImageGenerator.supportsInpainting(). 꺼져 있으면 부분 재생성 UI 를 아예 감춘다. */
-  supportsInpainting?: boolean;
   seriesTitle: string;
   episodeTitle: string;
 }
@@ -93,17 +85,15 @@ export interface CutEditorScreenProps {
 /** PRD 3.2 — 레이어 기반 컷 편집기. */
 export function CutEditorScreen({
   episodeId,
-  jobId,
+  jobId: _jobId,
   cuts,
   tree: initialTree,
   credits,
-  supportsInpainting = false,
   seriesTitle,
   episodeTitle,
 }: CutEditorScreenProps) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
-  const [asideTab, setAsideTab] = useState<"elements" | "layers">("elements");
   const [viewerOpen, setViewerOpen] = useState(false);
 
   // 캔버스와 컷의 실제 규격(1:1 또는 4:5)을 정확히 유지하여 세로 왜곡/늘어남 방지
@@ -136,86 +126,6 @@ export function CutEditorScreen({
   );
   const editor = useEditor({ initial: normalizedTree, save });
   const { tree, selected, selectedId } = editor;
-
-  // 부분 수정 (인페인팅 마스크) 상태
-  const [isMaskMode, setIsMaskMode] = useState(false);
-  const [brushTool, setBrushTool] = useState<"brush" | "eraser">("brush");
-  const [brushSize, setBrushSize] = useState<number>(45);
-  const [maskLines, setMaskLines] = useState<MaskLine[]>([]);
-  const [inpaintPrompt, setInpaintPrompt] = useState("");
-  const [isSubmittingInpaint, setIsSubmittingInpaint] = useState(false);
-  const [inpaintError, setInpaintError] = useState<string | null>(null);
-
-  const handleInpaintSubmit = useCallback(async () => {
-    if (maskLines.length === 0) {
-      setInpaintError("캔버스에서 고칠 영역을 먼저 칠해 주세요.");
-      return;
-    }
-    setIsSubmittingInpaint(true);
-    setInpaintError(null);
-
-    try {
-      const maskUrl = exportMaskToDataUrl(maskLines, canvasW, canvasH);
-      const res = await regenerateCutAction({
-        episodeId,
-        jobId: jobId ?? undefined,
-        cutId: tree.cutId,
-        intent: "inpaint_mask",
-        prompt: inpaintPrompt.trim() || undefined,
-        maskUrl,
-      });
-
-      if (!res.ok) {
-        setInpaintError(res.message);
-        setIsSubmittingInpaint(false);
-        return;
-      }
-
-      // 성공적으로 큐에 등록됨 -> 마스크 모드 닫기 및 폴링 시작
-      setMaskLines([]);
-      setIsMaskMode(false);
-
-      if (jobId) {
-        const interval = setInterval(async () => {
-          try {
-            const pollRes = await fetch(`/api/jobs/${jobId}`);
-            if (!pollRes.ok) return;
-            const data = await pollRes.json();
-            const thisCut = data.job?.cuts?.find((c: { cutId: string }) => c.cutId === tree.cutId);
-            if (thisCut?.status === "done" && thisCut.imageUrl) {
-              clearInterval(interval);
-              setIsSubmittingInpaint(false);
-              const bg = tree.layers.find((l) => l.kind === "background");
-              if (bg) {
-                editor.update(bg.id, (l) => ({ ...l, url: thisCut.imageUrl }));
-              }
-              router.refresh();
-            } else if (thisCut?.status === "failed") {
-              clearInterval(interval);
-              setIsSubmittingInpaint(false);
-              setInpaintError(thisCut.error ?? "부분 생성에 실패했어요");
-            }
-          } catch {
-            // 네트워크 오류 시 무시하고 다음 틱 대기
-          }
-        }, 1500);
-
-        setTimeout(() => {
-          clearInterval(interval);
-          setIsSubmittingInpaint(false);
-          router.refresh();
-        }, 60000);
-      } else {
-        setTimeout(() => {
-          setIsSubmittingInpaint(false);
-          router.refresh();
-        }, 3000);
-      }
-    } catch (e) {
-      setInpaintError(e instanceof Error ? e.message : "부분 재생성에 실패했어요");
-      setIsSubmittingInpaint(false);
-    }
-  }, [canvasH, canvasW, editor, episodeId, inpaintPrompt, jobId, maskLines, router, tree.cutId, tree.layers]);
 
   // 위에 그려지는 레이어가 목록 맨 위로 오도록 뒤집는다. z 순서와 목록 순서가 반대다.
   const rows = [...tree.layers].reverse();
@@ -278,13 +188,6 @@ export function CutEditorScreen({
           aria-label="캔버스"
           className="relative grid min-h-[320px] place-items-center overflow-hidden rounded-2xl border border-border/80 bg-surface-sunken p-4 shadow-inner"
         >
-          {isMaskMode && (
-            <div className="pointer-events-none absolute top-4 z-10 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-card/95 px-4 py-1.5 text-caption font-semibold text-accent shadow-md backdrop-blur-md">
-              <Paintbrush className="size-3.5 animate-pulse" />
-              <span>고치고 싶은 영역을 마우스나 터치로 칠해 주세요</span>
-            </div>
-          )}
-
           {size > 0 && (
             <EditorCanvas
               tree={tree}
@@ -295,54 +198,15 @@ export function CutEditorScreen({
               onPreviewBox={editor.previewBox}
               onPreviewTail={editor.previewTail}
               onCommit={editor.commitDrag}
-              isMaskMode={isMaskMode}
-              brushTool={brushTool}
-              brushSize={brushSize}
-              maskLines={maskLines}
-              onMaskLinesChange={setMaskLines}
             />
           )}
         </section>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-          {/* 사이드바 탭: 요소 라이브러리 vs 레이어 순서 */}
-          <div className="flex rounded-xl bg-surface-sunken p-1 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setAsideTab("elements")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-center text-label font-semibold transition-all",
-                asideTab === "elements"
-                  ? "bg-surface-card text-ink shadow-2xs"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              <MessageSquare className="size-3.5" />
-              <span>말풍선 & 요소</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAsideTab("layers")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-center text-label font-semibold transition-all",
-                asideTab === "layers"
-                  ? "bg-surface-card text-ink shadow-2xs"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              <Layers className="size-3.5" />
-              <span>레이어 ({rows.length})</span>
-            </button>
-          </div>
-
-          {asideTab === "elements" && (
-            <Panel title="말풍선 & 텍스트 추가" caption="클릭하면 캔버스에 즉시 추가돼요.">
-              <ElementPalette onSelectPreset={handleAddPreset} />
-            </Panel>
-          )}
-
-          {asideTab === "layers" && (
-            <Panel title="레이어 순서" caption="위에 있는 것이 앞에 그려져요.">
+          <Panel
+            title={`레이어 (${rows.length})`}
+            caption="위에 있는 것이 앞에 그려져요. 추가는 상단 툴바에서 해요."
+          >
               <div role="listbox" aria-label="레이어" className="flex flex-col">
                 {rows.map((layer, rowIndex) => {
                   const z = tree.layers.length - 1 - rowIndex;
@@ -369,7 +233,6 @@ export function CutEditorScreen({
                 })}
               </div>
             </Panel>
-          )}
 
           {selected && (
             <LayerInspector
@@ -452,155 +315,6 @@ export function CutEditorScreen({
             />
           )}
 
-          <Panel
-            title="부분만 다시 만들기"
-            caption="고치고 싶은 영역만 칠해서 수정해요. 크레딧이 절반(0.5)만 들어요."
-          >
-            {supportsInpainting ? (
-              <div className="flex flex-col gap-3">
-                {/* 1. 브러시 모드 켜기/끄기 토글 */}
-                <div className="flex items-center justify-between rounded-xl border border-border/80 bg-surface-sunken p-2.5 shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "size-2 rounded-full transition-colors",
-                        isMaskMode ? "bg-accent animate-pulse" : "bg-ink-muted/40",
-                      )}
-                    />
-                    <span className="text-label font-semibold text-ink">
-                      {isMaskMode ? "영역 칠하기 모드" : "브러시 꺼짐"}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={isMaskMode ? "primary" : "secondary"}
-                    onClick={() => setIsMaskMode((v) => !v)}
-                  >
-                    <Paintbrush className="mr-1.5 size-3.5" />
-                    {isMaskMode ? "칠하기 완료" : "영역 칠하기"}
-                  </Button>
-                </div>
-
-                {/* 2. 브러시 설정 패널 (모드 ON일 때 확장) */}
-                {isMaskMode && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="flex flex-col gap-2.5 rounded-xl border border-accent/25 bg-accent/5 p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-caption font-semibold text-accent">도구</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setBrushTool("brush")}
-                          className={cn(
-                            "flex items-center gap-1 rounded-md px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer",
-                            brushTool === "brush"
-                              ? "bg-accent text-white shadow-2xs"
-                              : "bg-surface-card text-ink-muted hover:text-ink",
-                          )}
-                        >
-                          <Paintbrush className="size-3" />
-                          브러시
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBrushTool("eraser")}
-                          className={cn(
-                            "flex items-center gap-1 rounded-md px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer",
-                            brushTool === "eraser"
-                              ? "bg-accent text-white shadow-2xs"
-                              : "bg-surface-card text-ink-muted hover:text-ink",
-                          )}
-                        >
-                          <Eraser className="size-3" />
-                          지우개
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-caption text-ink-muted">굵기</span>
-                      <div className="flex items-center gap-1">
-                        {([
-                          { label: "소 (20px)", size: 20 },
-                          { label: "중 (45px)", size: 45 },
-                          { label: "대 (80px)", size: 80 },
-                        ] as const).map((b) => (
-                          <button
-                            key={b.size}
-                            type="button"
-                            onClick={() => setBrushSize(b.size)}
-                            className={cn(
-                              "rounded-md px-2 py-0.5 text-caption transition-colors cursor-pointer",
-                              brushSize === b.size
-                                ? "bg-surface-card font-bold text-ink shadow-2xs border border-border"
-                                : "text-ink-muted hover:text-ink",
-                            )}
-                          >
-                            {b.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1 border-t border-accent/15">
-                      <span className="text-caption text-ink-muted">
-                        {maskLines.length > 0
-                          ? `칠한 획: ${maskLines.length}개`
-                          : "캔버스를 드래그해 칠하세요"}
-                      </span>
-                      {maskLines.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setMaskLines([])}
-                          className="flex items-center gap-1 text-caption text-ink-muted hover:text-danger cursor-pointer"
-                        >
-                          <RotateCcw className="size-3" />
-                          칠한 영역 비우기
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* 3. 인페인팅 지시문 입력 */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-label font-medium text-ink">
-                    어떻게 고칠까요?
-                  </label>
-                  <input
-                    type="text"
-                    value={inpaintPrompt}
-                    onChange={(e) => setInpaintPrompt(e.target.value)}
-                    placeholder="예: 살짝 미소 짓는 표정으로, 고양이 눈동자를 크게..."
-                    className="w-full rounded-xl border border-border/80 bg-surface-card px-3 py-2 text-body-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  {inpaintError && (
-                    <p className="text-caption text-danger">{inpaintError}</p>
-                  )}
-                </div>
-
-                {/* 4. 실행 버튼 */}
-                <Button
-                  variant="primary"
-                  cost={CREDIT_COST.partialRegenerate}
-                  block
-                  disabled={isSubmittingInpaint || maskLines.length === 0}
-                  loading={isSubmittingInpaint}
-                  onClick={handleInpaintSubmit}
-                >
-                  {isSubmittingInpaint ? "부분 생성 중..." : "칠한 곳만 다시 만들기 (0.5 크레딧)"}
-                </Button>
-              </div>
-            ) : (
-              <p className="text-body-sm text-ink-muted">
-                모델 검증(오픈 이슈 3)이 끝나면 열려요. 지금은 생성 화면의 한 컷 모드에서
-                표정·배경만 바꿀 수 있어요.
-              </p>
-            )}
-          </Panel>
         </aside>
       </div>
 
@@ -675,14 +389,17 @@ function Toolbar({
 
       <span className="mx-2 h-5 w-px bg-border/60" />
 
-      {/* 직관적인 요소 추가 버튼 그룹 (Canva/젠툰 스타일 스튜디오 툴바) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-        <ActionButton icon={<MessageSquare className="size-3.5 text-brand" />} label="말풍선" onClick={() => onAddPreset("balloon_normal")} />
-        <ActionButton icon={<Scroll className="size-3.5 text-amber-600" />} label="나레이션" onClick={() => onAddPreset("narration_top")} />
-        <ActionButton icon={<Cloud className="size-3.5 text-sky-500" />} label="생각" onClick={() => onAddPreset("balloon_thought")} />
-        <ActionButton icon={<Flame className="size-3.5 text-rose-500" />} label="외침" onClick={() => onAddPreset("balloon_shout")} />
-        <ActionButton icon={<Zap className="size-3.5 text-yellow-500" />} label="효과음" onClick={() => onAddPreset("sfx")} />
-        <ActionButton icon={<Type className="size-3.5 text-violet-500" />} label="텍스트" onClick={() => onAddPreset("text")} />
+      {/* 레이어 추가는 이 툴바 한 곳에서만 한다. 우측 패널은 레이어 순서·속성 전용. */}
+      <div role="group" aria-label="레이어 추가" className="flex items-center gap-1.5 overflow-x-auto py-1">
+        {ADD_LAYER_ACTIONS.map((a) => (
+          <ActionButton
+            key={a.id}
+            icon={a.icon}
+            label={a.label}
+            title={a.title}
+            onClick={() => onAddPreset(a.id)}
+          />
+        ))}
       </div>
 
       <span className="ml-auto flex items-center gap-3">
@@ -704,18 +421,37 @@ function Toolbar({
   );
 }
 
+const ADD_LAYER_ACTIONS: {
+  id: ElementPresetId;
+  label: string;
+  title: string;
+  icon: React.ReactNode;
+}[] = [
+  { id: "balloon_normal", label: "말풍선", title: "대사 말풍선", icon: <MessageSquare className="size-3.5 text-brand" /> },
+  { id: "balloon_thought", label: "생각", title: "생각 / 속마음 말풍선", icon: <Cloud className="size-3.5 text-sky-500" /> },
+  { id: "balloon_shout", label: "외침", title: "외침 / 샤우트 말풍선", icon: <Flame className="size-3.5 text-rose-500" /> },
+  { id: "narration_top", label: "상단 나레이션", title: "컷 상단 나레이션 박스", icon: <Scroll className="size-3.5 text-amber-600" /> },
+  { id: "narration_bottom", label: "하단 나레이션", title: "컷 하단 나레이션 박스", icon: <PanelBottom className="size-3.5 text-amber-600" /> },
+  { id: "sfx", label: "효과음", title: "효과음 (SFX)", icon: <Zap className="size-3.5 text-yellow-500" /> },
+  { id: "title_hook", label: "제목", title: "제목 · 후킹 문구", icon: <Heading className="size-3.5 text-brand" /> },
+  { id: "text", label: "텍스트", title: "자유 텍스트", icon: <Type className="size-3.5 text-violet-500" /> },
+];
+
 function ActionButton({
   icon,
   label,
+  title,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  title?: string;
   onClick: () => void;
 }) {
   return (
     <motion.button
       type="button"
+      title={title}
       whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
