@@ -198,13 +198,25 @@ export function GenerationScreen({
           {tab === 0 ? (
             <>
               <CutProgressGrid
-                cuts={job.cuts.map((c) => ({ status: c.status, progress: c.progress, refunded: c.refunded }))}
+                cuts={job.cuts.map((c) => ({
+                  cutId: c.cutId,
+                  index: c.index,
+                  status: c.status,
+                  progress: c.progress,
+                  refunded: c.refunded,
+                  imageUrl: c.imageUrl,
+                }))}
                 title={live ? `이미지 만드는 중 · ${s.percent}%` : "생성 끝"}
                 onRetry={() =>
                   startTransition(async () =>
                     handle(await retryFailedCutsAction({ episodeId: job.episodeId, jobId: job.id })),
                   )
                 }
+                onCutClick={(c) => {
+                  if (c.cutId) {
+                    router.push(`/episodes/${job.episodeId}/editor?cut=${c.cutId}`);
+                  }
+                }}
               />
               {allDone ? (
                 <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-tint px-4 py-3">
@@ -226,57 +238,95 @@ export function GenerationScreen({
               )}
             </>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5">
               <p className="text-body-sm text-ink-muted">
-                컷 하나만 골라서 다시 만들어요. 나머지 컷 결과는 그대로 둡니다.
+                수정할 컷을 선택해 프롬프트나 옵션으로 다시 생성해요.
               </p>
 
-              <div className="flex flex-col gap-2">
-                <span className="text-label font-semibold">컷 고르기</span>
-                <div className="flex flex-wrap gap-2">
-                  {job.cuts.map((c) => (
-                    <button
-                      key={c.cutId}
-                      type="button"
-                      onClick={() => setPickedCut(c.cutId)}
-                      className={cn(
-                        "h-control-sm cursor-pointer rounded-md px-3 text-label font-semibold tabular-nums",
-                        c.cutId === pickedCut
-                          ? "bg-brand text-on-brand"
-                          : "bg-surface-sunken text-ink-muted hover:text-ink",
-                      )}
-                    >
-                      {c.index}컷
-                    </button>
-                  ))}
+              {/* 한 컷 모드에서도 모든 컷의 실제 생성 이미지를 보면서 클릭 선택 */}
+              <div className="flex flex-col gap-2.5">
+                <span className="text-label font-bold text-ink">수정할 컷 선택</span>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
+                  {job.cuts.map((c) => {
+                    const isSelected = c.cutId === pickedCut;
+                    const isDone = c.status === "done" && Boolean(c.imageUrl);
+                    return (
+                      <div
+                        key={c.cutId}
+                        onClick={() => setPickedCut(c.cutId)}
+                        className={cn(
+                          "group relative aspect-square overflow-hidden rounded-xl border-2 cursor-pointer transition-all",
+                          isSelected
+                            ? "border-brand ring-4 ring-brand/20 shadow-md scale-[1.02]"
+                            : "border-border/80 bg-surface-card hover:border-brand/50 hover:shadow-xs",
+                        )}
+                      >
+                        {isDone ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.imageUrl!}
+                            alt={`${c.index}컷`}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex size-full items-center justify-center bg-surface-sunken/40 text-caption text-ink-subtle">
+                            {c.status === "running" ? "생성 중..." : c.status === "failed" ? "생성 실패" : "대기 중"}
+                          </div>
+                        )}
+                        <span
+                          className={cn(
+                            "absolute top-2 left-2 rounded-md px-1.5 py-0.5 text-[11px] font-extrabold shadow-2xs tabular-nums",
+                            isSelected
+                              ? "bg-brand text-white"
+                              : isDone
+                                ? "bg-black/60 text-white backdrop-blur-xs"
+                                : "bg-surface-card/90 text-ink-muted border border-border/80",
+                          )}
+                        >
+                          {c.index}컷
+                        </span>
+                        {isSelected && (
+                          <span className="absolute bottom-2 right-2 rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white shadow-2xs">
+                            선택됨
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="flex flex-col gap-2">
-                {intents.map((it) => (
-                  <ChoiceCard
-                    key={it}
-                    title={CUT_EDIT_INTENT_LABEL[it]}
-                    description={INTENT_RESULT[it]}
-                    selected={intent === it}
-                    onClick={() => setIntent(it)}
-                  />
-                ))}
+                <span className="text-label font-bold text-ink">수정 방식</span>
+                <div className="flex flex-col gap-2">
+                  {intents.map((it) => (
+                    <ChoiceCard
+                      key={it}
+                      title={CUT_EDIT_INTENT_LABEL[it]}
+                      description={INTENT_RESULT[it]}
+                      selected={intent === it}
+                      onClick={() => setIntent(it)}
+                    />
+                  ))}
+                </div>
               </div>
+
               <Field
                 label="어떻게 바꿀까요"
                 multiline
                 rows={3}
                 value={prompt}
                 onChange={setPrompt}
-                placeholder="표정을 조금 더 지쳐 보이게"
-                help="시리즈 그림체와 캐릭터는 자동으로 붙어요. 여기엔 바꿀 것만 적으세요."
+                placeholder="표정을 조금 더 지쳐 보이게, 혹은 배경을 카페로 변경"
+                help="시리즈 그림체와 캐릭터는 자동으로 유지돼요. 여기엔 바꿀 것만 적으세요."
                 maxLength={200}
               />
 
               <Button
                 cost={singleCost}
                 block
+                size="md"
+                className="font-bold"
                 loading={pending}
                 disabled={!pickedCut}
                 onClick={() =>
@@ -295,7 +345,7 @@ export function GenerationScreen({
                   })
                 }
               >
-                이 컷만 다시 만들기
+                {job.cuts.find((c) => c.cutId === pickedCut)?.index ?? ""}컷만 다시 만들기
               </Button>
             </div>
           )}
@@ -470,23 +520,6 @@ export function GenerationScreen({
             </p>
           </motion.section>
         )}
-
-        <section className="flex flex-col gap-3">
-          <h2 className="text-label font-semibold text-ink">
-            먼저 끝난 컷 {doneCuts.length}개
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {job.cuts.map((c) => (
-              <CutTile
-                key={c.cutId}
-                cut={c}
-                onOpen={() =>
-                  router.push(`/episodes/${job.episodeId}/editor?cut=${c.cutId}`)
-                }
-              />
-            ))}
-          </div>
-        </section>
       </main>
 
       {/* 크레딧이 모자라면 버튼을 막는 대신 여기서 막고 충전으로 보낸다(credit.ts 주석). */}
@@ -520,46 +553,5 @@ export function GenerationScreen({
         }))}
       />
     </div>
-  );
-}
-
-function CutTile({ cut, onOpen }: { cut: GenerationJobCut; onOpen: () => void }) {
-  const done = cut.status === "done" && cut.imageUrl;
-
-  return (
-    <figure className="flex flex-col gap-2">
-      <div
-        className={cn(
-          "relative aspect-square overflow-hidden rounded-lg border",
-          done ? "border-border" : "border-dashed border-border-control bg-skeleton",
-        )}
-      >
-        {done ? (
-          // 목 데이터는 SVG data URI 다. 스토리지가 붙으면 next/image 로 바꾼다.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cut.imageUrl} alt={`${cut.index}컷`} className="size-full object-cover" />
-        ) : (
-          <span className="absolute inset-0 grid place-items-center text-caption font-semibold text-ink-subtle">
-            {cut.status === "running"
-              ? `${cut.progress ?? 0}%`
-              : cut.status === "failed"
-                ? "실패"
-                : "대기"}
-          </span>
-        )}
-        <span className="absolute top-1 left-2 text-[11px] font-bold text-ink-muted mix-blend-difference">
-          {cut.index}
-        </span>
-        {done && (
-          <button
-            type="button"
-            onClick={onOpen}
-            className="absolute inset-0 grid cursor-pointer place-items-center bg-overlay text-label font-semibold text-ink-inverse opacity-0 transition-opacity hover:opacity-100"
-          >
-            편집기에서 열기
-          </button>
-        )}
-      </div>
-    </figure>
   );
 }
