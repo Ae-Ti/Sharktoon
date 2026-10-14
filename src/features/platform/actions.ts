@@ -41,16 +41,69 @@ function fail(e: unknown): Fail {
 export async function saveAssetAction(
   id: string | null,
   input: AssetInput,
+  seriesIds?: string[],
 ): Promise<ResultWithId> {
   try {
     const repo = await getRepository();
     const saved = id ? await repo.updateAsset(id, input) : await repo.createAsset(input);
+
+    if (seriesIds !== undefined) {
+      const allSeries = await repo.listSeries();
+      await Promise.all(
+        allSeries.map(async (s) => {
+          const detail = await repo.getSeries(s.id);
+          if (!detail) return;
+          const currentIds = detail.assets.map((a) => a.id);
+          const shouldHave = seriesIds.includes(s.id);
+          const has = currentIds.includes(saved.id);
+
+          if (shouldHave && !has) {
+            await repo.setSeriesAssets(s.id, [...currentIds, saved.id]);
+          } else if (!shouldHave && has) {
+            await repo.setSeriesAssets(
+              s.id,
+              currentIds.filter((cid) => cid !== saved.id),
+            );
+          }
+        }),
+      );
+    }
+
     revalidatePath("/assets");
+    revalidatePath("/series");
     return { ok: true, id: saved.id };
   } catch (e) {
     return fail(e);
   }
 }
+
+/** 에셋을 특정 시리즈에 추가하거나 제외한다. */
+export async function toggleSeriesAssetAction(
+  seriesId: string,
+  assetId: string,
+  attach: boolean,
+): Promise<Result> {
+  try {
+    const repo = await getRepository();
+    const series = await repo.getSeries(seriesId);
+    if (!series) throw new Error("없는 시리즈예요");
+    const currentIds = series.assets.map((a) => a.id);
+    let newIds: string[];
+    if (attach) {
+      if (currentIds.includes(assetId)) return { ok: true };
+      newIds = [...currentIds, assetId];
+    } else {
+      newIds = currentIds.filter((id) => id !== assetId);
+    }
+    await repo.setSeriesAssets(seriesId, newIds);
+    revalidatePath("/assets");
+    revalidatePath(`/series/${seriesId}`);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 
 /**
  * 에셋 레퍼런스 이미지 올리기(PRD 2.1 "각 에셋은 레퍼런스 이미지를 보유한다").

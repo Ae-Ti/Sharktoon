@@ -139,10 +139,19 @@ export default async function Page({
 
       <section className="flex flex-col gap-4 lg:flex-row">
         <div className="flex flex-1 flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
-          <h2 className="text-title font-semibold">에셋 참조</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-title font-semibold">에셋 참조</h2>
+            <Link
+              href={`/assets?series=${series.id}`}
+              className="text-caption text-brand hover:underline font-medium"
+            >
+              에셋 라이브러리에서 관리 ↗
+            </Link>
+          </div>
           <p className="text-body-sm text-ink-muted">
             이 시리즈의 모든 회차에 아래 에셋이 고정 레퍼런스로 들어가요.
           </p>
+
           <ul className="flex flex-wrap gap-2.5">
             {series.assets.map((a) => (
               <li

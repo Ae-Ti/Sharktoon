@@ -1,9 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { cn } from "@/lib/cn";
 import { Button, ChoiceCard, Field, Modal } from "@/components/ui";
 import { saveAssetAction, uploadAssetReferenceAction } from "@/features/platform/actions";
 import type { Asset, AssetKind } from "@/features/platform/data/types";
+
+export interface SeriesOption {
+  id: string;
+  title: string;
+  assetIds: string[];
+}
 
 const KINDS: { id: AssetKind; title: string; description: string }[] = [
   { id: "character", title: "캐릭터", description: "회차마다 같은 얼굴로 나올 인물" },
@@ -18,7 +25,10 @@ export interface AssetFormModalProps {
   /** 없으면 새로 만들기. */
   asset?: Asset | null;
   defaultKind: AssetKind;
+  seriesList?: SeriesOption[];
+  defaultSeriesId?: string | null;
 }
+
 
 /**
  * 열 때마다 초기값에서 시작해야 하므로 부모가 key 로 새로 마운트한다.
@@ -29,15 +39,25 @@ export function AssetFormModal({
   onClose,
   asset,
   defaultKind,
+  seriesList,
+  defaultSeriesId,
 }: AssetFormModalProps) {
   const [kind, setKind] = useState<AssetKind>(asset?.kind ?? defaultKind);
   const [name, setName] = useState(asset?.name ?? "");
   const [description, setDescription] = useState(asset?.description ?? "");
   const [tags, setTags] = useState(asset?.tags.join(", ") ?? "");
+  const [selectedSeriesIds, setSelectedSeriesIds] = useState<string[]>(() => {
+    if (asset) {
+      return seriesList?.filter((s) => s.assetIds.includes(asset.id)).map((s) => s.id) ?? [];
+    }
+    if (defaultSeriesId) {
+      return [defaultSeriesId];
+    }
+    return seriesList?.map((s) => s.id) ?? [];
+  });
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-
 
   const tagList = tags
     .split(",")
@@ -57,12 +77,16 @@ export function AssetFormModal({
       return;
     }
     start(async () => {
-      const r = await saveAssetAction(asset?.id ?? null, {
-        kind,
-        name: name.trim(),
-        description: description.trim() || null,
-        tags: tagList,
-      });
+      const r = await saveAssetAction(
+        asset?.id ?? null,
+        {
+          kind,
+          name: name.trim(),
+          description: description.trim() || null,
+          tags: tagList,
+        },
+        seriesList ? selectedSeriesIds : undefined,
+      );
       if (!r.ok) {
         setError(r.message);
         return;
@@ -80,6 +104,7 @@ export function AssetFormModal({
       onClose();
     });
   }
+
 
   return (
     <Modal
@@ -140,10 +165,49 @@ export function AssetFormModal({
         optional
       />
 
+      {seriesList && seriesList.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-label font-semibold text-ink">
+            적용할 시리즈 <span className="font-normal text-ink-subtle">(선택 시 고정 레퍼런스로 반영)</span>
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {seriesList.map((s) => {
+              const checked = selectedSeriesIds.includes(s.id);
+              return (
+                <label
+                  key={s.id}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-body-sm cursor-pointer transition-colors select-none",
+                    checked
+                      ? "border-brand bg-brand-tint/60 text-ink font-semibold"
+                      : "border-border bg-surface-card text-ink-muted hover:border-border-control",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-brand"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedSeriesIds((prev) => [...prev, s.id]);
+                      } else {
+                        setSelectedSeriesIds((prev) => prev.filter((id) => id !== s.id));
+                      }
+                    }}
+                  />
+                  <span>📁 {s.title}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <label className="flex flex-col gap-1.5 text-label">
         <span className="font-semibold text-ink">
           레퍼런스 이미지 <span className="font-normal text-ink-subtle">(선택)</span>
         </span>
+
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp"
