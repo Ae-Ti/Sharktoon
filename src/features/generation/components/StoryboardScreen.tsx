@@ -340,7 +340,7 @@ function StoryboardEditor({
                     ? "bg-surface-card text-ink shadow-2xs font-bold"
                     : "text-ink-muted hover:text-ink",
                 )}
-                title="⚡ 일반 (FLUX Schnell) - 1 크레딧/컷"
+                title="⚡ 일반 모드: 빠른 생성 (컷당 1 크레딧)"
               >
                 ⚡ 일반 (1C)
               </button>
@@ -355,7 +355,7 @@ function StoryboardEditor({
                     ? "bg-brand text-on-brand shadow-2xs font-bold"
                     : "text-ink-muted hover:text-ink",
                 )}
-                title="💎 Pro (ComfyUI 상용급) - 2 크레딧/컷"
+                title="💎 Pro 모드: 더 좋은 고화질과 캐릭터 디테일 유지 (컷당 2 크레딧)"
               >
                 💎 Pro (2C)
               </button>

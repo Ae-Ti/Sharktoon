@@ -169,12 +169,12 @@ export function GenerationScreen({
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface-card px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Badge tone={job.tier === "pro" ? "brand" : "neutral"}>
-              {job.tier === "pro" ? "💎 Pro ComfyUI 모드" : "⚡ 일반 Schnell 모드"}
+              {job.tier === "pro" ? "💎 Pro 모드" : "⚡ 일반 모드"}
             </Badge>
             <span className="text-body-sm font-medium text-ink">
               {job.tier === "pro"
-                ? "상용급 고화질 (PuLID + LoRA + OpenPose) 엔진 가동 중"
-                : "초고속 시안 확인 엔진 가동 중"}
+                ? "캐릭터 디테일과 화질을 높인 고품질 생성 중"
+                : "빠르고 가벼운 표준 생성 중"}
             </span>
           </div>
           <span className="text-caption font-semibold text-brand">
