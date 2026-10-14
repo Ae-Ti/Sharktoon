@@ -321,6 +321,7 @@ function StoryboardEditor({
         episodeTitle={episodeTitle}
         current="storyboard"
         credits={credits}
+        hideActionOnMobile
         action={
           <div className="flex items-center gap-2">
             <div

@@ -23,6 +23,8 @@ export interface EpisodeHeaderProps {
   credits: number;
   /** 이 화면의 주 동작. 오른쪽 끝에 둔다. */
   action?: ReactNode;
+  /** 모바일 화면(하단 고정 바가 있는 경우 등)에서 상단 헤더 액션을 숨김 */
+  hideActionOnMobile?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export function EpisodeHeader({
   current,
   credits,
   action,
+  hideActionOnMobile = false,
 }: EpisodeHeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-card/95 backdrop-blur-md">
@@ -94,7 +97,11 @@ export function EpisodeHeader({
         {/* 우측 영역: 크레딧 + 데스크톱 주 동작 */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           <CreditPill balance={credits} />
-          {action && <div className="hidden md:flex items-center gap-2">{action}</div>}
+          {action && (
+            <div className={cn("items-center gap-2", hideActionOnMobile ? "hidden lg:flex" : "hidden md:flex")}>
+              {action}
+            </div>
+          )}
         </div>
       </div>
 
@@ -123,7 +130,7 @@ export function EpisodeHeader({
       </div>
 
       {/* 3. 모바일 전용 액션 바 (action이 있고 모바일인 경우) */}
-      {action && (
+      {action && !hideActionOnMobile && (
         <div className="border-t border-border/60 bg-surface-card px-3 py-2 md:hidden">
           <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
             {action}
