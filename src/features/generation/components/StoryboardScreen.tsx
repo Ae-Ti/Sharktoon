@@ -246,11 +246,11 @@ function StoryboardEditor({
     });
   }
 
-  /** PRD 3.1.1 — 전체 생성을 큐에 등록하고 진행률 화면으로 넘긴다. */
+  /** PRD 3.1.1 — 전체 생성을 큐에 등록하고 라이브 스튜디오(에디터) 화면으로 넘긴다. */
   function startGeneration() {
     startTransition(async () => {
       const job = handle(await startGenerationAction(sb, tier));
-      if (job) router.push(`/episodes/${sb.episodeId}/generate?job=${job.id}`);
+      if (job) router.push(`/episodes/${sb.episodeId}/editor?job=${job.id}`);
     });
   }
 

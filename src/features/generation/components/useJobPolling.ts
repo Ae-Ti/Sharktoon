@@ -10,14 +10,37 @@ const INTERVAL_MS = 700;
  * 잡 상태 폴링. Supabase Realtime 이 붙으면 이 훅 안만 구독으로 바꾸고
  * 화면은 그대로 둔다.
  */
-export function useJobPolling(initial: GenerationJob, initialBalance: number) {
-  const [job, setJob] = useState(initial);
+export function useJobPolling(
+  initial: GenerationJob,
+  initialBalance: number,
+): {
+  job: GenerationJob;
+  setJob: React.Dispatch<React.SetStateAction<GenerationJob>>;
+  live: boolean;
+  balance: number;
+  refresh: (targetJobId?: string) => Promise<void>;
+};
+export function useJobPolling(
+  initial: GenerationJob | null | undefined,
+  initialBalance: number,
+): {
+  job: GenerationJob | null;
+  setJob: React.Dispatch<React.SetStateAction<GenerationJob | null>>;
+  live: boolean;
+  balance: number;
+  refresh: (targetJobId?: string) => Promise<void>;
+};
+export function useJobPolling(
+  initial: GenerationJob | null | undefined,
+  initialBalance: number,
+): any {
+  const [job, setJob] = useState<any>(initial ?? null);
   const [balance, setBalance] = useState(initialBalance);
 
-  const live = job.status === "queued" || job.status === "running";
+  const live = job ? job.status === "queued" || job.status === "running" : false;
 
   useEffect(() => {
-    if (!live) return;
+    if (!live || !job?.id) return;
 
     let cancelled = false;
     const timer = setInterval(async () => {
@@ -36,11 +59,13 @@ export function useJobPolling(initial: GenerationJob, initialBalance: number) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [live, job.id]);
+  }, [live, job?.id]);
 
   /** 재시도처럼 잡을 다시 돌린 뒤 부른다. 끝난 잡은 폴링이 멈춰 있기 때문이다. */
-  async function refresh() {
-    const res = await fetch(`/api/jobs/${job.id}`, { cache: "no-store" });
+  async function refresh(targetJobId?: string) {
+    const id = targetJobId ?? job?.id;
+    if (!id) return;
+    const res = await fetch(`/api/jobs/${id}`, { cache: "no-store" });
     if (!res.ok) return;
     const body = (await res.json()) as { job: GenerationJob; balance: number };
     setJob(body.job);

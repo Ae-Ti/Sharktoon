@@ -10,8 +10,7 @@ export type GenerationStep = "storyboard" | "generate" | "editor" | "publish";
 
 const STEPS: Array<{ key: GenerationStep; label: string; path: string }> = [
   { key: "storyboard", label: "콘티", path: "storyboard" },
-  { key: "generate", label: "생성", path: "generate" },
-  { key: "editor", label: "편집", path: "editor" },
+  { key: "editor", label: "제작·편집", path: "editor" },
   { key: "publish", label: "게시", path: "publish" },
 ];
 
@@ -28,8 +27,8 @@ export interface EpisodeHeaderProps {
 }
 
 /**
- * 콘티 → 생성 → 편집을 한 회차 안의 이동으로 보이게 하는 헤더.
- * 모바일에서는 2열 구조(상단: 제목/크레딧, 하단: 4단계 세그먼트 탭)로 자동 전환되어 잘림을 방지한다.
+ * 콘티 → 제작·편집 → 게시를 한 회차 안의 이동으로 보이게 하는 헤더.
+ * 모바일에서는 2열 구조(상단: 제목/크레딧, 하단: 3단계 세그먼트 탭)로 자동 전환되어 잘림을 방지한다.
  */
 export function EpisodeHeader({
   episodeId,
@@ -40,6 +39,9 @@ export function EpisodeHeader({
   action,
   hideActionOnMobile = false,
 }: EpisodeHeaderProps) {
+  const isCurrentStep = (stepKey: GenerationStep) =>
+    stepKey === current || (stepKey === "editor" && current === "generate");
+
   return (
     <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-card/95 backdrop-blur-md">
       {/* 1. 상단 메인 바 (모바일 & 데스크톱 공통) */}
@@ -75,14 +77,14 @@ export function EpisodeHeader({
         {/* 데스크톱 전용 인라인 스텝 내비게이션 (md 이상) */}
         <nav aria-label="제작 단계 (데스크톱)" className="hidden md:flex items-center gap-1 ml-4">
           {STEPS.map((step) => {
-            const active = step.key === current;
+            const active = isCurrentStep(step.key);
             return (
               <Link
                 key={step.key}
                 href={`/episodes/${episodeId}/${step.path}`}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-control-sm items-center rounded-lg px-3 text-label font-medium transition-all",
+                  "flex h-control-sm items-center rounded-lg px-3.5 text-label font-medium transition-all",
                   active
                     ? "bg-brand-tint font-bold text-brand shadow-2xs"
                     : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
@@ -105,11 +107,11 @@ export function EpisodeHeader({
         </div>
       </div>
 
-      {/* 2. 모바일 전용 4단계 세그먼트 탭 (md 미만) */}
+      {/* 2. 모바일 전용 3단계 세그먼트 탭 (md 미만) */}
       <div className="border-t border-border/50 px-3 py-1.5 md:hidden bg-surface-sunken/40">
-        <nav aria-label="제작 단계 (모바일)" className="grid grid-cols-4 gap-1">
+        <nav aria-label="제작 단계 (모바일)" className="grid grid-cols-3 gap-1.5">
           {STEPS.map((step) => {
-            const active = step.key === current;
+            const active = isCurrentStep(step.key);
             return (
               <Link
                 key={step.key}

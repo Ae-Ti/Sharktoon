@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
@@ -12,6 +12,7 @@ import {
   isVectorTextLayer,
   toLayerRowProps,
   type CutLayerTree,
+  type ImageLayer,
   type Layer,
   type VectorTextLayer,
 } from "../types/layer";
@@ -37,8 +38,16 @@ import {
   ChevronDown,
   BookOpen,
   Trash2,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import { EpisodeHeader } from "./EpisodeHeader";
+import { useJobPolling } from "./useJobPolling";
+import { regenerateCutAction, retryFailedCutsAction } from "../actions";
+import type { GenerationJob, CutEditIntent } from "@/contracts/generation";
+import type { Storyboard, StoryboardCut } from "../types/storyboard";
 
 /**
  * konva 는 window 를 쓴다. 서버에서 그릴 수 없으므로 클라이언트에서만 불러온다.
@@ -68,12 +77,15 @@ export interface EditorStripCut {
   cutId: string;
   index: number;
   imageUrl: string | null;
+  status?: "queued" | "running" | "done" | "failed";
   tree?: CutLayerTree | null;
 }
 
 export interface CutEditorScreenProps {
   episodeId: string;
   jobId?: string | null;
+  initialJob?: GenerationJob | null;
+  storyboard?: Storyboard | null;
   cuts: EditorStripCut[];
   tree: CutLayerTree;
   credits: number;
@@ -81,10 +93,12 @@ export interface CutEditorScreenProps {
   episodeTitle: string;
 }
 
-/** PRD 3.2 — 레이어 기반 컷 편집기. */
+/** PRD 3.2 — 레이어 기반 컷 편집기 & 라이브 제작 스튜디오. */
 export function CutEditorScreen({
   episodeId,
-  jobId: _jobId,
+  jobId,
+  initialJob,
+  storyboard,
   cuts,
   tree: initialTree,
   credits,
@@ -92,13 +106,42 @@ export function CutEditorScreen({
   episodeTitle,
 }: CutEditorScreenProps) {
   const router = useRouter();
+  const { job, balance, live, refresh } = useJobPolling(initialJob, credits);
+
   const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
   const [cutToDelete, setCutToDelete] = useState<EditorStripCut | null>(null);
   const [isDeletingCut, setIsDeletingCut] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [regenNotice, setRegenNotice] = useState<string | null>(null);
+
   const [viewerOpen, setViewerOpen] = useState(false);
   const [renderingViewer, setRenderingViewer] = useState(false);
   const [viewerCuts, setViewerCuts] = useState<{ cutId: string; imageUrl?: string; index: number }[]>([]);
   const [mobileTab, setMobileTab] = useState<"layers" | "inspector">("layers");
+
+  // 실시간 잡 상태가 반영된 컷 목록
+  const liveCuts = useMemo(() => {
+    return cuts.map((c) => {
+      const jc = job?.cuts.find((x) => x.cutId === c.cutId);
+      return {
+        ...c,
+        imageUrl: jc?.imageUrl ?? c.imageUrl,
+        status: (jc?.status as EditorStripCut["status"]) ?? c.status ?? (c.imageUrl ? "done" : "queued"),
+      };
+    });
+  }, [cuts, job?.cuts]);
+
+  // 현재 열려 있는 컷 정보
+  const currentCut = liveCuts.find((c) => c.cutId === initialTree.cutId);
+  const currentImageUrl = currentCut?.imageUrl;
+  const currentSbCut = storyboard?.cuts.find((c) => c.id === initialTree.cutId);
+
+  // 진행 통계
+  const doneCount = liveCuts.filter((c) => Boolean(c.imageUrl) || c.status === "done").length;
+  const totalCount = liveCuts.length;
+  const failedCuts = job?.cuts.filter((c) => c.status === "failed") ?? [];
+  const allDone = doneCount === totalCount && totalCount > 0;
 
   async function handleConfirmDeleteCut() {
     if (!cutToDelete) return;
@@ -112,6 +155,39 @@ export function CutEditorScreen({
         router.push(`/episodes/${episodeId}/editor?cut=${remaining[0].cutId}`);
       }
       router.refresh();
+    } else {
+      alert(res.message);
+    }
+  }
+
+  // 컷 이미지 재생성 실행
+  async function handleRegenerateCut(intent: CutEditIntent, prompt?: string) {
+    setIsRegenerating(true);
+    setRegenNotice(null);
+    const res = await regenerateCutAction({
+      episodeId,
+      jobId: jobId ?? undefined,
+      cutId: initialTree.cutId,
+      intent,
+      prompt: prompt?.trim() || undefined,
+    });
+    setIsRegenerating(false);
+    if (res.ok) {
+      void refresh(jobId ?? undefined);
+      setRegenNotice("재생성을 시작했습니다. 잠시 후 이미지가 교체됩니다.");
+    } else {
+      setRegenNotice(res.message);
+    }
+  }
+
+  // 실패 컷 일괄 재시도
+  async function handleRetryFailed() {
+    if (!job?.id) return;
+    setIsRetrying(true);
+    const res = await retryFailedCutsAction({ episodeId, jobId: job.id });
+    setIsRetrying(false);
+    if (res.ok) {
+      void refresh(job.id);
     } else {
       alert(res.message);
     }
@@ -148,6 +224,15 @@ export function CutEditorScreen({
   const editor = useEditor({ initial: normalizedTree, save });
   const { tree, selected, selectedId } = editor;
 
+  // 배경 이미지가 새로 도착했을 때 캔버스 레이어에 실시간 주입
+  useEffect(() => {
+    if (!currentImageUrl) return;
+    const bgLayer = editor.tree.layers.find((l) => l.kind === "background");
+    if (bgLayer && (bgLayer as ImageLayer).imageUrl !== currentImageUrl) {
+      editor.update(bgLayer.id, (l) => ({ ...l, imageUrl: currentImageUrl }));
+    }
+  }, [currentImageUrl, editor]);
+
   // 위에 그려지는 레이어가 목록 맨 위로 오도록 뒤집는다. z 순서와 목록 순서가 반대다.
   const rows = [...tree.layers].reverse();
 
@@ -167,7 +252,7 @@ export function CutEditorScreen({
       const { renderCutDataUrl } = await import("../editor/exportCarousel");
       const exportRatio = canvasH > canvasW ? "4:5" : "1:1";
       const rendered = await Promise.all(
-        cuts.map(async (c) => {
+        liveCuts.map(async (c) => {
           const cutTree = c.cutId === initialTree.cutId ? editor.tree : c.tree;
           if (cutTree) {
             try {
@@ -185,7 +270,7 @@ export function CutEditorScreen({
     } catch (e) {
       console.error(e);
       setViewerCuts(
-        cuts.map((c) => ({
+        liveCuts.map((c) => ({
           cutId: c.cutId,
           imageUrl: c.imageUrl ?? undefined,
           index: c.index,
@@ -195,7 +280,7 @@ export function CutEditorScreen({
     } finally {
       setRenderingViewer(false);
     }
-  }, [canvasH, canvasW, cuts, editor.tree, initialTree.cutId]);
+  }, [canvasH, canvasW, liveCuts, editor.tree, initialTree.cutId]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page">
@@ -204,9 +289,33 @@ export function CutEditorScreen({
         seriesTitle={seriesTitle}
         episodeTitle={episodeTitle}
         current="editor"
-        credits={credits}
+        credits={balance}
         action={
           <div className="flex items-center gap-2">
+            {live && (
+              <div className="flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand animate-pulse">
+                <Loader2 className="size-3 animate-spin" />
+                <span>AI 생성 중 ({doneCount}/{totalCount})</span>
+              </div>
+            )}
+            {!live && failedCuts.length > 0 && (
+              <Button
+                size="sm"
+                variant="danger"
+                loading={isRetrying}
+                onClick={handleRetryFailed}
+                title="실패한 컷을 다시 생성합니다"
+              >
+                <RefreshCw className="mr-1 size-3" />
+                실패 재시도 ({failedCuts.length})
+              </Button>
+            )}
+            {!live && allDone && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-success">
+                <CheckCircle2 className="size-3.5" />
+                전체 완성
+              </span>
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -235,11 +344,10 @@ export function CutEditorScreen({
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[132px_minmax(0,1fr)_340px]">
         <CutStrip
-          cuts={cuts}
+          cuts={liveCuts}
           openCutId={initialTree.cutId}
           isPortrait={canvasH > canvasW}
-          // 페이지가 그 컷의 트리를 읽어 새로 그린다. 떠나는 컷은 useEditor 가 바로 저장한다.
-          onOpen={(cutId) => router.push(`/episodes/${episodeId}/editor?cut=${cutId}`)}
+          onOpen={(cutId) => router.push(`/episodes/${episodeId}/editor?cut=${cutId}${jobId ? `&job=${jobId}` : ""}`)}
           onDeleteCut={(c) => setCutToDelete(c)}
         />
 
@@ -248,6 +356,19 @@ export function CutEditorScreen({
           aria-label="캔버스"
           className="relative grid min-h-[320px] place-items-center overflow-hidden rounded-2xl border border-border/80 bg-surface-sunken p-4 shadow-inner"
         >
+          {/* 이미지가 아직 생성 중일 때 캔버스 중앙 안내 오버레이 */}
+          {!currentImageUrl && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface-sunken/80 backdrop-blur-xs p-6 text-center">
+              <Sparkles className="size-8 text-brand animate-pulse" />
+              <div className="flex flex-col gap-1">
+                <p className="text-body font-bold text-ink">이 컷의 AI 이미지를 생성하고 있어요</p>
+                <p className="text-caption text-ink-muted">
+                  완료되면 이미지가 바로 나타납니다. 대사와 말풍선 배치는 지금 미리 수정할 수 있어요!
+                </p>
+              </div>
+            </div>
+          )}
+
           {size > 0 && (
             <EditorCanvas
               tree={tree}
@@ -287,7 +408,7 @@ export function CutEditorScreen({
                   : "text-ink-muted hover:text-ink",
               )}
             >
-              속성/대사 수정 {selected ? `(${selected.name})` : ""}
+              속성/재생성 {selected ? `(${selected.name})` : ""}
             </button>
           </div>
 
@@ -331,6 +452,11 @@ export function CutEditorScreen({
             {selected ? (
               <LayerInspector
                 layer={selected}
+                storyboardCut={currentSbCut}
+                tier={job?.tier ?? "pro"}
+                isRegenerating={isRegenerating}
+                regenNotice={regenNotice}
+                onRegenerate={handleRegenerateCut}
                 onChangeName={(name) =>
                   editor.update(selected.id, (l) => ({ ...l, name }))
                 }
@@ -651,27 +777,37 @@ function CutStrip({
       {cuts.map((cut) => {
         const open = cut.cutId === openCutId;
         const ready = Boolean(cut.imageUrl);
+        const isRunning = !ready && (cut.status === "running" || cut.status === "queued");
+        const isFailed = !ready && cut.status === "failed";
+
         return (
           <div key={cut.cutId} className="group relative mx-auto">
             <button
               type="button"
-              disabled={!ready}
               aria-current={open ? "true" : undefined}
               onClick={() => onOpen(cut.cutId)}
               className={cn(
-                "relative block shrink-0 overflow-hidden rounded-xl border transition-all",
+                "relative block shrink-0 overflow-hidden rounded-xl border transition-all cursor-pointer",
                 isPortrait ? "w-20 aspect-[4/5] lg:w-24" : "w-24 aspect-square lg:w-28",
-                ready ? "cursor-pointer hover:border-brand/80 shadow-2xs" : "cursor-default bg-skeleton",
                 open ? "border-2 border-brand ring-2 ring-brand/20 shadow-xs" : "border-border",
+                isRunning && "bg-surface-sunken animate-pulse border-brand/40",
+                isFailed && "bg-danger-subtle border-danger/40",
+                ready && "hover:border-brand/80 shadow-2xs",
               )}
             >
               {ready ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cut.imageUrl!} alt={`${cut.index}컷`} className="size-full object-cover" />
+              ) : isFailed ? (
+                <div className="grid size-full place-items-center p-1 text-center bg-danger-subtle">
+                  <AlertTriangle className="size-4 text-danger mb-0.5" />
+                  <span className="text-[10px] font-semibold text-danger">생성 실패</span>
+                </div>
               ) : (
-                <span className="grid size-full place-items-center text-caption text-ink-subtle">
-                  아직 없음
-                </span>
+                <div className="grid size-full place-items-center p-1 text-center bg-surface-sunken">
+                  <Loader2 className="size-4 text-brand animate-spin mb-0.5" />
+                  <span className="text-[10px] font-semibold text-brand">생성 중</span>
+                </div>
               )}
               <span className="absolute top-1.5 left-1.5 rounded-sm bg-black/60 px-1 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
                 {cut.index}컷
@@ -731,6 +867,11 @@ function getLayerKindInfo(layer: Layer): { label: string; icon: React.ReactNode 
 
 function LayerInspector({
   layer,
+  storyboardCut,
+  tier = "pro",
+  isRegenerating = false,
+  regenNotice,
+  onRegenerate,
   onChangeName,
   onChangeText,
   onChangeFontSize,
@@ -740,6 +881,11 @@ function LayerInspector({
   onDelete,
 }: {
   layer: Layer;
+  storyboardCut?: StoryboardCut | null;
+  tier?: "standard" | "pro";
+  isRegenerating?: boolean;
+  regenNotice?: string | null;
+  onRegenerate?: (intent: CutEditIntent, prompt?: string) => void;
   onChangeName: (name: string) => void;
   onChangeText: (text: string) => void;
   onChangeFont: (family: string) => void;
@@ -750,6 +896,8 @@ function LayerInspector({
 }) {
   const vector = isVectorTextLayer(layer) ? (layer as VectorTextLayer) : null;
   const kindInfo = getLayerKindInfo(layer);
+  const [regenIntent, setRegenIntent] = useState<CutEditIntent>("regenerate");
+  const [customPrompt, setCustomPrompt] = useState("");
 
   return (
     <Panel title={layer.name || "레이어 속성"}>
@@ -868,6 +1016,109 @@ function LayerInspector({
               벡터라 이미지에 굽지 않아요. 나중에 글자만 고칠 수 있어요.
             </p>
           </>
+        ) : layer.kind === "background" ? (
+          <div className="flex flex-col gap-3 pt-1">
+            <dl className="flex flex-col gap-1 text-label rounded-lg bg-surface-sunken p-2.5">
+              <Row label="캔버스 크기">
+                {Math.round(layer.box.width)} × {Math.round(layer.box.height)}
+              </Row>
+              {storyboardCut && (
+                <div className="pt-2 border-t border-border/60 flex flex-col gap-1 text-caption">
+                  <span className="font-semibold text-ink">콘티 연출 묘사</span>
+                  <p className="text-ink-muted line-clamp-2 leading-relaxed">
+                    {storyboardCut.scene}
+                  </p>
+                  {storyboardCut.emotion && (
+                    <span className="text-ink-subtle text-[11px]">
+                      감정: {storyboardCut.emotion} · 구도: {storyboardCut.camera || "기본"}
+                    </span>
+                  )}
+                </div>
+              )}
+            </dl>
+
+            {/* 이미지 실시간 재생성 옵션 카드 */}
+            {onRegenerate && (
+              <div className="flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand-subtle/30 p-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-label font-bold text-ink flex items-center gap-1.5">
+                    <RefreshCw className={cn("size-3.5 text-brand", isRegenerating && "animate-spin")} />
+                    이 컷 이미지 다시 생성
+                  </span>
+                  <span className="text-caption text-ink-muted">
+                    {tier === "pro" ? "💎 Pro (2C)" : "⚡ 일반 (1C)"}
+                  </span>
+                </div>
+
+                {/* 인텐트 선택 */}
+                <div className="grid grid-cols-3 gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setRegenIntent("regenerate")}
+                    className={cn(
+                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      regenIntent === "regenerate"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                    )}
+                  >
+                    새 구도
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegenIntent("keep_composition_change_expression")}
+                    className={cn(
+                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      regenIntent === "keep_composition_change_expression"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                    )}
+                  >
+                    표정 변경
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegenIntent("replace_background")}
+                    className={cn(
+                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      regenIntent === "replace_background"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                    )}
+                  >
+                    배경 변경
+                  </button>
+                </div>
+
+                {/* 프롬프트 보강 (선택사항) */}
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <input
+                    type="text"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="연출 보강 (예: 더 환하게 웃는 표정)"
+                    className="h-8 rounded-lg border border-border bg-surface-card px-2.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
+                  />
+                </div>
+
+                {regenNotice && (
+                  <p className="text-[11px] text-brand font-medium">
+                    {regenNotice}
+                  </p>
+                )}
+
+                <Button
+                  size="sm"
+                  block
+                  loading={isRegenerating}
+                  onClick={() => onRegenerate(regenIntent, customPrompt)}
+                  className="mt-0.5 font-bold"
+                >
+                  {isRegenerating ? "이미지 생성 중..." : "🔄 이 컷 다시 만들기"}
+                </Button>
+              </div>
+            )}
+          </div>
         ) : (
           <dl className="flex flex-col gap-2 text-label">
             <Row label="크기">
