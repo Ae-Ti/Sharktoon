@@ -146,6 +146,41 @@ export async function saveStoryboardAction(storyboard: Storyboard): Promise<Acti
       }
     }
 
+    // 새로 등록된 등장인물이 있으면 전체 에셋 라이브러리 및 시리즈 에셋에 자동 동기화
+    try {
+      const repo = await getRepository();
+      const currentAssets = await repo.listAssets();
+      const seriesAssetIds = [...context.assets.map((a) => a.id)];
+      let updatedSeries = false;
+
+      for (const ch of checked.characters) {
+        if (ch.key === "ch_me") continue;
+        const name = ch.name.trim();
+        if (!name) continue;
+        const existing = currentAssets.find((a) => a.name === name && a.kind === "character");
+        if (existing) {
+          if (!seriesAssetIds.includes(existing.id)) {
+            seriesAssetIds.push(existing.id);
+            updatedSeries = true;
+          }
+        } else {
+          const created = await repo.createAsset({
+            kind: "character",
+            name,
+            description: `${name} (콘티에서 등록된 인물)`,
+            tags: ["등장인물", "조연"],
+          });
+          seriesAssetIds.push(created.id);
+          updatedSeries = true;
+        }
+      }
+      if (updatedSeries) {
+        await repo.setSeriesAssets(context.seriesId, seriesAssetIds);
+      }
+    } catch (e) {
+      console.error("[saveStoryboardAction] Auto asset sync error:", e);
+    }
+
     return { ok: true, data: null };
   } catch (e) {
     return toCreditOrError(e);
