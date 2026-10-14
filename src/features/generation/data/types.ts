@@ -50,6 +50,7 @@ export interface GenerationStore {
 
   listCuts(episodeId: string): Promise<CutRecord[]>;
   saveLayerTree(episodeId: string, cutId: string, tree: CutLayerTree): Promise<void>;
+  deleteCut(episodeId: string, cutId: string): Promise<void>;
 
   getPostPackage(episodeId: string): Promise<PostPackage | null>;
   savePostPackage(episodeId: string, pkg: Omit<PostPackage, "updatedAt">): Promise<void>;

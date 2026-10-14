@@ -49,6 +49,14 @@ export const mockGenerationStore: GenerationStore = {
     if (!cut) throw new Error("아직 만들어지지 않은 컷이에요");
     cut.layerTree = structuredClone(tree);
   },
+  async deleteCut(episodeId, cutId) {
+    cutsOf(episodeId).delete(cutId);
+    for (const job of S.jobs.values()) {
+      if (job.episodeId === episodeId) {
+        job.cuts = job.cuts.filter((c) => c.cutId !== cutId);
+      }
+    }
+  },
 
   async getPostPackage(episodeId) {
     return structuredClone(S.packages.get(episodeId) ?? null);

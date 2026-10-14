@@ -282,6 +282,37 @@ function StoryboardEditor({
     });
   }
 
+  function addCharacter(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSb((s) => {
+      if (s.characters.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
+        return s;
+      }
+      const key = `ch_${crypto.randomUUID().slice(0, 8)}`;
+      return {
+        ...s,
+        characters: [...s.characters, { key, name: trimmed }],
+      };
+    });
+  }
+
+  function removeCharacter(key: string) {
+    setSb((s) => {
+      const nextCharacters = s.characters.filter((c) => c.key !== key);
+      const nextCuts = s.cuts.map((cut) => ({
+        ...cut,
+        characterIds: cut.characterIds.filter((id) => id !== key),
+        dialogue: cut.dialogue.map((d) => (d.speakerId === key ? { ...d, speakerId: null } : d)),
+      }));
+      return {
+        ...s,
+        characters: nextCharacters,
+        cuts: nextCuts,
+      };
+    });
+  }
+
   return (
     <div className="min-h-dvh bg-surface-page">
       <EpisodeHeader
@@ -291,17 +322,56 @@ function StoryboardEditor({
         current="storyboard"
         credits={credits}
         action={
-          <Button
-            size="sm"
-            cost={cost}
-            disabled={!ready}
-            // 실제로는 CreditLedger.hold 가 먼저 가고, 모자라면 충전 시트가 열린다.
-            title={ready ? undefined : "모든 컷의 장면 묘사를 먼저 입력하세요"}
-            loading={pending}
-            onClick={startGeneration}
-          >
-            {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <div
+              role="radiogroup"
+              aria-label="생성 품질"
+              className="flex items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "standard"}
+                onClick={() => setTier("standard")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2.5 py-1 transition-all",
+                  tier === "standard"
+                    ? "bg-surface-card text-ink shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+                title="⚡ 일반 (FLUX Schnell) - 1 크레딧/컷"
+              >
+                ⚡ 일반 (1C)
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "pro"}
+                onClick={() => setTier("pro")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2.5 py-1 transition-all",
+                  tier === "pro"
+                    ? "bg-brand text-on-brand shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+                title="💎 Pro (ComfyUI 상용급) - 2 크레딧/컷"
+              >
+                💎 Pro (2C)
+              </button>
+            </div>
+
+            <Button
+              size="sm"
+              cost={cost}
+              disabled={!ready}
+              // 실제로는 CreditLedger.hold 가 먼저 가고, 모자라면 충전 시트가 열린다.
+              title={ready ? undefined : "모든 컷의 장면 묘사를 먼저 입력하세요"}
+              loading={pending}
+              onClick={startGeneration}
+            >
+              {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
+            </Button>
+          </div>
         }
       />
 
@@ -312,12 +382,9 @@ function StoryboardEditor({
           pending={pending}
           onChange={setStory}
           onRegenerate={regenerateStoryboard}
-          fixedCharacters={fixedCharacters}
           characters={sb.characters}
-          stylePreset={stylePreset}
-          aspectRatio={aspectRatio}
-          tier={tier}
-          onTierChange={setTier}
+          onAddCharacter={addCharacter}
+          onRemoveCharacter={removeCharacter}
         />
 
         <section aria-label="컷 목록" className="flex flex-col gap-3">
@@ -408,44 +475,6 @@ function StoryboardEditor({
                       };
                     });
                     return { ...s, cuts: nextCuts };
-                  });
-                }}
-                onAddLineSpeaker={(lineId, name) => {
-                  const trimmed = name.trim();
-                  if (!trimmed) return;
-                  setSb((s) => {
-                    let key: string;
-                    const existing = s.characters.find(
-                      (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
-                    );
-                    let nextCharacters = s.characters;
-                    if (existing) {
-                      key = existing.key;
-                    } else {
-                      key = `ch_${crypto.randomUUID().slice(0, 8)}`;
-                      nextCharacters = [...s.characters, { key, name: trimmed }];
-                    }
-
-                    const nextCuts = s.cuts.map((c) => {
-                      if (c.id !== cut.id) return c;
-                      const nextCharIds = c.characterIds.includes(key)
-                        ? c.characterIds
-                        : [...c.characterIds, key];
-                      const nextDialogue = c.dialogue.map((l) =>
-                        l.id === lineId ? { ...l, speakerId: key } : l,
-                      );
-                      return {
-                        ...c,
-                        characterIds: nextCharIds,
-                        dialogue: nextDialogue,
-                      };
-                    });
-
-                    return {
-                      ...s,
-                      characters: nextCharacters,
-                      cuts: nextCuts,
-                    };
                   });
                 }}
                 onChangeLineBalloon={(lineId, balloon) =>
@@ -633,72 +662,31 @@ function StorySidebar({
   pending,
   onChange,
   onRegenerate,
-  fixedCharacters,
   characters,
-  stylePreset,
-  aspectRatio,
-  tier,
-  onTierChange,
+  onAddCharacter,
+  onRemoveCharacter,
 }: {
   story: string;
   cutCount: number;
   pending: boolean;
   onChange: (value: string) => void;
   onRegenerate: () => void;
-  fixedCharacters: string[];
   characters: StoryboardCharacter[];
-  stylePreset: string;
-  aspectRatio: string;
-  tier: GenerationTier;
-  onTierChange: (t: GenerationTier) => void;
+  onAddCharacter: (name: string) => void;
+  onRemoveCharacter: (key: string) => void;
 }) {
+  const [newName, setNewName] = useState("");
+
+  function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    onAddCharacter(trimmed);
+    setNewName("");
+  }
+
   return (
     <aside aria-label="사연" className="flex flex-col gap-4">
-      {/* 2티어 생성 품질 모드 선택기 */}
-      <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface-card p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-ink">생성 품질 모드</h2>
-          <span className="text-[11px] font-semibold text-brand">
-            {tier === "pro" ? "💎 Pro (컷당 2C)" : "⚡ 일반 (컷당 1C)"}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => onTierChange("standard")}
-            className={cn(
-              "flex cursor-pointer flex-col items-start rounded-lg border p-2 text-left transition-all",
-              tier === "standard"
-                ? "border-brand bg-brand-subtle text-ink ring-1 ring-brand"
-                : "border-border bg-surface-sunken text-ink-muted hover:border-ink-muted hover:text-ink",
-            )}
-          >
-            <span className="text-[12px] font-bold text-ink">⚡ 일반 (Schnell)</span>
-            <span className="text-[11px] text-ink-muted">초고속 시안 확인</span>
-            <span className="mt-1 text-[11px] font-semibold text-brand">1 크레딧/컷</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onTierChange("pro")}
-            className={cn(
-              "flex cursor-pointer flex-col items-start rounded-lg border p-2 text-left transition-all",
-              tier === "pro"
-                ? "border-brand bg-brand-subtle text-ink ring-1 ring-brand"
-                : "border-border bg-surface-sunken text-ink-muted hover:border-ink-muted hover:text-ink",
-            )}
-          >
-            <span className="text-[12px] font-bold text-ink">💎 Pro (ComfyUI)</span>
-            <span className="text-[11px] text-ink-muted">상용급 외모·디테일</span>
-            <span className="mt-1 text-[11px] font-semibold text-brand">2 크레딧/컷</span>
-          </button>
-        </div>
-        <p className="text-caption leading-tight text-ink-subtle">
-          {tier === "pro"
-            ? "ComfyUI 19노드 워크플로우(PuLID + LoRA + OpenPose)로 상용 웹툰급 최고 품질로 제작합니다."
-            : "FLUX Schnell 모델로 3~5초 내에 빠르게 구도와 콘티 시안을 검토합니다."}
-        </p>
-      </div>
-
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
         <h2 className="text-label font-semibold text-ink">입력한 사연</h2>
         <Field
@@ -718,38 +706,58 @@ function StorySidebar({
         </p>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-card p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-ink">등장인물</h2>
+          <h2 className="text-label font-semibold text-ink">등장인물 관리</h2>
           <span className="text-caption text-ink-muted">{characters.length}명</span>
         </div>
-        <p className="text-body-sm text-ink-muted">
-          대사에서 화자를 선택하거나 새 인물을 바로 추가할 수 있어요.
+        <p className="text-caption text-ink-muted leading-relaxed">
+          회차에 등장하는 인물을 관리해요. 대사에서는 여기서 등록한 인물 중 선택할 수 있어요.
         </p>
-        <div className="flex flex-wrap gap-1">
-          {characters.map((ch) => (
-            <Badge key={ch.key} tone={ch.key === "ch_me" ? "brand" : "neutral"}>
-              {ch.name}
-            </Badge>
-          ))}
-        </div>
-      </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-card p-4">
-        <h2 className="text-label font-semibold text-ink">자동으로 붙는 것</h2>
-        <p className="text-body-sm text-ink-muted">
-          시리즈 그림체와 고정 캐릭터는 모든 컷에 자동으로 들어가요. 컷마다 다시 고르지
-          않아도 돼요.
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {fixedCharacters.map((name) => (
-            <Badge key={name} tone="brand">
-              {name}
-            </Badge>
-          ))}
-          {fixedCharacters.length === 0 && <Badge>기본 캐릭터</Badge>}
-          <Badge>{stylePreset}</Badge>
-          <Badge>{aspectRatio}</Badge>
+        {/* 인물 추가 폼 */}
+        <form onSubmit={handleAdd} className="flex gap-1.5">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="새 인물 이름 (예: 김팀장)"
+            maxLength={15}
+            className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-surface-card px-2.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
+          />
+          <Button type="submit" size="sm" variant="secondary" disabled={!newName.trim()}>
+            추가
+          </Button>
+        </form>
+
+        {/* 등록된 인물 칩 목록 */}
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {characters.map((ch) => {
+            const isMe = ch.key === "ch_me";
+            return (
+              <span
+                key={ch.key}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  isMe
+                    ? "border-brand/30 bg-brand-subtle text-brand font-semibold"
+                    : "border-border bg-surface-sunken text-ink",
+                )}
+              >
+                <span>{ch.name}</span>
+                {characters.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveCharacter(ch.key)}
+                    title={`${ch.name} 삭제`}
+                    className="cursor-pointer text-ink-muted hover:text-danger text-sm leading-none"
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
         </div>
       </div>
     </aside>
@@ -969,135 +977,25 @@ function SpeakerPicker({
   speakerId,
   characters,
   onSelectSpeaker,
-  onAddSpeaker,
 }: {
   speakerId: string | null;
   characters: StoryboardCharacter[];
   onSelectSpeaker: (speakerId: string | null) => void;
-  onAddSpeaker: (name: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  const currentSpeaker = characters.find(
-    (c) => c.key === speakerId || c.name === speakerId,
-  );
-  const currentLabel = currentSpeaker?.name ?? (speakerId ? speakerId : "화자 없음");
-
-  const q = query.trim().toLowerCase();
-  const filtered = characters.filter((c) => c.name.toLowerCase().includes(q));
-  const hasExactMatch = characters.some((c) => c.name.toLowerCase() === q);
-  const canCreate = q.length > 0 && !hasExactMatch && q !== "화자 없음";
-
-  function handleCreate() {
-    if (!canCreate) return;
-    const name = query.trim();
-    onAddSpeaker(name);
-    setQuery("");
-    setOpen(false);
-  }
-
   return (
-    <div className="relative inline-block" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        title={currentLabel}
-        className="flex h-control-sm items-center gap-1.5 rounded border border-border bg-surface-card px-2.5 text-caption font-medium text-ink hover:border-border-control transition-colors"
-      >
-        <span className="max-w-[70px] truncate">{currentLabel}</span>
-        <span className="text-[10px] text-ink-muted">▾</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-52 rounded-lg border border-border bg-surface-card p-2 shadow-lg">
-          <input
-            type="text"
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (e.nativeEvent.isComposing) return;
-                e.preventDefault();
-                if (canCreate) {
-                  handleCreate();
-                } else if (filtered.length > 0) {
-                  onSelectSpeaker(filtered[0].key);
-                  setOpen(false);
-                }
-              } else if (e.key === "Escape") {
-                setOpen(false);
-              }
-            }}
-            placeholder="인물 검색 또는 새 인물..."
-            className="mb-2 h-7 w-full rounded border border-border bg-surface-sunken px-2 text-caption text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
-          />
-
-          {canCreate && (
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="mb-1.5 flex w-full items-center justify-between rounded bg-brand-subtle px-2 py-1.5 text-left text-caption font-semibold text-brand hover:bg-brand-tint transition-colors"
-            >
-              <span>+ &quot;{query.trim()}&quot; 인물 추가</span>
-              <kbd className="text-[10px] font-normal text-ink-subtle">Enter</kbd>
-            </button>
-          )}
-
-          <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                onSelectSpeaker(null);
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-caption transition-colors",
-                !speakerId
-                  ? "bg-surface-sunken font-bold text-brand"
-                  : "text-ink hover:bg-surface-sunken",
-              )}
-            >
-              <span>화자 없음</span>
-              {!speakerId && <span>✓</span>}
-            </button>
-
-            {filtered.map((ch) => (
-              <button
-                key={ch.key}
-                type="button"
-                onClick={() => {
-                  onSelectSpeaker(ch.key);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-caption transition-colors",
-                  speakerId === ch.key
-                    ? "bg-surface-sunken font-bold text-brand"
-                    : "text-ink hover:bg-surface-sunken",
-                )}
-              >
-                <span className="truncate">{ch.name}</span>
-                {speakerId === ch.key && <span>✓</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    <select
+      value={speakerId ?? ""}
+      onChange={(e) => onSelectSpeaker(e.target.value ? e.target.value : null)}
+      aria-label="화자 선택"
+      className="h-control-sm max-w-[100px] truncate rounded border border-border bg-surface-card px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+    >
+      <option value="">화자 없음</option>
+      {characters.map((ch) => (
+        <option key={ch.key} value={ch.key}>
+          {ch.name}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -1121,7 +1019,6 @@ function CutCard({
   onRemoveLine,
   onChangeLine,
   onChangeLineSpeaker,
-  onAddLineSpeaker,
   onChangeLineBalloon,
   onAddNarration,
   onRemoveNarration,
@@ -1146,7 +1043,6 @@ function CutCard({
   onRemoveLine: (lineId: string) => void;
   onChangeLine: (lineId: string, text: string) => void;
   onChangeLineSpeaker: (lineId: string, speakerId: string | null) => void;
-  onAddLineSpeaker: (lineId: string, name: string) => void;
   onChangeLineBalloon: (lineId: string, balloon: BalloonKind) => void;
   onAddNarration: () => void;
   onRemoveNarration: () => void;
@@ -1293,7 +1189,6 @@ function CutCard({
                     speakerId={line.speakerId}
                     characters={characters}
                     onSelectSpeaker={(speakerId) => onChangeLineSpeaker(line.id, speakerId)}
-                    onAddSpeaker={(name) => onAddLineSpeaker(line.id, name)}
                   />
 
                   {/* 말풍선 종류 선택 */}

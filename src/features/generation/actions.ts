@@ -131,11 +131,62 @@ export async function saveStoryboardAction(storyboard: Storyboard): Promise<Acti
     const { context } = await ownedEpisode(storyboard.episodeId);
     const store = await getGenerationStore();
     const saved = await store.getStoryboard(context.episodeId);
+    const checked = checkStoryboard(storyboard, context);
     await store.saveStoryboard(
-      checkStoryboard(storyboard, context),
+      checked,
       saved?.usedMock ?? !isAnthropicConfigured(),
     );
+
+    // 콘티에서 빠진 컷 레코드가 있으면 동기화하여 정리
+    const activeCutIds = new Set(checked.cuts.map((c) => c.id));
+    const existingCuts = await store.listCuts(context.episodeId);
+    for (const c of existingCuts) {
+      if (!activeCutIds.has(c.cutId)) {
+        await store.deleteCut(context.episodeId, c.cutId);
+      }
+    }
+
     return { ok: true, data: null };
+  } catch (e) {
+    return toCreditOrError(e);
+  }
+}
+
+/** 컷 삭제 액션 (콘티 또는 편집기에서 호출). */
+export async function deleteCutAction(input: {
+  episodeId: string;
+  cutId: string;
+}): Promise<ActionResult<{ remainingCutsCount: number }>> {
+  try {
+    const { context } = await ownedEpisode(input.episodeId);
+    const store = await getGenerationStore();
+    const saved = await store.getStoryboard(context.episodeId);
+    if (!saved) return { ok: false, kind: "error", message: "콘티를 찾지 못했어요." };
+
+    const cutIndex = saved.storyboard.cuts.findIndex((c) => c.id === input.cutId);
+    if (cutIndex < 0) return { ok: false, kind: "error", message: "삭제할 컷을 찾지 못했어요." };
+
+    if (saved.storyboard.cuts.length <= 1) {
+      return { ok: false, kind: "error", message: "최소 1개의 컷은 유지되어야 해요." };
+    }
+
+    const remainingCuts = saved.storyboard.cuts
+      .filter((c) => c.id !== input.cutId)
+      .map((c, i) => ({ ...c, index: i + 1 }));
+
+    const updatedStoryboard: Storyboard = {
+      ...saved.storyboard,
+      cuts: remainingCuts,
+    };
+
+    await store.saveStoryboard(updatedStoryboard, saved.usedMock);
+    await store.deleteCut(input.episodeId, input.cutId);
+
+    revalidatePath(`/episodes/${input.episodeId}/editor`);
+    revalidatePath(`/episodes/${input.episodeId}/generate`);
+    revalidatePath(`/episodes/${input.episodeId}/publish`);
+
+    return { ok: true, data: { remainingCutsCount: remainingCuts.length } };
   } catch (e) {
     return toCreditOrError(e);
   }

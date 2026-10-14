@@ -112,6 +112,10 @@ export const supabaseGenerationStore: GenerationStore = {
     if (error) throw error;
     if (!data?.length) throw new Error("저장할 컷을 찾지 못했어요");
   },
+  async deleteCut(episodeId, cutId) {
+    const db = await createClient();
+    await db.from("cuts").delete().eq("episode_id", episodeId).eq("cut_id", cutId);
+  },
 
   async getPostPackage(episodeId) {
     const db = await createClient();

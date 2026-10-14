@@ -27,17 +27,29 @@ export default async function Page({
 
   const repo = await getRepository();
   const [userId, credit] = await Promise.all([repo.currentUserId(), repo.getCredit()]);
-  // 콘티에서 넘어오면 잡 id 가 있다. 주소로 바로 들어오면 이 회차의 마지막 잡을 보여준다.
-  const job = jobId
-    ? await getJob(jobId, userId)
-    : await (await getGenerationStore()).getLatestJob(episodeId);
+  const store = await getGenerationStore();
+  const [saved, rawJob] = await Promise.all([
+    store.getStoryboard(episodeId),
+    jobId ? await getJob(jobId, userId) : await store.getLatestJob(episodeId),
+  ]);
 
   // 아직 생성한 적이 없으면 콘티부터다.
-  if (!job || job.episodeId !== episodeId) redirect(`/episodes/${episodeId}/storyboard`);
+  if (!rawJob || rawJob.episodeId !== episodeId) redirect(`/episodes/${episodeId}/storyboard`);
+
+  // 콘티에서 삭제된 컷은 생성 화면에서도 동기화하여 제외
+  const activeCutMap = new Map(saved?.storyboard.cuts.map((c) => [c.id, c.index]));
+  const synchronizedJob = saved
+    ? {
+        ...rawJob,
+        cuts: rawJob.cuts
+          .filter((c) => activeCutMap.has(c.cutId))
+          .map((c) => ({ ...c, index: activeCutMap.get(c.cutId) ?? c.index })),
+      }
+    : rawJob;
 
   return (
     <GenerationScreen
-      initial={job}
+      initial={synchronizedJob}
       initialBalance={credit.balance}
       episodeNumber={context.number}
       supportsInpainting={getImageGenerator().supportsInpainting()}

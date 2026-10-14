@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Badge, Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
-import { saveLayerTreeAction } from "../actions";
+import { deleteCutAction, saveLayerTreeAction } from "../actions";
 import { TOON_FONTS, ensureToonFont } from "../editor/fonts";
 import {
   isVectorTextLayer,
@@ -37,6 +37,7 @@ import {
   ChevronUp,
   ChevronDown,
   BookOpen,
+  Trash2,
 } from "lucide-react";
 import { EpisodeHeader } from "./EpisodeHeader";
 
@@ -92,7 +93,26 @@ export function CutEditorScreen({
 }: CutEditorScreenProps) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState<Layer | null>(null);
+  const [cutToDelete, setCutToDelete] = useState<EditorStripCut | null>(null);
+  const [isDeletingCut, setIsDeletingCut] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+
+  async function handleConfirmDeleteCut() {
+    if (!cutToDelete) return;
+    setIsDeletingCut(true);
+    const res = await deleteCutAction({ episodeId, cutId: cutToDelete.cutId });
+    setIsDeletingCut(false);
+    if (res.ok) {
+      const remaining = cuts.filter((c) => c.cutId !== cutToDelete.cutId);
+      setCutToDelete(null);
+      if (remaining.length > 0) {
+        router.push(`/episodes/${episodeId}/editor?cut=${remaining[0].cutId}`);
+      }
+      router.refresh();
+    } else {
+      alert(res.message);
+    }
+  }
 
   // 캔버스와 컷의 실제 규격(1:1 또는 4:5)을 정확히 유지하여 세로 왜곡/늘어남 방지
   const canvasW = initialTree.canvas?.width || 1080;
@@ -179,6 +199,7 @@ export function CutEditorScreen({
           isPortrait={canvasH > canvasW}
           // 페이지가 그 컷의 트리를 읽어 새로 그린다. 떠나는 컷은 useEditor 가 바로 저장한다.
           onOpen={(cutId) => router.push(`/episodes/${episodeId}/editor?cut=${cutId}`)}
+          onDeleteCut={(c) => setCutToDelete(c)}
         />
 
         <section
@@ -326,6 +347,27 @@ export function CutEditorScreen({
               }}
             >
               지우기
+            </Button>
+          </>
+        }
+      />
+
+      <Modal
+        open={cutToDelete !== null}
+        onClose={() => setCutToDelete(null)}
+        title={`${cutToDelete?.index}컷을 삭제할까요?`}
+        description="이 컷과 작업한 레이어가 회차에서 제외됩니다. 컷 순서는 자동으로 재정렬돼요."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setCutToDelete(null)}>
+              그대로 두기
+            </Button>
+            <Button
+              variant="danger"
+              loading={isDeletingCut}
+              onClick={handleConfirmDeleteCut}
+            >
+              컷 삭제
             </Button>
           </>
         }
@@ -514,11 +556,13 @@ function CutStrip({
   openCutId,
   isPortrait = false,
   onOpen,
+  onDeleteCut,
 }: {
   cuts: EditorStripCut[];
   openCutId: string;
   isPortrait?: boolean;
   onOpen: (cutId: string) => void;
+  onDeleteCut?: (cut: EditorStripCut) => void;
 }) {
   return (
     <nav
@@ -529,31 +573,46 @@ function CutStrip({
         const open = cut.cutId === openCutId;
         const ready = Boolean(cut.imageUrl);
         return (
-          <button
-            key={cut.cutId}
-            type="button"
-            disabled={!ready}
-            aria-current={open ? "true" : undefined}
-            onClick={() => onOpen(cut.cutId)}
-            className={cn(
-              "relative shrink-0 overflow-hidden rounded-xl border transition-all mx-auto",
-              isPortrait ? "w-20 aspect-[4/5] lg:w-24" : "w-24 aspect-square lg:w-28",
-              ready ? "cursor-pointer hover:border-brand/80 shadow-2xs" : "cursor-default bg-skeleton",
-              open ? "border-2 border-brand ring-2 ring-brand/20 shadow-xs" : "border-border",
-            )}
-          >
-            {ready ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cut.imageUrl!} alt={`${cut.index}컷`} className="size-full object-cover" />
-            ) : (
-              <span className="grid size-full place-items-center text-caption text-ink-subtle">
-                아직 없음
+          <div key={cut.cutId} className="group relative mx-auto">
+            <button
+              type="button"
+              disabled={!ready}
+              aria-current={open ? "true" : undefined}
+              onClick={() => onOpen(cut.cutId)}
+              className={cn(
+                "relative block shrink-0 overflow-hidden rounded-xl border transition-all",
+                isPortrait ? "w-20 aspect-[4/5] lg:w-24" : "w-24 aspect-square lg:w-28",
+                ready ? "cursor-pointer hover:border-brand/80 shadow-2xs" : "cursor-default bg-skeleton",
+                open ? "border-2 border-brand ring-2 ring-brand/20 shadow-xs" : "border-border",
+              )}
+            >
+              {ready ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cut.imageUrl!} alt={`${cut.index}컷`} className="size-full object-cover" />
+              ) : (
+                <span className="grid size-full place-items-center text-caption text-ink-subtle">
+                  아직 없음
+                </span>
+              )}
+              <span className="absolute top-1.5 left-1.5 rounded-sm bg-black/60 px-1 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
+                {cut.index}컷
               </span>
+            </button>
+            {cuts.length > 1 && onDeleteCut && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteCut(cut);
+                }}
+                title={`${cut.index}컷 삭제`}
+                aria-label={`${cut.index}컷 삭제`}
+                className="absolute -top-1.5 -right-1.5 hidden size-5.5 cursor-pointer items-center justify-center rounded-full bg-danger text-white shadow-xs transition-transform hover:scale-110 group-hover:flex"
+              >
+                <Trash2 className="size-3" />
+              </button>
             )}
-            <span className="absolute top-1.5 left-1.5 rounded-sm bg-black/60 px-1 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
-              {cut.index}컷
-            </span>
-          </button>
+          </div>
         );
       })}
     </nav>
