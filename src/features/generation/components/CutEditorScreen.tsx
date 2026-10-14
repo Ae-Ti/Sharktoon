@@ -9,10 +9,8 @@ import { cn } from "@/lib/cn";
 import { saveLayerTreeAction } from "../actions";
 import { TOON_FONTS, ensureToonFont } from "../editor/fonts";
 import {
-  BALLOON_LABEL,
   isVectorTextLayer,
   toLayerRowProps,
-  type BalloonKind,
   type CutLayerTree,
   type Layer,
   type VectorTextLayer,
@@ -237,24 +235,12 @@ export function CutEditorScreen({
           {selected && (
             <LayerInspector
               layer={selected}
+              onChangeName={(name) =>
+                editor.update(selected.id, (l) => ({ ...l, name }))
+              }
               onChangeText={(text) =>
                 editor.update(selected.id, (l) =>
                   isVectorTextLayer(l) ? { ...l, text } : l,
-                )
-              }
-              onChangeBalloon={(balloon) =>
-                editor.update(selected.id, (l) =>
-                  isVectorTextLayer(l)
-                    ? {
-                        ...l,
-                        balloon,
-                        // 꼬리가 없던 레이어를 말풍선으로 바꾸면 아래쪽에 꼬리를 하나 달아 준다.
-                        tail: l.tail ?? {
-                          x: l.box.x + l.box.width / 2,
-                          y: l.box.y + l.box.height + 100,
-                        },
-                      }
-                    : l,
                 )
               }
               onChangeFont={(fontFamily) => {
@@ -574,26 +560,41 @@ function CutStrip({
   );
 }
 
-/** 말풍선 고르기는 12종을 다 보여준다(PRD 3.2). 드롭다운에 숨기면 안 쓴다. */
-const BALLOON_ORDER: BalloonKind[] = [
-  "normal",
-  "thought",
-  "shout",
-  "whisper",
-  "narration_box",
-  "telepathy",
-  "broadcast",
-  "wobble",
-  "spike",
-  "cloud",
-  "chain",
-  "none",
-];
+function getLayerKindInfo(layer: Layer): { label: string; icon: React.ReactNode } {
+  if (layer.kind === "balloon") {
+    if (layer.balloon === "thought") {
+      return { label: "생각 말풍선", icon: <Cloud className="size-3.5 text-sky-500" /> };
+    }
+    if (layer.balloon === "shout") {
+      return { label: "외침 말풍선", icon: <Flame className="size-3.5 text-rose-500" /> };
+    }
+    return { label: "말풍선", icon: <MessageSquare className="size-3.5 text-brand" /> };
+  }
+  if (layer.kind === "narration") {
+    if (layer.name.includes("하단") || layer.box.y > 600) {
+      return { label: "하단 나레이션", icon: <PanelBottom className="size-3.5 text-amber-600" /> };
+    }
+    return { label: "상단 나레이션", icon: <Scroll className="size-3.5 text-amber-600" /> };
+  }
+  if (layer.kind === "sfx") {
+    return { label: "효과음", icon: <Zap className="size-3.5 text-yellow-500" /> };
+  }
+  if (layer.kind === "text") {
+    if (layer.name.includes("제목") || layer.name.includes("후킹")) {
+      return { label: "제목", icon: <Heading className="size-3.5 text-brand" /> };
+    }
+    return { label: "텍스트", icon: <Type className="size-3.5 text-violet-500" /> };
+  }
+  if (layer.kind === "background") {
+    return { label: "배경 이미지", icon: <Sparkles className="size-3.5 text-brand" /> };
+  }
+  return { label: "캐릭터 이미지", icon: <Sparkles className="size-3.5 text-brand" /> };
+}
 
 function LayerInspector({
   layer,
+  onChangeName,
   onChangeText,
-  onChangeBalloon,
   onChangeFontSize,
   onChangeFont,
   onChangePosition,
@@ -601,8 +602,8 @@ function LayerInspector({
   onDelete,
 }: {
   layer: Layer;
+  onChangeName: (name: string) => void;
   onChangeText: (text: string) => void;
-  onChangeBalloon: (balloon: BalloonKind) => void;
   onChangeFont: (family: string) => void;
   onChangeFontSize: (size: number) => void;
   onChangePosition: (pos: "top_left" | "top_center" | "top_right" | "center" | "bottom") => void;
@@ -610,145 +611,141 @@ function LayerInspector({
   onDelete: () => void;
 }) {
   const vector = isVectorTextLayer(layer) ? (layer as VectorTextLayer) : null;
+  const kindInfo = getLayerKindInfo(layer);
 
   return (
-    <Panel title={layer.name}>
-      {vector ? (
-        <div className="flex flex-col gap-3">
-          <Field
-            label="글"
-            multiline
-            rows={2}
-            value={vector.text}
-            onChange={onChangeText}
-            maxLength={120}
-          />
+    <Panel title={layer.name || "레이어 속성"}>
+      <div className="flex flex-col gap-3">
+        <Field
+          label="레이어 이름"
+          value={layer.name}
+          onChange={onChangeName}
+          placeholder="레이어 이름 입력"
+          maxLength={30}
+        />
 
-          <div className="flex flex-col gap-2">
-            <span className="text-label font-semibold text-ink">말풍선</span>
-            <div className="flex flex-wrap gap-1">
-              {BALLOON_ORDER.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => onChangeBalloon(kind)}
-                  aria-pressed={vector.balloon === kind}
-                  className={cn(
-                    "h-control-sm cursor-pointer rounded-md px-2.5 text-caption font-semibold",
-                    vector.balloon === kind
-                      ? "bg-brand text-on-brand"
-                      : "bg-surface-sunken text-ink-muted hover:text-ink",
-                  )}
-                >
-                  {BALLOON_LABEL[kind]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <span className="text-label font-semibold text-ink">위치 정렬</span>
-            <div className="grid grid-cols-5 gap-1">
-              <button
-                type="button"
-                onClick={() => onChangePosition("top_left")}
-                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
-                title="상단 좌측"
-              >
-                ↖ 좌상
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangePosition("top_center")}
-                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
-                title="상단 중앙"
-              >
-                ↑ 상단
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangePosition("top_right")}
-                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
-                title="상단 우측"
-              >
-                ↗ 우상
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangePosition("center")}
-                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
-                title="가운데"
-              >
-                · 중앙
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangePosition("bottom")}
-                className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
-                title="하단 중앙"
-              >
-                ↓ 하단
-              </button>
-            </div>
-            <p className="text-caption text-ink-subtle">
-              캔버스에서 직접 드래그하여 자유롭게 이동할 수도 있어요.
-            </p>
-          </div>
-
-          <label className="flex items-center gap-3 text-label">
-            <span className="shrink-0 text-ink-muted">글꼴</span>
-            <select
-              value={vector.style.fontFamily}
-              onChange={(e) => onChangeFont(e.target.value)}
-              className="h-control-sm min-w-0 flex-1 rounded-md border border-border-control bg-surface-card px-2 text-label text-ink"
-            >
-              {(["손글씨", "둥근", "굵은", "고딕", "명조", "장식"] as const).map((tone) => (
-                <optgroup key={tone} label={tone}>
-                  {TOON_FONTS.filter((f) => f.tone === tone).map((f) => (
-                    <option key={f.family} value={f.family}>
-                      {f.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-3 text-label">
-            <span className="shrink-0 text-ink-muted">크기</span>
-            <input
-              type="range"
-              min={16}
-              max={96}
-              value={vector.style.fontSize}
-              onChange={(e) => onChangeFontSize(Number(e.target.value))}
-              className="h-control-sm min-w-0 flex-1 accent-brand"
-            />
-            <span className="w-10 shrink-0 text-right font-semibold tabular-nums">
-              {vector.style.fontSize}
-            </span>
-          </label>
-
-          <p className="text-caption text-ink-subtle">
-            벡터라 이미지에 굽지 않아요. 나중에 글자만 고칠 수 있어요.
-          </p>
+        <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-3 py-2 text-caption">
+          <span className="font-medium text-ink-muted">종류</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
+            {kindInfo.icon}
+            {kindInfo.label}
+          </span>
         </div>
-      ) : (
-        <dl className="flex flex-col gap-2 text-label">
-          <Row label="종류">생성 이미지</Row>
-          <Row label="크기">
-            {Math.round(layer.box.width)} × {Math.round(layer.box.height)}
-          </Row>
-        </dl>
-      )}
 
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={onToggleLock}>
-          {layer.locked ? "잠금 풀기" : "잠그기"}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onDelete} disabled={layer.locked}>
-          지우기
-        </Button>
+        {vector ? (
+          <>
+            <Field
+              label="글"
+              multiline
+              rows={2}
+              value={vector.text}
+              onChange={onChangeText}
+              maxLength={120}
+            />
+
+            <div className="flex flex-col gap-2">
+              <span className="text-label font-semibold text-ink">위치 정렬</span>
+              <div className="grid grid-cols-5 gap-1">
+                <button
+                  type="button"
+                  onClick={() => onChangePosition("top_left")}
+                  className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                  title="상단 좌측"
+                >
+                  ↖ 좌상
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangePosition("top_center")}
+                  className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                  title="상단 중앙"
+                >
+                  ↑ 상단
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangePosition("top_right")}
+                  className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                  title="상단 우측"
+                >
+                  ↗ 우상
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangePosition("center")}
+                  className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                  title="가운데"
+                >
+                  · 중앙
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangePosition("bottom")}
+                  className="h-control-sm cursor-pointer rounded-md bg-surface-sunken text-caption font-medium text-ink-muted hover:bg-border hover:text-ink"
+                  title="하단 중앙"
+                >
+                  ↓ 하단
+                </button>
+              </div>
+              <p className="text-caption text-ink-subtle">
+                캔버스에서 직접 드래그하여 자유롭게 이동할 수도 있어요.
+              </p>
+            </div>
+
+            <label className="flex items-center gap-3 text-label">
+              <span className="shrink-0 text-ink-muted">글꼴</span>
+              <select
+                value={vector.style.fontFamily}
+                onChange={(e) => onChangeFont(e.target.value)}
+                className="h-control-sm min-w-0 flex-1 rounded-md border border-border-control bg-surface-card px-2 text-label text-ink"
+              >
+                {(["손글씨", "둥근", "굵은", "고딕", "명조", "장식"] as const).map((tone) => (
+                  <optgroup key={tone} label={tone}>
+                    {TOON_FONTS.filter((f) => f.tone === tone).map((f) => (
+                      <option key={f.family} value={f.family}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-3 text-label">
+              <span className="shrink-0 text-ink-muted">크기</span>
+              <input
+                type="range"
+                min={16}
+                max={96}
+                value={vector.style.fontSize}
+                onChange={(e) => onChangeFontSize(Number(e.target.value))}
+                className="h-control-sm min-w-0 flex-1 accent-brand"
+              />
+              <span className="w-10 shrink-0 text-right font-semibold tabular-nums">
+                {vector.style.fontSize}
+              </span>
+            </label>
+
+            <p className="text-caption text-ink-subtle">
+              벡터라 이미지에 굽지 않아요. 나중에 글자만 고칠 수 있어요.
+            </p>
+          </>
+        ) : (
+          <dl className="flex flex-col gap-2 text-label">
+            <Row label="크기">
+              {Math.round(layer.box.width)} × {Math.round(layer.box.height)}
+            </Row>
+          </dl>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <Button variant="secondary" size="sm" onClick={onToggleLock}>
+            {layer.locked ? "잠금 풀기" : "잠그기"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete} disabled={layer.locked}>
+            지우기
+          </Button>
+        </div>
       </div>
     </Panel>
   );

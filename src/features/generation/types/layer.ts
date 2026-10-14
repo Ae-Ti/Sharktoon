@@ -55,11 +55,11 @@ export type BalloonKind =
   | "none";
 
 export const BALLOON_LABEL: Record<BalloonKind, string> = {
-  normal: "일반",
+  normal: "말풍선",
   thought: "생각",
   shout: "외침",
   whisper: "속삭임",
-  narration_box: "나레이션 박스",
+  narration_box: "나레이션",
   telepathy: "텔레파시",
   broadcast: "방송",
   wobble: "떨림",
