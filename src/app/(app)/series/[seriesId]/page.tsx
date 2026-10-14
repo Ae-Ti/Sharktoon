@@ -5,6 +5,7 @@ import { Badge, Button, ButtonLink } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 import type { EpisodeStatus } from "@/features/platform/data/types";
+import { cn } from "@/lib/cn";
 
 export const metadata: Metadata = { title: "시리즈 · 샥툰" };
 
@@ -32,13 +33,49 @@ export default async function Page({
 }) {
   const { seriesId } = await params;
   const repo = await getRepository();
-  const series = await repo.getSeries(seriesId);
+  const [series, allSeries] = await Promise.all([
+    repo.getSeries(seriesId),
+    repo.listSeries(),
+  ]);
   if (!series) notFound();
 
   const next = Math.max(0, ...series.episodes.map((e) => e.number)) + 1;
 
   return (
     <div className="flex flex-col gap-6">
+      {allSeries.length > 1 && (
+        <nav aria-label="시리즈 전환" className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {allSeries.map((s) => {
+              const active = s.id === series.id;
+              return (
+                <Link
+                  key={s.id}
+                  href={`/series/${s.id}`}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-lg px-3 text-caption font-semibold transition-all shrink-0",
+                    active
+                      ? "bg-brand text-on-brand shadow-2xs font-bold"
+                      : "border border-border bg-surface-card text-ink-muted hover:border-brand/50 hover:text-ink",
+                  )}
+                >
+                  <span>{s.title}</span>
+                  <span className={cn("text-[11px]", active ? "text-white/80" : "text-ink-subtle")}>
+                    {s.episodeCount}화
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          <Link
+            href="/series"
+            className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-caption font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors shrink-0"
+          >
+            전체 시리즈 ({allSeries.length}) ↗
+          </Link>
+        </nav>
+      )}
+
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-title-lg font-bold">{series.title}</h1>

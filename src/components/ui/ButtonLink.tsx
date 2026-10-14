@@ -33,7 +33,7 @@ export function ButtonLink({
 }: ButtonLinkProps) {
   return (
     <Link className={buttonClasses({ variant, size, block, className })} {...rest}>
-      <span>{children}</span>
+      {children}
       {cost != null && (
         <span
           className={cn(

@@ -21,6 +21,8 @@
     "@anthropic-ai/sdk": "^0.126.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
+    "@types/canvas-confetti": "^1.9.0",
+    "canvas-confetti": "^1.9.4",
     "fflate": "^0.8.3",
     "framer-motion": "^14.1.1",
     "konva": "^10.5.0",

@@ -13,7 +13,7 @@ const RESUME: Record<EpisodeStatus, { note: string; label: string; path: string 
   draft: { note: "아직 사연만 적어 뒀어요", label: "콘티 만들기", path: "storyboard" },
   storyboard: { note: "콘티까지 만들어 뒀어요", label: "콘티 이어서", path: "storyboard" },
   generating: { note: "이미지를 만들고 있어요", label: "진행 보기", path: "generate" },
-  ready: { note: "컷이 다 나왔어요. 올리기만 하면 돼요", label: "게시 준비", path: "publish" },
+  ready: { note: "컷 생성이 완료되었어요. 대사와 말풍선을 편집해 보세요", label: "편집", path: "editor" },
   published: { note: "게시했어요", label: "보기", path: "publish" },
 };
 
@@ -28,11 +28,16 @@ export default async function Page() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-4">
         <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
-        <ButtonLink href="/onboarding/character" size="sm" variant="primary" className="flex items-center gap-1.5 shadow-2xs">
-          <Plus className="size-4" />
-          <span>새 인스타툰 만들기</span>
+        <ButtonLink
+          href="/onboarding/character"
+          size="md"
+          variant="primary"
+          className="h-11 px-5 shadow-xs hover:shadow transition-all"
+        >
+          <Plus className="size-5 shrink-0" />
+          <span className="font-bold">새 인스타툰 만들기</span>
         </ButtonLink>
       </div>
 
@@ -41,6 +46,27 @@ export default async function Page() {
         streak={attendance.streak}
         policy={policy}
       />
+
+      {resumable && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title font-semibold">이어서 만들기</h2>
+          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface-card p-4 shadow-2xs">
+            <span className="size-14 shrink-0 rounded-lg bg-skeleton" />
+            <span className="flex flex-1 flex-col gap-1">
+              <span className="text-body font-semibold">
+                {resumable.seriesTitle} · {resumable.number}화
+              </span>
+              <span className="text-caption text-ink-muted">{RESUME[resumable.status].note}</span>
+            </span>
+            <ButtonLink
+              href={`/episodes/${resumable.episodeId}/${RESUME[resumable.status].path}`}
+              size="sm"
+            >
+              {RESUME[resumable.status].label}
+            </ButtonLink>
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-title font-semibold">내 시리즈</h2>
@@ -79,28 +105,6 @@ export default async function Page() {
           </ul>
         )}
       </section>
-
-      {resumable && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title font-semibold">이어서 만들기</h2>
-          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface-card px-4 py-3">
-            <span className="size-14 shrink-0 rounded-md bg-skeleton" />
-            <span className="flex flex-1 flex-col gap-1">
-              <span className="text-body font-semibold">
-                {resumable.seriesTitle} · {resumable.number}화
-              </span>
-              <span className="text-caption text-ink-muted">{RESUME[resumable.status].note}</span>
-            </span>
-            <Badge>초안</Badge>
-            <ButtonLink
-              href={`/episodes/${resumable.episodeId}/${RESUME[resumable.status].path}`}
-              size="sm"
-            >
-              {RESUME[resumable.status].label}
-            </ButtonLink>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

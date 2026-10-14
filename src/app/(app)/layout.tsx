@@ -20,7 +20,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     repo.listSeries(),
     repo.getProfile(),
   ]);
-  const seriesHref = series[0] ? `/series/${series[0].id}` : null;
+  const seriesHref = "/series";
   const isAdmin = Boolean(session.isAdmin);
 
   return (

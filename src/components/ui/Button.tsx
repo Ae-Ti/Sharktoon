@@ -47,7 +47,7 @@ export function Button({
           className="size-3.5 animate-spin rounded-full border-2 border-current border-r-transparent opacity-85"
         />
       )}
-      <span>{children}</span>
+      {children}
       {cost != null && !loading && (
         <span
           className={cn(
