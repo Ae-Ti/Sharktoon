@@ -206,9 +206,12 @@ export class FalFluxGenerator implements ImageGenerator {
       const customBg = customBgMatch ? customBgMatch[1].trim() : "";
       if (customBg && !customBg.includes("단색") && !customBg.includes("거실")) {
         backgroundPrompt = `[Environment & Background]: Fully illustrated detailed ${customBg} setting with architectural depth and environmental props, strictly NO empty background, NO plain white void.`;
-      } else {
-        // 거실 또는 기본 인테리어
+      } else if (cutText.includes("거실") || cutText.includes("소파")) {
+        // 거실이 명시된 경우
         backgroundPrompt = `[Environment & Background]: Fully illustrated cozy modern Korean apartment living room interior setting with architectural depth. Warm light wooden flooring with subtle grain, fabric sofa and cushions in the background, low coffee table, baseboards, window blinds with ambient daylight, lived-in interior props, strictly NO empty background, NO plain white void.`;
+      } else {
+        // 기본 모던 실내 배경
+        backgroundPrompt = `[Environment & Background]: Fully illustrated clean modern interior indoor setting with subtle architectural depth, neat walls, natural flooring, environmental props fitting the scene, strictly NO empty background, NO plain white void.`;
       }
     }
 

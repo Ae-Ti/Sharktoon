@@ -199,11 +199,15 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
     const hasVetDialogue = cut.dialogue.some(
       (d) =>
         (typeof d.speakerId === "string" && (d.speakerId.includes("vet") || d.speakerId.includes("doctor") || d.speakerId.includes("수의사"))) ||
-        d.text.includes("순해요") ||
         d.text.includes("진료")
     );
     if (hasVetDialogue && !scene.includes("수의사") && !scene.includes("의사")) {
-      scene = `동물병원 진료실 안. 흰색 가운을 입은 40대 남성 수의사가 진료대 옆에서 고양이를 진찰하고 있는 모습. 그 옆에서 고정 그레이 후드티 차림의 20대 여성 주인공(나, 평범한 인간 귀)이 바라보고 있음. ${scene}`;
+      const petType = cut.dialogue.some((d) => d.text.includes("고양이") || d.text.includes("냥이"))
+        ? "고양이"
+        : cut.dialogue.some((d) => d.text.includes("강아지") || d.text.includes("댕댕이"))
+          ? "강아지"
+          : "반려동물";
+      scene = `동물병원 진료실 안. 흰색 가운을 입은 40대 남성 수의사가 진료대 옆에서 ${petType}를 진찰하고 있는 모습. 그 옆에서 고정 그레이 후드티 차림의 20대 여성 주인공(나, 평범한 인간 귀)이 바라보고 있음. ${scene}`;
       if (!charIds.includes("ch_vet")) charIds.push("ch_vet");
     }
 
@@ -239,10 +243,10 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
         bg = { preset: "bedroom" };
       } else if (scene.includes("카페")) {
         bg = { preset: "cafe" };
-      } else if (scene.includes("회사") || scene.includes("사무실") || scene.includes("회의") || scene.includes("팀장") || scene.includes("출근") || scene.includes("퇴근")) {
+      } else if (scene.includes("회사") || scene.includes("사무실") || scene.includes("회의") || scene.includes("팀장") || scene.includes("출근") || scene.includes("퇴근") || scene.includes("부장")) {
         bg = { preset: "office" };
       } else {
-        bg = { preset: "living_room" };
+        bg = { preset: "solid_color", customName: "심플 실내" };
       }
     }
 

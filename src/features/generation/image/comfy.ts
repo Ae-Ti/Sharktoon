@@ -330,6 +330,8 @@ export class ComfyUIGenerator implements ImageGenerator {
         "On the right side: 20-year-old Korean female pet owner, black hair tied loosely in low ponytail with curtain bangs, wearing oversized dark grey hoodie, dark pants, standing and watching calmly. (Strictly NO lab coat, NO stethoscope).";
     }
 
+    const hasCatInCut = cutText.includes("고양이") || cutText.includes("냥이") || cutText.includes("cat");
+
     // 2. Base Positive & Negative Prompts
     const positivePrompt = [
       `A clean 2D animation illustration, soft line art style, Korean webtoon aesthetic.`,
@@ -337,8 +339,10 @@ export class ComfyUIGenerator implements ImageGenerator {
       `[Key Dynamic Action & Poses]: ${visualScene}.`,
       `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult human proportions, strictly NO chibi, NO super-deformed.`,
       `[Protagonist]: 20-year-old Korean human girl, natural ears, signature low ponytail with curtain bangs, oversized dark grey hoodie.`,
-      `[Animal]: Small adult domestic orange tabby cat with white paws, realistic quadruped feline anatomy, NO clothes on cat.`,
-    ].join("\n");
+      hasCatInCut
+        ? `[Animal]: Small adult domestic orange tabby cat with white paws, realistic quadruped feline anatomy, NO clothes on cat.`
+        : "",
+    ].filter(Boolean).join("\n");
 
     const negativePrompt = [
       "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
