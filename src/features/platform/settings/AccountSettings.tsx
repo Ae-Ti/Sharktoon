@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { User, Coins, RotateCcw, ShieldAlert, AlertCircle, Calendar } from "lucide-react";
 import { Badge, Button, Field, Modal } from "@/components/ui";
 import {
   cancelAccountDeletionAction,
@@ -60,66 +61,95 @@ export function AccountSettings({ name, plan, credit, policy, quote, refund, acc
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <h1 className="text-title-lg font-bold">설정</h1>
+      <div>
+        <h1 className="text-title-lg font-bold">계정 설정</h1>
+        <p className="text-body-sm text-ink-muted">
+          크레딧 보유 현황, 환불 정책 및 계정 상태를 관리할 수 있습니다.
+        </p>
+      </div>
 
-      {notice && <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">{notice}</p>}
+      {notice && (
+        <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger-tint px-4 py-3 text-body-sm text-danger shadow-2xs">
+          <AlertCircle className="size-4 shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
 
       {account.deletionRequestedAt && (
-        <section className="flex flex-wrap items-center gap-3 rounded-lg border border-danger bg-danger-tint p-4">
-          <p className="flex-1 text-body-sm text-danger">
-            탈퇴를 요청했어요. {day(account.purgeAt!)}에 계정과 만든 작품이 모두 지워져요. 그 전에는 되돌릴 수 있어요.
-          </p>
+        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger-tint/60 p-5 shadow-2xs">
+          <div className="flex flex-1 items-start gap-2.5">
+            <ShieldAlert className="size-5 shrink-0 text-danger mt-0.5" />
+            <p className="text-body-sm text-danger leading-relaxed">
+              탈퇴를 요청했어요. {day(account.purgeAt!)}에 계정과 만든 작품이 모두 지워져요. 그 전에는 되돌릴 수 있어요.
+            </p>
+          </div>
           <Button variant="secondary" loading={pending} onClick={() => run(cancelAccountDeletionAction)}>
             탈퇴 취소
           </Button>
         </section>
       )}
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
-        <div className="flex items-center gap-2">
-          <h2 className="flex-1 text-title font-semibold">{name ?? "내 계정"}</h2>
+      <section className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-brand-tint text-brand">
+              <User className="size-4" />
+            </span>
+            <h2 className="text-title font-semibold">{name ?? "내 계정"}</h2>
+          </div>
           <Badge tone="brand">{PLAN_LABEL[plan]}</Badge>
         </div>
         <dl className="grid grid-cols-3 gap-3 text-center">
-          <Stat label="무상" value={credit.byKind.free} />
-          <Stat label="구독" value={credit.byKind.subscription} />
-          <Stat label="구매" value={credit.byKind.purchase} />
+          <Stat label="무상 크레딧" value={credit.byKind.free} />
+          <Stat label="구독 크레딧" value={credit.byKind.subscription} />
+          <Stat label="구매 크레딧" value={credit.byKind.purchase} />
         </dl>
-        <p className="text-caption text-ink-muted">
-          무상 → 구독 → 구매 순으로 써요.
-          {credit.held > 0 && ` 지금 만드는 중인 컷에 ${credit.held}크레딧이 잡혀 있어요.`}
-          {credit.nextExpiry &&
-            ` ${day(credit.nextExpiry.at)}에 ${credit.nextExpiry.amount}크레딧이 사라져요.`}
-        </p>
-        <p className="text-caption text-ink-subtle">
-          출석하면 하루 {policy.attendanceDaily}크레딧, {policy.attendanceStreakDays}일 연속이면{" "}
-          {policy.attendanceStreakBonus}크레딧을 더 드려요. 출석 크레딧은 한 달에 {policy.attendanceMonthlyCap}크레딧까지예요.
-        </p>
+        <div className="space-y-1.5 pt-1 text-caption text-ink-muted">
+          <p>
+            무상 → 구독 → 구매 순으로 차감돼요.
+            {credit.held > 0 && ` 지금 만드는 중인 컷에 ${credit.held}크레딧이 잡혀 있어요.`}
+            {credit.nextExpiry &&
+              ` ${day(credit.nextExpiry.at)}에 ${credit.nextExpiry.amount}크레딧이 만료돼요.`}
+          </p>
+          <p className="text-ink-subtle">
+            출석하면 하루 {policy.attendanceDaily}크레딧, {policy.attendanceStreakDays}일 연속이면{" "}
+            {policy.attendanceStreakBonus}크레딧을 더 드려요. 출석 크레딧은 한 달에 {policy.attendanceMonthlyCap}크레딧까지예요.
+          </p>
+        </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
-        <h2 className="text-title font-semibold">환불</h2>
+      <section className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-surface-sunken text-ink-muted">
+            <RotateCcw className="size-4" />
+          </span>
+          <h2 className="text-title font-semibold">환불</h2>
+        </div>
         {refund && (
-          <p className="text-body-sm text-ink-muted">
-            최근 신청: {day(refund.createdAt)} · {won(refund.netKrw)} ·{" "}
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-surface-sunken/40 px-3.5 py-2.5 text-body-sm text-ink-muted">
+            <span>최근 신청: {day(refund.createdAt)} · {won(refund.netKrw)}</span>
             <Badge tone={refund.status === "rejected" ? "danger" : "neutral"}>{REFUND_LABEL[refund.status]}</Badge>
-          </p>
+          </div>
         )}
         {quote.netKrw > 0 ? (
-          <>
-            <p className="text-body text-ink">
-              쓰지 않은 유료 크레딧 {quote.credits}개 · {won(quote.grossKrw)}
-              {quote.feeKrw > 0 && ` − 공제 ${won(quote.feeKrw)}`} ={" "}
-              <strong className="font-semibold">{won(quote.netKrw)}</strong>
-            </p>
-            <p className="text-caption text-ink-muted">
-              결제·환불 수수료로 {Math.round(policy.refundFeeRate * 100)}%를 빼요. 결제하고 7일 안에 한 번도 안 쓴 결제는 빼지 않아요.
+          <div className="flex flex-col gap-3">
+            <div className="rounded-lg border border-border/60 bg-surface-sunken/40 p-3.5">
+              <p className="text-body text-ink">
+                쓰지 않은 유료 크레딧 <strong className="font-semibold text-brand">{quote.credits}개</strong> · {won(quote.grossKrw)}
+                {quote.feeKrw > 0 && ` − 공제 ${won(quote.feeKrw)}`} ={" "}
+                <strong className="text-title font-bold text-ink">{won(quote.netKrw)}</strong>
+              </p>
+            </div>
+            <p className="text-caption text-ink-muted leading-relaxed">
+              결제·환불 수수료로 {Math.round(policy.refundFeeRate * 100)}%를 공제해요. 결제하고 7일 안에 한 번도 안 쓴 결제는 차감하지 않아요.
               앱에서 산 크레딧은 각 스토어에서 환불해요.
             </p>
-            <Button variant="secondary" disabled={openRefund} onClick={() => setAskRefund(true)}>
-              {openRefund ? "환불 처리 중" : "환불 신청"}
-            </Button>
-          </>
+            <div>
+              <Button variant="secondary" disabled={openRefund} onClick={() => setAskRefund(true)}>
+                {openRefund ? "환불 처리 중" : "환불 신청"}
+              </Button>
+            </div>
+          </div>
         ) : (
           <p className="text-body-sm text-ink-muted">
             환불할 유료 크레딧이 없어요. 가입·출석으로 받은 무상 크레딧은 환불되지 않아요.
@@ -128,15 +158,22 @@ export function AccountSettings({ name, plan, credit, policy, quote, refund, acc
       </section>
 
       {!account.deletionRequestedAt && (
-        <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
-          <h2 className="text-title font-semibold">탈퇴</h2>
-          <p className="text-body-sm text-ink-muted">
-            탈퇴하면 30일 뒤에 계정, 시리즈, 만든 작품이 모두 지워져요. 30일 안에는 되돌릴 수 있어요.
-            무상 크레딧은 사라지고, 유료 크레딧은 탈퇴 전에 환불 신청을 해 주세요.
+        <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-surface-sunken text-ink-muted">
+              <ShieldAlert className="size-4" />
+            </span>
+            <h2 className="text-title font-semibold">회원 탈퇴</h2>
+          </div>
+          <p className="text-body-sm text-ink-muted leading-relaxed">
+            탈퇴하면 30일 뒤에 계정, 시리즈, 만든 작품이 모두 영구 삭제돼요. 30일 안에는 언제든 되돌릴 수 있어요.
+            무상 크레딧은 사라지며, 유료 크레딧은 탈퇴 전 환불 신청을 진행해 주세요.
           </p>
-          <Button variant="ghost" onClick={() => setAskDelete(true)}>
-            탈퇴하기
-          </Button>
+          <div className="pt-1">
+            <Button variant="ghost" onClick={() => setAskDelete(true)} className="text-ink-muted hover:text-danger hover:bg-danger-tint/30">
+              탈퇴하기
+            </Button>
+          </div>
         </section>
       )}
 
@@ -192,9 +229,9 @@ export function AccountSettings({ name, plan, credit, policy, quote, refund, acc
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-md bg-surface-sunken py-3">
-      <dt className="text-caption text-ink-muted">{label}</dt>
-      <dd className="text-title font-bold tabular-nums">{value}</dd>
+    <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-surface-sunken/40 py-3.5 px-3">
+      <dt className="text-caption font-medium text-ink-muted">{label}</dt>
+      <dd className="text-title-lg font-bold tabular-nums text-ink">{value}</dd>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Sparkles, Edit3, Share2, Layers, CheckCircle2 } from "lucide-react";
 import { Badge, ButtonLink } from "@/components/ui";
 import { getGenerationStore } from "@/features/generation/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
@@ -36,54 +37,56 @@ export default async function Page({
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-display font-bold tracking-[-0.015em]">
-          {ctx.number === 1 ? "첫 화가 완성됐어요" : `${ctx.number}화가 완성됐어요`}
-        </h1>
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-md bg-brand-tint text-brand">
+            <CheckCircle2 className="size-3.5" />
+          </span>
+          <h1 className="text-display font-bold tracking-[-0.015em]">
+            {ctx.number === 1 ? "첫 화가 완성됐어요!" : `${ctx.number}화가 완성됐어요!`}
+          </h1>
+        </div>
         <p className="text-body-sm text-ink-muted">
-          인스타 캐러셀 순서 그대로예요. 컷을 눌러 고칠 수 있어요.
+          인스타그램 캐러셀 순서 그대로예요. 컷을 눌러 대사와 레이어를 편집할 수 있어요.
         </p>
       </div>
 
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
         {cuts.map((c) => (
           <Link
             key={c.id}
             href={`/episodes/${ctx.episodeId}/editor?cut=${c.id}`}
-            className="flex w-44 shrink-0 flex-col gap-1.5"
+            className="group flex w-44 shrink-0 flex-col gap-1.5 cursor-pointer"
           >
             {c.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={c.imageUrl}
                 alt={`${c.no}컷 · ${c.role}`}
-                className={`${ctx.rule.aspectRatio === "4:5" ? "aspect-[4/5]" : "aspect-square"} w-full rounded-lg border border-border object-cover`}
+                className={`${ctx.rule.aspectRatio === "4:5" ? "aspect-[4/5]" : "aspect-square"} w-full rounded-xl border border-border/80 object-cover shadow-2xs group-hover:border-brand group-hover:shadow-xs transition-all`}
               />
             ) : (
-              <span className="grid aspect-square place-items-center rounded-lg border border-border bg-skeleton text-caption text-ink-subtle">
-                {c.no}컷 · 아직 없음
+              <span className="grid aspect-square place-items-center rounded-xl border border-border/80 bg-surface-sunken text-caption text-ink-subtle">
+                {c.no}컷 · 준비 중
               </span>
             )}
-            <span className="text-caption text-ink-muted">
-              {c.no} / {cuts.length} · {c.role}
-            </span>
+            <div className="flex items-center justify-between px-0.5 text-caption text-ink-muted">
+              <span className="font-medium text-ink group-hover:text-brand transition-colors">
+                {c.no}컷
+              </span>
+              <Badge tone="neutral" className="text-[10px] px-1.5 py-0">{c.role}</Badge>
+            </div>
           </Link>
         ))}
       </div>
 
-      {/* AI 라벨은 이미지 위에 얹지 않고 바로 아래 메타 줄에 둔다. */}
-      <div className="flex items-center gap-2">
-        <Badge tone="ai">AI 생성</Badge>
-        <span className="text-caption text-ink-muted">{ctx.rule.aspectRatio}</span>
-      </div>
-
       {ctx.assets.length === 0 && (
-        <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface-card p-4">
+        <div className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-surface-card p-4 shadow-2xs">
           <div className="flex items-center justify-between gap-2">
             <span className="text-label font-semibold">시리즈로 이어갈까요?</span>
             <Badge tone="brand">추천</Badge>
           </div>
-          <p className="text-body-sm text-ink-muted">
-            캐릭터와 그림체를 에셋으로 저장해 두면 2화부터는 사연만 적으면 돼요.
+          <p className="text-body-sm text-ink-muted leading-relaxed">
+            캐릭터와 그림체를 에셋으로 등록해 두면 2화부터는 사연만 적어도 그림체가 유지돼요.
           </p>
           <ButtonLink href="/assets" variant="secondary" block>
             에셋 등록하기
@@ -93,12 +96,24 @@ export default async function Page({
 
       <div className="flex-1" />
 
-      <div className="flex flex-col gap-2">
-        <ButtonLink href={`/episodes/${ctx.episodeId}/publish`} size="lg" block>
+      <div className="flex flex-col gap-2.5">
+        <ButtonLink
+          href={`/episodes/${ctx.episodeId}/publish`}
+          size="lg"
+          block
+          className="gap-2 shadow-xs"
+        >
+          <Share2 className="size-4" />
           게시 준비하기
         </ButtonLink>
-        <ButtonLink href={`/episodes/${ctx.episodeId}/editor`} variant="secondary" block>
-          대사 먼저 다듬기
+        <ButtonLink
+          href={`/episodes/${ctx.episodeId}/editor`}
+          variant="secondary"
+          block
+          className="gap-2"
+        >
+          <Edit3 className="size-4" />
+          편집기에서 다듬기
         </ButtonLink>
         <ButtonLink href={`/series/${ctx.seriesId}`} variant="ghost" block>
           시리즈에서 보기

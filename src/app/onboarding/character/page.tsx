@@ -12,23 +12,30 @@ import {
   type StylePreset,
 } from "@/features/platform/onboarding/OnboardingContext";
 
-const METHODS: { id: CharacterMethod; title: string; description: string }[] = [
+import { Camera, Tags, Sparkles, UploadCloud } from "lucide-react";
+
+const METHODS: { id: CharacterMethod; title: string; description: string; icon: React.ReactNode }[] = [
   {
     id: "selfie",
     title: "셀카로 만들기",
-    description: "사진 1장이면 돼요. 원본은 시트를 만든 뒤 지워요.",
+    description: "사진 1장이면 돼요. 얼굴 특징을 자동 분석해 2D 캐릭터를 만들어요.",
+    icon: <Camera className="size-4.5" />,
   },
   {
     id: "tags",
     title: "특징 태그로 만들기",
-    description: "안경, 곱슬머리처럼 5개까지.",
+    description: "안경, 곱슬머리처럼 5개까지 키워드로 직접 구성해요.",
+    icon: <Tags className="size-4.5" />,
   },
   {
     id: "default",
     title: "기본 캐릭터 쓰기",
-    description: "지금 정하지 않고 첫 화부터 볼래요.",
+    description: "지금 정하지 않고 첫 화부터 바로 볼래요.",
+    icon: <Sparkles className="size-4.5" />,
   },
 ];
+
+const TAG_SUGGESTIONS = ["안경", "후드티", "단발", "곱슬머리", "직장인", "고양이귀"];
 
 const STYLES = (Object.keys(STYLE_LABEL) as StylePreset[]).map((id) => ({
   id,
@@ -42,7 +49,15 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const preview = useObjectUrl(selfie);
 
-  const tagCount = tags.split(",").map((t) => t.trim()).filter(Boolean).length;
+  const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+  const tagCount = tagList.length;
+
+  function addTag(tag: string) {
+    if (tagList.includes(tag) || tagCount >= 5) return;
+    const nextTags = tagList.length > 0 ? `${tags}, ${tag}` : tag;
+    set("tags", nextTags);
+    set("characterAssetId", null);
+  }
 
   /** 셀카나 태그로 캐릭터 시트를 만들고 사연 단계로 간다. 시트 생성은 크레딧을 쓰지 않는다. */
   function next() {
@@ -98,10 +113,10 @@ export default function Page() {
                 set("characterAssetId", null);
               }}
               className={cn(
-                "group cursor-pointer rounded-lg p-3 text-left transition-all",
+                "group cursor-pointer rounded-xl p-3 text-left transition-all shadow-2xs",
                 style === s.id
-                  ? "border-2 border-brand bg-brand-tint ring-1 ring-brand/30"
-                  : "border border-border-control bg-surface-card hover:bg-surface-sunken",
+                  ? "border-2 border-brand bg-brand-tint/40 ring-1 ring-brand/30 shadow-xs"
+                  : "border border-border/80 bg-surface-card hover:border-brand/50 hover:bg-surface-sunken/40",
               )}
             >
               <div className="flex items-center justify-between mb-1">
@@ -130,10 +145,10 @@ export default function Page() {
               key={m.id}
               title={m.title}
               description={m.description}
+              icon={m.icon}
               selected={method === m.id}
               onClick={() => {
                 set("method", m.id);
-                // 방법을 바꾸면 이전에 만든 캐릭터는 쓰지 않는다.
                 set("characterAssetId", null);
               }}
             />
@@ -142,14 +157,18 @@ export default function Page() {
       </div>
 
       {method === "selfie" && (
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border-control bg-surface-sunken px-6 py-7 text-center hover:border-brand transition-colors">
+        <label className="group flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-border/80 bg-surface-card p-6 text-center hover:border-brand/70 hover:bg-brand-tint/10 transition-all shadow-2xs">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="고른 사진" className="size-24 rounded-full object-cover ring-2 ring-brand" />
-          ) : null}
-          <span className="text-body font-semibold">{selfie ? "다른 사진 고르기" : "사진 고르기"}</span>
-          <span className="text-body-sm text-ink-muted">
-            얼굴이 잘 보이는 사진 1장으로 <strong className="text-brand font-medium">'{STYLE_LABEL[style]}'</strong> 2D 캐릭터를 만들어요.
+            <img src={preview} alt="고른 사진" className="size-24 rounded-full object-cover ring-4 ring-brand/30 shadow-sm" />
+          ) : (
+            <div className="grid size-12 place-items-center rounded-full bg-surface-sunken text-ink-muted group-hover:bg-brand-tint group-hover:text-brand transition-colors">
+              <UploadCloud className="size-6" />
+            </div>
+          )}
+          <span className="text-body font-bold text-ink">{selfie ? "다른 사진으로 변경하기" : "사진 업로드하기"}</span>
+          <span className="text-caption text-ink-muted leading-relaxed">
+            얼굴이 잘 보이는 셀카 1장으로 <strong className="text-brand font-medium">'{STYLE_LABEL[style]}'</strong> 화풍 캐릭터를 추출해요.
           </span>
           <input
             type="file"
@@ -164,24 +183,40 @@ export default function Page() {
       )}
 
       {method === "tags" && (
-        <Field
-          label="특징 태그"
-          value={tags}
-          onChange={(v) => {
-            set("tags", v);
-            set("characterAssetId", null);
-          }}
-          placeholder="안경, 곱슬머리, 후드티"
-          help="쉼표로 구분해 5개까지 적어 주세요."
-          error={tagCount > 5 ? "5개까지만 넣을 수 있어요." : undefined}
-        />
+        <div className="flex flex-col gap-2">
+          <Field
+            label="특징 태그"
+            value={tags}
+            onChange={(v) => {
+              set("tags", v);
+              set("characterAssetId", null);
+            }}
+            placeholder="안경, 곱슬머리, 후드티"
+            help="쉼표로 구분해 5개까지 적어 주세요."
+            error={tagCount > 5 ? "5개까지만 넣을 수 있어요." : undefined}
+          />
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[11px] font-medium text-ink-subtle">추천 태그:</span>
+            {TAG_SUGGESTIONS.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => addTag(tag)}
+                disabled={tagCount >= 5 || tagList.includes(tag)}
+                className="rounded-full border border-border bg-surface-sunken px-2.5 py-0.5 text-[11px] font-medium text-ink-muted hover:border-brand hover:text-brand transition-colors disabled:opacity-40"
+              >
+                +{tag}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex-1" />
 
-      <div className="flex flex-col gap-2">
-        {error && <p className="text-body-sm text-danger">{error}</p>}
-        <Button size="lg" block loading={pending} disabled={tagCount > 5} onClick={next}>
+      <div className="flex flex-col gap-2 pt-2">
+        {error && <p className="text-body-sm text-danger font-medium">{error}</p>}
+        <Button size="lg" block loading={pending} disabled={tagCount > 5} onClick={next} className="shadow-xs font-bold">
           {pending ? "캐릭터 시트 만드는 중" : "다음"}
         </Button>
         <Button
@@ -189,7 +224,6 @@ export default function Page() {
           block
           disabled={pending}
           onClick={() => {
-            // 건너뛰어도 진행 바는 채워진다. 건너뛰기가 실패처럼 보이면 아무도 안 누른다.
             set("method", "default");
             set("characterAssetId", null);
             skip("character");

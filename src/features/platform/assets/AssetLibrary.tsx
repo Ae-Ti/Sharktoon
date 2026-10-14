@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Plus, Edit3, Trash2, Sparkles, Film } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { AssetCard, Badge, Button, EmptyState, Modal, Tabs } from "@/components/ui";
 import { deleteAssetAction } from "@/features/platform/actions";
@@ -36,10 +37,16 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
   const [deleting, startDelete] = useTransition();
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-title-lg font-bold">에셋 라이브러리</h1>
-        <Button onClick={() => setForm({ open: true, asset: null })}>
+        <div>
+          <h1 className="text-title-lg font-bold">에셋 라이브러리</h1>
+          <p className="text-body-sm text-ink-muted">
+            캐릭터, 장소, 소품을 등록하여 회차 간 작화 일관성을 유지하세요.
+          </p>
+        </div>
+        <Button onClick={() => setForm({ open: true, asset: null })} className="gap-1.5 shadow-2xs">
+          <Plus className="size-4" />
           에셋 추가
         </Button>
       </div>
@@ -63,7 +70,7 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
               onAction={() => setForm({ open: true, asset: null })}
             />
           ) : (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
               {shown.map((a) => (
                 <li key={a.id}>
                   <AssetCard
@@ -71,6 +78,7 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
                     kind={LABEL[a.kind]}
                     kindTone={a.kind === "character" ? "brand" : "neutral"}
                     usedIn={a.usedIn}
+                    selected={picked?.id === a.id}
                     thumb={
                       a.thumbUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -86,7 +94,7 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
         </div>
 
         {picked && (
-          <aside className="flex w-full shrink-0 flex-col gap-4 rounded-lg border border-border bg-surface-card p-5 lg:w-80">
+          <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs lg:w-80">
             {picked.referenceUrls.length > 0 ? (
               <div className="grid grid-cols-4 gap-1.5">
                 {picked.referenceUrls.map((url, i) => (
@@ -96,14 +104,14 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
                     src={url}
                     alt={`레퍼런스 ${i + 1}`}
                     className={cn(
-                      "aspect-square w-full rounded-md border border-border object-cover",
+                      "aspect-square w-full rounded-lg border border-border/70 object-cover",
                       i === 0 && "col-span-2 row-span-2",
                     )}
                   />
                 ))}
               </div>
             ) : (
-              <div className="grid h-45 place-items-center rounded-md bg-skeleton px-4 text-center text-caption text-ink-subtle">
+              <div className="grid h-45 place-items-center rounded-lg bg-surface-sunken px-4 text-center text-caption text-ink-subtle">
                 {picked.kind === "character"
                   ? "캐릭터 시트 · 정면 / 측면 / 표정 4종 / 전신"
                   : "레퍼런스 이미지"}
@@ -119,32 +127,41 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
             {picked.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {picked.tags.map((t) => (
-                  <Badge key={t}>{t}</Badge>
+                  <Badge key={t} tone="neutral">{t}</Badge>
                 ))}
               </div>
             )}
 
-            <div className="h-px bg-border" />
+            <div className="h-px bg-border/80" />
 
             {/* 에셋을 바꾸면 이 회차들의 일관성이 흔들린다. 고치기 전에 보여준다. */}
             <div className="flex flex-col gap-2">
-              <h3 className="text-label font-semibold">이 에셋을 쓰는 회차</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {picked.usedInEpisodes.map((e) => (
-                  <Badge key={e}>{e}</Badge>
-                ))}
+              <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
+                <Film className="size-3.5 text-ink-muted" />
+                <span>이 에셋을 쓰는 회차</span>
               </div>
-              <p className="text-caption text-ink-muted">
+              <div className="flex flex-wrap gap-1.5">
+                {picked.usedInEpisodes.length > 0 ? (
+                  picked.usedInEpisodes.map((e) => (
+                    <Badge key={e} tone="brand">{e}</Badge>
+                  ))
+                ) : (
+                  <span className="text-caption text-ink-muted">아직 사용된 회차가 없어요.</span>
+                )}
+              </div>
+              <p className="text-caption text-ink-muted leading-relaxed">
                 바꾸면 이 회차들의 캐릭터가 달라 보일 수 있어요. 지난 회차는 그대로 두고 다음 화부터 적용해요.
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 pt-2">
               <Button
                 variant="secondary"
                 block
                 onClick={() => setForm({ open: true, asset: picked })}
+                className="gap-1.5"
               >
+                <Edit3 className="size-4" />
                 수정
               </Button>
               <Button
@@ -154,7 +171,9 @@ export function AssetLibrary({ assets, counts, order }: AssetLibraryProps) {
                   setDeleteError(null);
                   setConfirmDelete(true);
                 }}
+                className="gap-1.5 text-ink-muted hover:text-danger hover:bg-danger-tint/30"
               >
+                <Trash2 className="size-4" />
                 삭제
               </Button>
             </div>

@@ -1,70 +1,72 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Badge, EmptyState } from "@/components/ui";
+import { Plus, BookOpen, Layers, Sparkles, ArrowRight } from "lucide-react";
+import { Badge, ButtonLink, EmptyState } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 
-export const metadata: Metadata = { title: "시리즈 목록 · 샥툰" };
+export const metadata: Metadata = { title: "내 시리즈 · 샥툰" };
 
 export default async function Page() {
   const repo = await getRepository();
-  const series = await repo.listSeries();
+  const allSeries = await repo.listSeries();
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-title-lg font-bold">내 시리즈 ({series.length})</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-title-lg font-bold">내 시리즈</h1>
           <p className="text-body-sm text-ink-muted">
-            캐릭터와 생성 규칙을 고정해 회차를 이어가는 만화 묶음이에요.
+            고정된 캐릭터와 그림체로 연재 중인 인스타툰 시리즈 목록입니다.
           </p>
         </div>
-        <NewSeriesButton label="+ 새 시리즈 만들기" />
-      </header>
+        <NewSeriesButton label="새 시리즈 만들기" />
+      </div>
 
-      {series.length === 0 ? (
+      {allSeries.length === 0 ? (
         <EmptyState
-          title="아직 시리즈가 없어요"
-          description="첫 화를 만들면 같은 캐릭터로 다음 화를 이어갈 수 있어요."
-          actionLabel="첫 화 만들기 (온보딩)"
-          actionHref="/onboarding/character"
+          title="아직 생성된 시리즈가 없어요"
+          description="새로운 시리즈를 만들고 일관된 캐릭터와 화풍으로 연재를 시작해 보세요."
+          actionLabel="새 시리즈 시작하기"
+          onAction={undefined}
         />
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-          {series.map((s) => (
-            <li key={s.id}>
-              <Link
-                href={`/series/${s.id}`}
-                className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface-card text-ink transition-all hover:border-brand/60 hover:shadow-sm"
-              >
-                <div className="grid h-36 place-items-center bg-surface-sunken text-caption text-ink-subtle group-hover:bg-brand-tint/20 transition-colors">
-                  <span className="font-medium text-ink-muted">대표 컷 미리보기</span>
-                </div>
-                <div className="flex flex-col gap-2 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-body font-bold text-ink group-hover:text-brand transition-colors">
-                      {s.title}
-                    </span>
-                    {!s.isPublic && <Badge tone="neutral">비공개</Badge>}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {allSeries.map((s) => (
+            <Link
+              key={s.id}
+              href={`/series/${s.id}`}
+              className="group flex flex-col justify-between rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs transition-all hover:border-brand/70 hover:shadow-xs cursor-pointer"
+            >
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-brand-tint text-brand">
+                    <BookOpen className="size-4" />
                   </div>
-                  <div className="flex items-center gap-2 text-caption text-ink-muted">
-                    <span className="font-semibold text-ink">{s.episodeCount}화 발행</span>
-                    <span>·</span>
-                    <span className="text-[11px] text-ink-subtle">
-                      {new Date(s.updatedAt).toLocaleDateString("ko-KR", {
-                        month: "numeric",
-                        day: "numeric",
-                      })} 수정
-                    </span>
-                  </div>
+                  <Badge tone="brand">{s.episodeCount}화 연재 중</Badge>
                 </div>
-              </Link>
-            </li>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-title font-semibold text-ink group-hover:text-brand transition-colors">
+                    {s.title}
+                  </h2>
+                  {s.description && (
+                    <p className="text-body-sm text-ink-muted line-clamp-2">
+                      {s.description}
+                    </p>
+                  )}
+                  <p className="text-caption text-ink-subtle pt-1">
+                    최근 업데이트: {new Date(s.updatedAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-3 text-caption font-semibold text-ink-muted group-hover:text-brand transition-colors">
+                <span>시리즈 관리하기</span>
+                <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
+              </div>
+            </Link>
           ))}
-          <li>
-            <NewSeriesButton variant="card" />
-          </li>
-        </ul>
+        </div>
       )}
     </div>
   );

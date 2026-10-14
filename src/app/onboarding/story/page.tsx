@@ -2,18 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Button, Field } from "@/components/ui";
+import { Lightbulb, Layers, Sparkles, BookOpen, Check } from "lucide-react";
+import { Button, Field, Badge } from "@/components/ui";
 import { startEpisodeAction } from "@/features/platform/actions";
 import { cn } from "@/lib/cn";
 import { STYLE_LABEL, useOnboarding } from "@/features/platform/onboarding/OnboardingContext";
 
 const EXAMPLES = [
-  { chip: "회사 빌런", text: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다" },
-  { chip: "반려동물", text: "출근하려는데 고양이가 가방 위에 앉아서 안 비켜준다" },
-  { chip: "연애 빙산", text: "3개월 만난 사람이 아직 내 생일을 모른다" },
+  { chip: "회사 빌런", text: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다", emoji: "🏢" },
+  { chip: "반려동물", text: "출근하려는데 고양이가 가방 위에 앉아서 안 비켜준다", emoji: "🐾" },
+  { chip: "연애 빙산", text: "3개월 만난 사람이 아직 내 생일을 모른다", emoji: "💔" },
 ];
 
-const CUT_COUNTS = [4, 6, 8] as const;
+const CUT_CONFIG = [
+  { count: 4, title: "4컷", desc: "인스타 피드 기본", recommend: true },
+  { count: 6, title: "6컷", desc: "기승전결 확장", recommend: false },
+  { count: 8, title: "8컷", desc: "풀 스토리 몰입", recommend: false },
+] as const;
 
 export default function Page() {
   const { story, cutCount, style, characterAssetId, set, skip } = useOnboarding();
@@ -39,60 +44,96 @@ export default function Page() {
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-display font-bold tracking-[-0.015em]">
-          무슨 이야기예요?
-        </h1>
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-md bg-brand-tint text-brand">
+            <BookOpen className="size-3.5" />
+          </span>
+          <h1 className="text-display font-bold tracking-[-0.015em]">
+            무슨 이야기예요?
+          </h1>
+        </div>
         <p className="text-body-sm text-ink-muted">
-          한 줄만 적어도 컷별 콘티를 만들어 드려요.
+          한 줄만 적어도 AI가 컷별 콘티를 자동으로 완성해 드려요.
         </p>
       </div>
 
-      <Field
-        label="사연"
-        multiline
-        rows={5}
-        value={story}
-        onChange={(v) => set("story", v)}
-        placeholder="어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다"
-        help="콘티 만들기는 크레딧을 쓰지 않아요."
-        maxLength={300}
-      />
+      <div className="rounded-xl border border-border/80 bg-surface-card p-4 shadow-2xs">
+        <Field
+          label="사연"
+          multiline
+          rows={5}
+          value={story}
+          onChange={(v) => set("story", v)}
+          placeholder="어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다"
+          help="콘티 만들기는 크레딧을 쓰지 않아요."
+          maxLength={300}
+        />
+      </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="text-label font-semibold">뭘 써야 할지 모르겠다면</div>
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
+          <Lightbulb className="size-4 text-warning" />
+          <span>뭘 써야 할지 모르겠다면</span>
+        </div>
         <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((e) => (
-            <button
-              key={e.chip}
-              type="button"
-              onClick={() => set("story", e.text)}
-              className="h-control-sm cursor-pointer rounded-full border border-border-control bg-surface-card px-3 text-label text-ink hover:bg-surface-sunken"
-            >
-              {e.chip}
-            </button>
-          ))}
+          {EXAMPLES.map((e) => {
+            const isSelected = story === e.text;
+            return (
+              <button
+                key={e.chip}
+                type="button"
+                onClick={() => set("story", e.text)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-label transition-all cursor-pointer",
+                  isSelected
+                    ? "border-brand bg-brand-tint text-brand font-semibold shadow-2xs ring-1 ring-brand/30"
+                    : "border-border/80 bg-surface-card text-ink-muted hover:border-border-control hover:bg-surface-sunken hover:text-ink"
+                )}
+              >
+                <span>{e.emoji}</span>
+                <span>{e.chip}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="text-label font-semibold">컷 수</div>
-        <div role="group" aria-label="컷 수" className="grid grid-cols-3 gap-2">
-          {CUT_COUNTS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-pressed={cutCount === n}
-              onClick={() => set("cutCount", n)}
-              className={cn(
-                "h-control-md cursor-pointer rounded-md text-label font-semibold",
-                cutCount === n
-                  ? "border-2 border-brand bg-brand-tint"
-                  : "border border-border-control bg-surface-card",
-              )}
-            >
-              {n}컷
-            </button>
-          ))}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
+          <Layers className="size-4 text-ink-muted" />
+          <span>컷 수</span>
+        </div>
+        <div role="group" aria-label="컷 수" className="grid grid-cols-3 gap-2.5">
+          {CUT_CONFIG.map((c) => {
+            const isSelected = cutCount === c.count;
+            return (
+              <button
+                key={c.count}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => set("cutCount", c.count)}
+                className={cn(
+                  "relative flex flex-col items-start gap-0.5 rounded-xl border p-3.5 text-left transition-all cursor-pointer",
+                  isSelected
+                    ? "border-brand bg-brand-tint/40 shadow-xs ring-2 ring-brand/30"
+                    : "border-border/80 bg-surface-card hover:border-border-control hover:bg-surface-sunken"
+                )}
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-body font-bold text-ink">{c.title}</span>
+                  {c.recommend && (
+                    <Badge tone="brand" className="text-[10px] px-1.5 py-0">
+                      인기
+                    </Badge>
+                  )}
+                  {isSelected && !c.recommend && (
+                    <Check className="size-3.5 text-brand" />
+                  )}
+                </div>
+                <span className="text-caption text-ink-muted">{c.desc}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -106,7 +147,9 @@ export default function Page() {
           loading={pending}
           disabled={!story.trim()}
           onClick={() => begin(story.trim())}
+          className="gap-2"
         >
+          <Sparkles className="size-4" />
           콘티 만들기
         </Button>
         <Button
@@ -119,7 +162,7 @@ export default function Page() {
             begin(EXAMPLES[0].text);
           }}
         >
-          예시 사연으로 해볼래요
+          예시 사연으로 바로 해볼래요
         </Button>
       </div>
     </>

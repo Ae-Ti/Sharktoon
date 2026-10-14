@@ -13,6 +13,7 @@ export interface BadgeProps {
   tone?: BadgeTone;
   /** 상태가 바뀌는 뱃지에 켠다. 색 말고 형태로도 구분되게. */
   dot?: boolean;
+  className?: string;
   children?: ReactNode;
 }
 
@@ -25,12 +26,13 @@ const TONE: Record<BadgeTone, string> = {
   ai: "bg-surface-sunken text-ink-muted border border-border",
 };
 
-export function Badge({ tone = "neutral", dot, children }: BadgeProps) {
+export function Badge({ tone = "neutral", dot, className, children }: BadgeProps) {
   return (
     <span
       className={cn(
         "inline-flex h-[22px] items-center gap-1 rounded-sm px-2 text-caption font-semibold",
         TONE[tone],
+        className,
       )}
     >
       {dot && <span aria-hidden className="size-1.5 rounded-full bg-current" />}

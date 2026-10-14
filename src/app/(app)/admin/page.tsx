@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { TrendingUp, AlertTriangle, Coins, Filter, Clock } from "lucide-react";
 import { Badge, EmptyState } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { BillingAdmin } from "@/features/platform/admin/BillingAdmin";
@@ -31,22 +32,37 @@ export default async function Page() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-title-lg font-bold">운영</h1>
+      <div>
+        <h1 className="text-title-lg font-bold">운영 대시보드</h1>
+        <p className="text-body-sm text-ink-muted">
+          핵심 지표, 퍼널 전환율, 크레딧 소모 및 환불 요청을 모니터링합니다.
+        </p>
+      </div>
 
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-        <article className="flex flex-col gap-1 rounded-lg border border-border bg-surface-card p-5">
-          <span className="text-body-sm text-ink-muted">첫 게시 완주율</span>
-          <span className="text-[32px] leading-10 font-bold tabular-nums">
+      <section className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+        <article className="flex flex-col gap-2 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs transition-all hover:border-border-control">
+          <div className="flex items-center justify-between">
+            <span className="text-body-sm font-medium text-ink-muted">첫 게시 완주율</span>
+            <span className="flex size-7 items-center justify-center rounded-lg bg-brand-tint text-brand">
+              <TrendingUp className="size-4" />
+            </span>
+          </div>
+          <span className="text-[32px] leading-10 font-bold tabular-nums text-ink">
             {percent(completion)}
           </span>
           <span className="text-caption text-ink-muted">
-            목표 40% · 가입 {top}명 중 {published}명
+            목표 40% · 가입 {top}명 중 {published}명 완주
           </span>
         </article>
 
-        <article className="flex flex-col gap-1 rounded-lg border border-border bg-surface-card p-5">
-          <span className="text-body-sm text-ink-muted">생성 실패율</span>
-          <span className="text-[32px] leading-10 font-bold tabular-nums">
+        <article className="flex flex-col gap-2 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs transition-all hover:border-border-control">
+          <div className="flex items-center justify-between">
+            <span className="text-body-sm font-medium text-ink-muted">생성 실패율</span>
+            <span className="flex size-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
+              <AlertTriangle className="size-4" />
+            </span>
+          </div>
+          <span className="text-[32px] leading-10 font-bold tabular-nums text-ink">
             {percent(generation.failureRate)}
           </span>
           <span className="text-caption text-ink-muted">
@@ -54,9 +70,14 @@ export default async function Page() {
           </span>
         </article>
 
-        <article className="flex flex-col gap-1 rounded-lg border border-border bg-surface-card p-5">
-          <span className="text-body-sm text-ink-muted">크레딧</span>
-          <span className="text-[32px] leading-10 font-bold tabular-nums">
+        <article className="flex flex-col gap-2 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs transition-all hover:border-border-control">
+          <div className="flex items-center justify-between">
+            <span className="text-body-sm font-medium text-ink-muted">크레딧 현황</span>
+            <span className="flex size-7 items-center justify-center rounded-lg bg-brand-tint text-brand">
+              <Coins className="size-4" />
+            </span>
+          </div>
+          <span className="text-[32px] leading-10 font-bold tabular-nums text-ink">
             {credit.spent}
           </span>
           <span className="text-caption text-ink-muted">
@@ -65,8 +86,11 @@ export default async function Page() {
         </article>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-title font-semibold">온보딩 깔때기</h2>
+      <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <Filter className="size-4 text-ink-muted" />
+          <h2 className="text-title font-semibold">온보딩 퍼널</h2>
+        </div>
         <ul className="flex flex-col gap-2">
           {funnel.map((f, i) => {
             const ratio = top === 0 ? 0 : f.users / top;
@@ -75,20 +99,20 @@ export default async function Page() {
             return (
               <li
                 key={f.step}
-                className="flex items-center gap-4 rounded-md border border-border bg-surface-card px-4 py-3"
+                className="flex items-center gap-4 rounded-lg border border-border/60 bg-surface-sunken/40 px-4 py-3"
               >
-                <span className="w-24 shrink-0 text-label font-semibold">{f.step}</span>
+                <span className="w-24 shrink-0 text-label font-semibold text-ink">{f.step}</span>
                 <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                   <span
-                    className="block h-full rounded-full bg-brand"
+                    className="block h-full rounded-full bg-brand transition-all"
                     style={{ width: `${ratio * 100}%` }}
                   />
                 </span>
-                <span className="w-16 shrink-0 text-right text-label tabular-nums">
+                <span className="w-16 shrink-0 text-right text-label font-medium tabular-nums text-ink">
                   {f.users}명
                 </span>
-                <span className="w-20 shrink-0 text-right text-caption tabular-nums text-ink-muted">
-                  {dropped > 0 ? `-${dropped}` : ""}
+                <span className="w-20 shrink-0 text-right text-caption tabular-nums text-danger font-medium">
+                  {dropped > 0 ? `-${dropped}명` : ""}
                 </span>
               </li>
             );
@@ -96,9 +120,12 @@ export default async function Page() {
         </ul>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-title font-semibold">최근 크레딧 환불</h2>
+      <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="size-4 text-ink-muted" />
+            <h2 className="text-title font-semibold">최근 크레딧 환불</h2>
+          </div>
           <Badge tone={recentRefunds.length > 0 ? "warning" : "neutral"}>
             {recentRefunds.length}건
           </Badge>
@@ -110,16 +137,16 @@ export default async function Page() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-md border-collapse text-body-sm">
               <thead>
-                <tr className="border-b border-border text-left text-caption text-ink-muted">
-                  <th className="py-2 font-medium">시각</th>
-                  <th className="py-2 font-medium">사용자</th>
-                  <th className="py-2 text-right font-medium">환불</th>
+                <tr className="border-b border-border/70 text-left text-caption text-ink-muted">
+                  <th className="py-2.5 font-medium">시각</th>
+                  <th className="py-2.5 font-medium">사용자</th>
+                  <th className="py-2.5 text-right font-medium">환불</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/50">
                 {recentRefunds.map((r) => (
-                  <tr key={r.id} className="border-b border-border">
-                    <td className="py-2 tabular-nums text-ink-muted">
+                  <tr key={r.id} className="hover:bg-surface-sunken/30 transition-colors">
+                    <td className="py-2.5 tabular-nums text-ink-muted">
                       {new Date(r.createdAt).toLocaleString("ko-KR", {
                         timeZone: "Asia/Seoul",
                         month: "numeric",
@@ -128,8 +155,8 @@ export default async function Page() {
                         minute: "2-digit",
                       })}
                     </td>
-                    <td className="py-2 font-mono text-caption">{r.userId}</td>
-                    <td className="py-2 text-right tabular-nums text-accent-ink">
+                    <td className="py-2.5 font-mono text-caption text-ink">{r.userId}</td>
+                    <td className="py-2.5 text-right tabular-nums font-semibold text-brand">
                       +{r.amount}
                     </td>
                   </tr>
