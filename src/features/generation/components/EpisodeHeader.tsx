@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Badge, CreditPill } from "@/components/ui";
+import { CreditPill } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 export type GenerationStep = "storyboard" | "generate" | "editor" | "publish";
@@ -81,7 +81,6 @@ export function EpisodeHeader({
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <Badge tone="ai">AI 생성</Badge>
           <CreditPill balance={credits} />
           {action}
         </div>

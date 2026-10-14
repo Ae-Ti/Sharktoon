@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { Badge, Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
+import { Button, ButtonLink, Field, LayerRow, Modal } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
 import { deleteCutAction, saveLayerTreeAction } from "../actions";
@@ -21,7 +21,6 @@ import {
   buildLayerFromPreset,
   type ElementPresetId,
 } from "../editor/ElementPalette";
-import { motion } from "framer-motion";
 import {
   Undo2,
   Redo2,
@@ -418,7 +417,7 @@ function Toolbar({
       <span className="mx-2 h-5 w-px bg-border/60" />
 
       {/* 레이어 추가는 이 툴바 한 곳에서만 한다. 우측 패널은 레이어 순서·속성 전용. */}
-      <div role="group" aria-label="레이어 추가" className="flex items-center gap-1.5 overflow-x-auto py-1">
+      <div role="group" aria-label="레이어 추가" className="scrollbar-none flex items-center gap-1.5 overflow-x-auto py-1">
         {ADD_LAYER_ACTIONS.map((a) => (
           <ActionButton
             key={a.id}
@@ -438,12 +437,6 @@ function Toolbar({
         >
           {saveLabel}
         </span>
-        <Badge tone="ai">
-          <span className="inline-flex items-center gap-1">
-            <Sparkles className="size-3 text-brand" />
-            <span>AI 생성</span>
-          </span>
-        </Badge>
       </span>
     </div>
   );
@@ -477,17 +470,15 @@ function ActionButton({
   onClick: () => void;
 }) {
   return (
-    <motion.button
+    <button
       type="button"
       title={title}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className="flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-border/80 bg-surface-card px-2.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:border-brand hover:bg-brand-tint hover:text-brand"
+      className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border/80 bg-surface-card px-2.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:border-brand hover:bg-brand-tint hover:text-brand active:scale-95"
     >
       <span className="shrink-0">{icon}</span>
-      <span>{label}</span>
-    </motion.button>
+      <span className="whitespace-nowrap">{label}</span>
+    </button>
   );
 }
 

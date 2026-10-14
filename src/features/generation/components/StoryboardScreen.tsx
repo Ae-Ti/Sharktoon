@@ -419,7 +419,7 @@ function StoryboardEditor({
                 nameOf={(key) => characterName(sb, key)}
                 total={sb.cuts.length}
                 selected={cut.id === selectedId}
-                onSelect={() => setSelectedId(cut.id)}
+                onSelect={() => setSelectedId((prev) => (prev === cut.id ? null : cut.id))}
                 onMove={(dir) => moveCut(cut.id, dir)}
                 onRemove={() => removeCut(cut.id)}
                 onAddAfter={() => addCutAfter(cut.id)}
@@ -526,7 +526,6 @@ function StoryboardEditor({
                     <ChoiceCard
                       key={o.id}
                       title={o.text}
-                      description={o.rationale}
                       selected={sb.selectedHookId === o.id}
                       onClick={() => setSb((s) => ({ ...s, selectedHookId: o.id }))}
                     />
@@ -592,7 +591,6 @@ function StoryboardEditor({
                     <ChoiceCard
                       key={o.id}
                       title={o.text}
-                      description={o.rationale}
                       selected={sb.selectedCtaId === o.id}
                       onClick={() => setSb((s) => ({ ...s, selectedCtaId: o.id }))}
                     />
@@ -1048,15 +1046,85 @@ function CutCard({
   onRemoveNarration: () => void;
   onChangeNarration: (text: string) => void;
 }) {
+  const bgLabel =
+    cut.background?.preset === "solid_color"
+      ? "단색 배경"
+      : cut.background?.customName
+        ? cut.background.customName
+        : DEFAULT_LOCATIONS.find((l) => l.id === cut.background?.preset)?.label ?? "거실";
+
+  if (!selected) {
+    return (
+      <article
+        onClick={onSelect}
+        className="group flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-surface-card p-3.5 transition-all hover:border-brand/50 hover:bg-surface-sunken/20 hover:shadow-2xs"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
+            {cut.index}
+          </span>
+          {cut.index === 1 && <Badge tone="brand">후킹 컷</Badge>}
+          {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+
+          <span className="rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
+            {EMOTION_LABEL[cut.emotion]}
+          </span>
+          <span className="rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
+            {CAMERA_LABEL[cut.camera]}
+          </span>
+          <span className="max-w-[140px] truncate rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
+            {bgLabel}
+          </span>
+
+          <div
+            className="ml-auto flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
+              ↑
+            </IconButton>
+            <IconButton
+              label="아래로"
+              onClick={() => onMove(1)}
+              disabled={cut.index === total}
+            >
+              ↓
+            </IconButton>
+            <IconButton label="아래에 컷 추가" onClick={onAddAfter}>
+              +
+            </IconButton>
+            <IconButton label="컷 삭제" onClick={onRemove} disabled={total === 1}>
+              ✕
+            </IconButton>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 text-caption text-ink-muted">
+          <p className="min-w-0 flex-1 truncate text-body-sm text-ink-muted">
+            <span className="mr-1.5 font-semibold text-ink">[장면]</span>
+            {cut.scene ? cut.scene : <span className="italic text-ink-subtle">장면 묘사 없음</span>}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {cut.dialogue.length > 0 && (
+              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-caption font-medium text-ink">
+                대사 {cut.dialogue.length}개
+              </span>
+            )}
+            {cut.narration && (
+              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-caption font-medium text-amber-700">
+                나레이션
+              </span>
+            )}
+            <span className="text-caption font-semibold text-brand">클릭하여 편집 ▾</span>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
-      onClick={onSelect}
-      className={cn(
-        "flex cursor-pointer flex-col gap-3 rounded-xl bg-surface-card p-4 transition-colors",
-        selected
-          ? "border-2 border-brand p-[15px]"
-          : "border border-border hover:border-border-control",
-      )}
+      className="flex flex-col gap-3 rounded-xl border-2 border-brand bg-surface-card p-[15px] shadow-sm transition-colors"
     >
       {/* 컷 헤더: 번호, 후킹/CTA 뱃지, 감정/카메라/장소 드롭다운, 순서/삭제 버튼 */}
       <div className="flex flex-wrap items-center gap-2">
@@ -1115,7 +1183,14 @@ function CutCard({
         />
 
         {/* 컷 이동 및 추가/삭제 버튼 */}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={onSelect}
+            className="mr-1 cursor-pointer rounded px-2 py-0.5 text-caption font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors"
+          >
+            접기 ▴
+          </button>
           <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
             ↑
           </IconButton>

@@ -52,7 +52,8 @@ const AUTOSAVE_MS = 1500;
 export function PublishScreen(props: PublishScreenProps) {
   const [pkg, setPkg] = useState(props.initialPackage);
   const [caption, setCaption] = useState<keyof PostPackage["captions"]>("short");
-  const [ratio, setRatio] = useState<ExportRatio>(props.defaultRatio);
+  const ratio = props.defaultRatio;
+  const [newTag, setNewTag] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -148,22 +149,7 @@ export function PublishScreen(props: PublishScreenProps) {
               <h2 className="flex-1 text-label font-semibold text-ink">
                 캐러셀 {props.slides.length}장
               </h2>
-              <div role="group" aria-label="비율" className="flex gap-1">
-                {(["1:1", "4:5"] as const).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    aria-pressed={ratio === r}
-                    onClick={() => setRatio(r)}
-                    className={cn(
-                      "h-control-sm cursor-pointer rounded-md px-3 text-label font-semibold",
-                      ratio === r ? "bg-brand text-on-brand" : "bg-surface-sunken text-ink-muted",
-                    )}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
+              <Badge tone="neutral">비율 {ratio}</Badge>
               <Button
                 size="sm"
                 variant="secondary"
@@ -199,43 +185,90 @@ export function PublishScreen(props: PublishScreenProps) {
             <p className="text-caption text-ink-subtle">
               미리보기는 생성 이미지예요. 내려받는 PNG 에는 편집기에서 얹은 대사·말풍선이 들어가요.
             </p>
-
-            {missing.length > 0 ? (
-              <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
-                {missing.map((m) => m.index).join(", ")}컷 이미지가 아직 없어요. 생성 화면에서 다시 만든 뒤 내보낼 수 있어요.
-              </p>
-            ) : (
-              <Button block loading={exporting !== null} onClick={downloadZip}>
-                {exporting ? `내보내는 중 · ${exporting}` : `${ratio} PNG ZIP 내려받기`}
-              </Button>
-            )}
-            <p className="text-caption text-ink-subtle">
-              모든 이미지에 AI 생성 표시(메타데이터)가 들어가요.
-              {props.watermark && " 무료 요금제는 오른쪽 아래에 작은 워터마크가 붙어요."}
-            </p>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-            <h2 className="text-label font-semibold text-ink">올리고 나서</h2>
-            {published ? (
-              <>
-                <p className="text-body text-ink">
-                  게시 완료로 표시했어요. 다음 화는 같은 캐릭터로 사연만 적으면 돼요.
-                </p>
-                <ButtonLink href={`/series/${props.seriesId}`} variant="secondary" block>
+          {published ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-brand/30 bg-brand-subtle/30 p-4">
+              <div className="flex items-center gap-2">
+                <span className="grid size-6 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">
+                  ✓
+                </span>
+                <h2 className="text-label font-semibold text-ink">인스타그램에 게시 완료되었어요!</h2>
+              </div>
+              <p className="text-body-sm text-ink-muted">
+                시리즈 타임라인에 게시된 화로 등록되었어요. 다음 화는 같은 캐릭터로 사연만 적으면 돼요.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <ButtonLink href={`/series/${props.seriesId}`} variant="primary" size="sm">
                   시리즈에서 다음 화 만들기
                 </ButtonLink>
-              </>
-            ) : (
-              <>
-                <p className="text-body-sm text-ink-muted">
-                  인스타그램에 올렸으면 눌러 주세요. 시리즈 타임라인에 게시된 화로 남아요.
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={exporting !== null}
+                  onClick={downloadZip}
+                >
+                  ZIP 다시 다운로드
+                </Button>
+                <ButtonLink
+                  href="https://www.instagram.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="ghost"
+                  size="sm"
+                >
+                  인스타그램 가기 ↗
+                </ButtonLink>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-label font-semibold text-ink">인스타그램 게시</h2>
+                <span className="text-caption text-ink-muted">1~3 순서대로 진행해 주세요</span>
+              </div>
+
+              {missing.length > 0 && (
+                <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
+                  {missing.map((m) => m.index).join(", ")}컷 이미지가 아직 없어요. 생성 화면에서 다시 만든 뒤 내보낼 수 있어요.
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <ButtonLink href="https://www.instagram.com/" variant="ghost" target="_blank" rel="noreferrer">
-                    인스타그램 열기
-                  </ButtonLink>
+              )}
+
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken/40 p-3">
+                  <span className="text-[11px] font-bold text-ink-subtle">1단계</span>
                   <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={exporting !== null}
+                    onClick={downloadZip}
+                    disabled={missing.length > 0}
+                    className="w-full"
+                  >
+                    {exporting ? exporting : `${ratio} ZIP 다운로드`}
+                  </Button>
+                  <span className="text-[11px] text-ink-muted">합성 완료된 이미지 묶음</span>
+                </div>
+
+                <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken/40 p-3">
+                  <span className="text-[11px] font-bold text-ink-subtle">2단계</span>
+                  <ButtonLink
+                    href="https://www.instagram.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full text-center"
+                  >
+                    인스타그램 열기 ↗
+                  </ButtonLink>
+                  <span className="text-[11px] text-ink-muted">우측 본문 복사 후 붙여넣기</span>
+                </div>
+
+                <div className="flex flex-col gap-1.5 rounded-lg border border-brand/20 bg-brand-tint/20 p-3">
+                  <span className="text-[11px] font-bold text-brand">3단계</span>
+                  <Button
+                    size="sm"
                     loading={pending}
                     onClick={() =>
                       start(async () => {
@@ -244,13 +277,20 @@ export function PublishScreen(props: PublishScreenProps) {
                         else setNotice(r.message);
                       })
                     }
+                    className="w-full"
                   >
-                    인스타에 올렸어요
+                    인스타 올렸어요
                   </Button>
+                  <span className="text-[11px] text-ink-muted">게시 완료 상태로 전환</span>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+
+              <p className="text-caption text-ink-subtle">
+                모든 이미지에 AI 생성 메타데이터가 포함됩니다.
+                {props.watermark && " 무료 요금제는 오른쪽 아래에 작은 워터마크가 붙어요."}
+              </p>
+            </div>
+          )}
         </section>
 
         <aside className="flex flex-col gap-4">
@@ -341,6 +381,46 @@ export function PublishScreen(props: PublishScreenProps) {
                   <h2 className="flex-1 text-label font-semibold text-ink">해시태그</h2>
                   <span className="text-caption tabular-nums text-ink-muted">{tags.length}개</span>
                 </div>
+
+                {/* 새 해시태그 직접 추가 */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const trimmed = newTag.trim().replace(/^#+/, "");
+                    if (!trimmed) return;
+                    if (
+                      !pkg.hashtags.dynamic.includes(trimmed) &&
+                      !pkg.hashtags.fixed.includes(trimmed)
+                    ) {
+                      edit({
+                        ...pkg,
+                        hashtags: {
+                          ...pkg.hashtags,
+                          dynamic: [...pkg.hashtags.dynamic, trimmed],
+                        },
+                      });
+                    }
+                    setNewTag("");
+                  }}
+                  className="flex gap-1.5"
+                >
+                  <input
+                    type="text"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="새 해시태그 추가 (예: 일상툰)"
+                    maxLength={30}
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-surface-card px-2.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!newTag.trim()}
+                  >
+                    추가
+                  </Button>
+                </form>
                 {pkg.hashtags.fixed.length > 0 && (
                   <TagGroup
                     title="시리즈 고정"
