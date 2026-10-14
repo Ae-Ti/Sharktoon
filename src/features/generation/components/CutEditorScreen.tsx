@@ -444,8 +444,8 @@ function Toolbar({
   saveError: boolean;
 }) {
   return (
-    <div className="flex h-13 items-center gap-2 border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md">
-      <div className="flex items-center gap-1">
+    <div className="flex h-13 items-center gap-2 border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md overflow-x-auto overflow-y-hidden scrollbar-none">
+      <div className="flex items-center gap-1 shrink-0">
         <ToolButton label="실행 취소 (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 className="size-4.5" />
         </ToolButton>
@@ -454,10 +454,14 @@ function Toolbar({
         </ToolButton>
       </div>
 
-      <span className="mx-2 h-5 w-px bg-border/60" />
+      <span className="mx-2 h-5 w-px bg-border/60 shrink-0" />
 
       {/* 레이어 추가는 이 툴바 한 곳에서만 한다. 우측 패널은 레이어 순서·속성 전용. */}
-      <div role="group" aria-label="레이어 추가" className="scrollbar-none flex items-center gap-1.5 overflow-x-auto py-1">
+      <div
+        role="group"
+        aria-label="레이어 추가"
+        className="scrollbar-none flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-1 min-w-0 flex-1"
+      >
         {ADD_LAYER_ACTIONS.map((a) => (
           <ActionButton
             key={a.id}
@@ -469,7 +473,7 @@ function Toolbar({
         ))}
       </div>
 
-      <span className="ml-auto flex items-center gap-3">
+      <span className="ml-auto flex shrink-0 items-center gap-3">
         {/* 자동 저장은 3초 디바운스다(PRD 성능). 저장 버튼을 따로 두지 않는다. */}
         <span
           aria-live="polite"

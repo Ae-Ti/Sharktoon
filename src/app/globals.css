@@ -96,3 +96,16 @@ dialog::backdrop {
 :root[data-theme="dark"] dialog::backdrop {
   background: rgba(0, 0, 0, 0.66);
 }
+
+/* 가로 스크롤 영역의 브라우저 기본 스크롤바 숨김 */
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
