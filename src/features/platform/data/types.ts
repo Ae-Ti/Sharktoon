@@ -159,10 +159,8 @@ export interface PlatformRepository {
   setSeriesAssets(seriesId: string, assetIds: string[]): Promise<void>;
   /** 다음 번호로 회차를 하나 연다. 번호는 서버가 정한다. */
   createEpisode(seriesId: string, story: string): Promise<EpisodeSummary>;
-  updateEpisode(
-    episodeId: string,
-    input: { story?: string; cutCount?: number; seriesId?: string },
-  ): Promise<void>;
+  /** 회차의 사연, 컷 수, 시리즈 변경 */
+  updateEpisode(episodeId: string, input: { story?: string; cutCount?: number; seriesId?: string }): Promise<void>;
 
   /**
    * 생성 파이프라인이 회차 하나를 만들 때 필요한 것 전부.

@@ -19,6 +19,8 @@ import {
   Scroll,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
+  PenSquare,
   ArrowUp,
   ArrowDown,
   Trash2,
@@ -135,10 +137,13 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   const [openNewSeriesModal, setOpenNewSeriesModal] = useState(false);
   const [openSelectSeriesModal, setOpenSelectSeriesModal] = useState(false);
 
-  // 사연 & 시리즈 기획 카드 펼침/접힘 상태
-  const [isPlanningExpanded, setIsPlanningExpanded] = useState<boolean>(
-    !props.initial || props.initial.cuts.length === 0 || Boolean(props.isNewDraft) || !props.story
-  );
+  // 콘티 1, 2단계 네비게이션 상태: 초안이 이미 만들어져 있으면 2단계(컷 콘티)로 바로 진입
+  const [step, setStep] = useState<"story" | "cuts">(() => {
+    if (props.isNewDraft && (!props.initial || props.initial.cuts.length === 0)) {
+      return "story";
+    }
+    return props.initial && props.initial.cuts.length > 0 ? "cuts" : "story";
+  });
 
   // 이미지(카톡/글 캡처) OCR 추출 상태
   const [analyzingImage, setAnalyzingImage] = useState(false);
@@ -173,7 +178,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         setSb(normalized);
         setUsedMock(r.data.usedMock);
         setSelectedId(normalized.cuts[0]?.id ?? null);
-        setIsPlanningExpanded(false);
+        setStep("cuts");
       } else {
         setNotice(r.message);
       }
@@ -258,7 +263,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         setSb(normalized);
         setUsedMock(res.data.usedMock);
         setSelectedId(normalized.cuts[0]?.id ?? null);
-        setIsPlanningExpanded(false);
+        setStep("cuts");
       } else {
         if (res.kind === "credit") {
           setShortfall({ required: res.required, available: res.available });
@@ -465,6 +470,100 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         credits={props.credits}
       />
 
+      {/* 1, 2단계 스텝 네비게이션 탭 바 */}
+      <div className="sticky top-0 z-20 border-b border-border bg-surface-card/95 backdrop-blur-md shadow-2xs">
+        <div className="mx-auto flex max-w-[880px] items-center justify-between px-4 py-2.5">
+          <nav aria-label="콘티 제작 단계" className="flex items-center gap-1.5 sm:gap-2">
+            {/* 1단계 */}
+            <button
+              type="button"
+              onClick={() => setStep("story")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                step === "story"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                  step === "story"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted border border-border/80",
+                )}
+              >
+                1
+              </span>
+              <span>사연 & 기획</span>
+            </button>
+
+            <ChevronRight className="size-4 text-ink-subtle select-none shrink-0" />
+
+            {/* 2단계 */}
+            <button
+              type="button"
+              onClick={() => setStep("cuts")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                step === "cuts"
+                  ? "bg-brand text-on-brand shadow-2xs font-bold"
+                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                  step === "cuts"
+                    ? "bg-white/20 text-white"
+                    : "bg-surface-sunken text-ink-muted border border-border/80",
+                )}
+              >
+                2
+              </span>
+              <span>컷 콘티 편집</span>
+              {sb && sb.cuts.length > 0 && (
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    step === "cuts"
+                      ? "bg-white/20 text-white"
+                      : "bg-brand-tint text-brand border border-brand/30",
+                  )}
+                >
+                  {sb.cuts.length}컷
+                </span>
+              )}
+            </button>
+          </nav>
+
+          {/* 우측 보조 빠른 이동 버튼 */}
+          <div className="flex items-center gap-2">
+            {step === "story" && sb && sb.cuts.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("cuts")}
+                className="font-bold text-brand hover:text-brand text-xs gap-1"
+              >
+                <span>콘티로 넘어가기</span>
+                <ChevronRight className="size-3.5" />
+              </Button>
+            ) : step === "cuts" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("story")}
+                className="text-ink-muted hover:text-ink text-xs gap-1"
+              >
+                <PenSquare className="size-3.5" />
+                <span>사연 수정</span>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <main className="mx-auto max-w-[880px] p-4 pb-28 lg:pb-16 flex flex-col gap-5">
         {saveNote && (
           <p aria-live="polite" className="text-right text-caption text-ink-subtle">
@@ -477,42 +576,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
           </p>
         )}
 
-        {/* 1. 상단: 사연 & 시리즈 기획 카드 (접힘/펼침 가능한 단일 워크스페이스 상단 섹션) */}
-        {!isPlanningExpanded && sb && sb.cuts.length > 0 ? (
-          /* 1-A. 접힌 상태의 컴팩트 기획 요약 바 */
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-border/80 bg-surface-card p-4 shadow-2xs transition-all">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand font-bold text-base shadow-2xs">
-                📝
-              </div>
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-body-sm font-bold text-ink">사연 & 시리즈 기획</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2 py-0.5 text-[11px] font-bold text-brand">
-                    <BookOpen className="size-3" />
-                    {currentSeries?.title ?? props.seriesTitle}
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-surface-sunken border border-border/60 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
-                    총 {sb.cuts.length}컷
-                  </span>
-                </div>
-                <p className="text-body-sm text-ink-muted truncate max-w-xl">
-                  {story ? `“${story}”` : "입력된 사연이 없습니다."}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsPlanningExpanded(true)}
-              className="shrink-0 self-end sm:self-auto font-semibold gap-1 text-xs"
-            >
-              <span>사연 & 기획 수정</span>
-              <ChevronDown className="size-3.5" />
-            </Button>
-          </div>
-        ) : (
-          /* 1-B. 펼쳐진 상태의 전체 기획 패널 */
+        {/* 1단계: 사연 & 시리즈 기획 패널 */}
+        {step === "story" && (
           <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-surface-card p-5 shadow-2xs">
             <div className="flex items-center justify-between border-b border-border/70 pb-3">
               <div className="flex items-center gap-2">
@@ -520,23 +585,12 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   📝
                 </span>
                 <div>
-                  <h2 className="text-label font-bold text-ink">사연 & 시리즈 기획</h2>
+                  <h2 className="text-label font-bold text-ink">1단계 · 사연 & 시리즈 기획</h2>
                   <p className="text-caption text-ink-muted">
                     시리즈와 컷 수를 고르고 사연을 입력하세요. 사연을 수정하면 언제든 콘티를 새로 짤 수 있어요.
                   </p>
                 </div>
               </div>
-
-              {sb && sb.cuts.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsPlanningExpanded(false)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-ink-muted hover:text-brand cursor-pointer"
-                >
-                  <span>접기</span>
-                  <ChevronUp className="size-3.5" />
-                </button>
-              )}
             </div>
 
             {/* 시리즈 선택 row */}
@@ -735,49 +789,108 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               />
             </div>
 
-            {/* 콘티 생성 버튼 */}
+            {/* 콘티 생성 및 컷 콘티 이동 버튼 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/70">
               <span className="text-caption text-ink-muted">
                 {sb && sb.cuts.length > 0
                   ? "콘티를 다시 생성하면 대사와 연출이 초기화됩니다. (크레딧 무료)"
                   : "콘티 생성은 크레딧을 소모하지 않습니다."}
               </span>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                {sb && sb.cuts.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={() => setStep("cuts")}
+                    className="font-bold gap-1 shadow-xs"
+                  >
+                    <span>컷 콘티로 넘어가기 ({sb.cuts.length}컷)</span>
+                    <ChevronRight className="size-4" />
+                  </Button>
+                )}
+                <Button
+                  size="md"
+                  loading={pending}
+                  onClick={handleGenerateStoryboard}
+                  className="font-bold shrink-0 gap-1.5 shadow-xs"
+                >
+                  <RefreshCw className={cn("size-4", pending && "animate-spin")} />
+                  <span>
+                    {sb && sb.cuts.length > 0
+                      ? `🔄 사연으로 콘티 다시 생성 (${cutCount}컷)`
+                      : `✨ 이 사연으로 콘티 생성하기 (${cutCount}컷)`}
+                  </span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2단계: 컷 콘티 편집 */}
+        {step === "cuts" && (
+          <div className="flex flex-col gap-4">
+            {/* 상단 사연 & 기획 확인 배너 (1단계로 빠른 복귀) */}
+            <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-surface-card px-4 py-3 shadow-2xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-tint text-brand font-bold text-sm shadow-2xs">
+                  📝
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-body-sm font-bold text-ink">사연 & 시리즈 기획</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2 py-0.5 text-[11px] font-bold text-brand">
+                      <BookOpen className="size-3" />
+                      {currentSeries?.title ?? props.seriesTitle}
+                    </span>
+                    {sb && (
+                      <span className="inline-flex items-center rounded-full bg-surface-sunken border border-border/60 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
+                        총 {sb.cuts.length}컷
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-body-sm text-ink-muted truncate max-w-xl">
+                    {story ? `“${story}”` : "입력된 사연이 없습니다."}
+                  </p>
+                </div>
+              </div>
               <Button
-                size="md"
-                loading={pending}
-                onClick={handleGenerateStoryboard}
-                className="font-bold shrink-0 self-end sm:self-auto gap-1.5 shadow-xs"
+                variant="secondary"
+                size="sm"
+                onClick={() => setStep("story")}
+                className="shrink-0 font-semibold gap-1 text-xs ml-3"
               >
-                <RefreshCw className={cn("size-4", pending && "animate-spin")} />
-                <span>
-                  {sb && sb.cuts.length > 0
-                    ? `🔄 사연으로 콘티 다시 생성 (${cutCount}컷)`
-                    : `✨ 이 사연으로 콘티 생성하기 (${cutCount}컷)`}
-                </span>
+                <PenSquare className="size-3.5" />
+                <span>사연 & 기획 수정</span>
               </Button>
             </div>
-          </div>
-        )}
 
-        {usedMock && (
-          <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
-            모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
-          </p>
-        )}
+            {usedMock && (
+              <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
+                모델 키(ANTHROPIC_API_KEY)가 없어 사연 문장으로 콘티 틀만 짰어요. 키를 넣으면 작가처럼 다시 써 드려요.
+              </p>
+            )}
 
-        {/* 2. 콘티 본문 섹션 */}
-        {!sb || sb.cuts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/80 bg-surface-card p-12 text-center shadow-2xs">
-            <div className="grid size-12 place-items-center rounded-2xl bg-brand-tint text-brand text-2xl mb-3 shadow-2xs">
-              🎬
-            </div>
-            <h3 className="text-body font-bold text-ink">아직 콘티가 생성되지 않았어요</h3>
-            <p className="mt-1 text-body-sm text-ink-muted max-w-sm">
-              위의 기획 카드에서 사연을 입력하고 <strong>콘티 생성하기</strong>를 누르면, AI가 화풍과 캐릭터를 유지한 컷별 연출과 대사를 자동으로 구성해 드려요.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
+            {!sb || sb.cuts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/80 bg-surface-card p-12 text-center shadow-2xs">
+                <div className="grid size-12 place-items-center rounded-2xl bg-brand-tint text-brand text-2xl mb-3 shadow-2xs">
+                  🎬
+                </div>
+                <h3 className="text-body font-bold text-ink">아직 콘티가 생성되지 않았어요</h3>
+                <p className="mt-1 text-body-sm text-ink-muted max-w-sm mb-4">
+                  1단계에서 사연을 입력하고 콘티를 생성하면, AI가 화풍과 캐릭터를 유지한 컷별 연출과 대사를 자동으로 구성해 드려요.
+                </p>
+                <Button
+                  size="md"
+                  onClick={() => setStep("story")}
+                  className="font-bold gap-1.5"
+                >
+                  <PenSquare className="size-4" />
+                  <span>1단계: 사연 & 기획으로 가기</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
             {/* 독립 표지(커버) 컷 토글 바 */}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/80 bg-surface-card px-4 py-3 shadow-2xs">
               <div className="flex items-center gap-2.5">
@@ -1003,58 +1116,72 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
             </div>
           </div>
         )}
+          </div>
+        )}
       </main>
 
-      {/* 모바일 하단 플로팅 생성 바 */}
+      {/* 모바일 하단 플로팅 바 */}
       {sb && sb.cuts.length > 0 && (
         <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
-          <div className="flex items-center gap-2">
-            <div
-              role="radiogroup"
-              aria-label="생성 품질"
-              className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
-            >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={tier === "standard"}
-                onClick={() => setTier("standard")}
-                className={cn(
-                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                  tier === "standard"
-                    ? "bg-surface-card text-ink shadow-2xs font-bold"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                ⚡ 일반
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={tier === "pro"}
-                onClick={() => setTier("pro")}
-                className={cn(
-                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                  tier === "pro"
-                    ? "bg-brand text-on-brand shadow-2xs font-bold"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                💎 Pro
-              </button>
-            </div>
+          {step === "story" ? (
             <Button
               size="md"
               block
-              cost={cost}
-              disabled={!ready}
-              loading={pending}
-              onClick={startGeneration}
-              className="flex-1 font-bold shadow-xs"
+              onClick={() => setStep("cuts")}
+              className="font-bold shadow-xs gap-1"
             >
-              {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
+              <span>컷 콘티로 넘어가기 ({sb.cuts.length}컷)</span>
+              <ChevronRight className="size-4" />
             </Button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div
+                role="radiogroup"
+                aria-label="생성 품질"
+                className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tier === "standard"}
+                  onClick={() => setTier("standard")}
+                  className={cn(
+                    "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                    tier === "standard"
+                      ? "bg-surface-card text-ink shadow-2xs font-bold"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  ⚡ 일반
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tier === "pro"}
+                  onClick={() => setTier("pro")}
+                  className={cn(
+                    "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                    tier === "pro"
+                      ? "bg-brand text-on-brand shadow-2xs font-bold"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  💎 Pro
+                </button>
+              </div>
+              <Button
+                size="md"
+                block
+                cost={cost}
+                disabled={!ready}
+                loading={pending}
+                onClick={startGeneration}
+                className="flex-1 font-bold shadow-xs"
+              >
+                {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
