@@ -22,7 +22,14 @@ import {
 import { buildStructuredWebtoonPrompt } from "./promptBuilder";
 
 const OPENAI_API_HOST = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-image-2";
+/**
+ * 최신 GPT Image 2.5 라인업:
+ * - gpt-image-2.5-sunburst: 정밀 렌더링, 스타일/인물 다중 레퍼런스 일관성 최상위 모델
+ * - gpt-image-2.5-flare: 50% 낮은 레이턴시의 고속 일상 생성 모델
+ * - gpt-image-2: 이전 세대 호환 모델
+ */
+const DEFAULT_MODEL = "gpt-image-2.5-sunburst";
+
 
 function getApiKey(): string {
   const key = process.env.OPENAI_API_KEY;
