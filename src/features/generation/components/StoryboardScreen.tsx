@@ -547,9 +547,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
             </button>
           </nav>
 
-          {/* 우측: 품질 토글(일반/Pro) + 이미지 생성 버튼 */}
+          {/* 우측: 품질 토글(일반/Pro) + 이미지 생성 버튼 (모바일에서는 숨기고 하단 플로팅 바 사용) */}
           {sb && sb.cuts.length > 0 ? (
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
               {/* 생성 품질 토글 */}
               <div
                 role="radiogroup"
@@ -562,7 +562,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   aria-checked={tier === "standard"}
                   onClick={() => setTier("standard")}
                   className={cn(
-                    "cursor-pointer rounded-md px-2 sm:px-2.5 py-1 transition-all text-xs",
+                    "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
                     tier === "standard"
                       ? "bg-surface-card text-ink shadow-2xs font-bold"
                       : "text-ink-muted hover:text-ink",
@@ -577,7 +577,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   aria-checked={tier === "pro"}
                   onClick={() => setTier("pro")}
                   className={cn(
-                    "cursor-pointer rounded-md px-2 sm:px-2.5 py-1 transition-all text-xs",
+                    "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
                     tier === "pro"
                       ? "bg-brand text-on-brand shadow-2xs font-bold"
                       : "text-ink-muted hover:text-ink",
@@ -595,12 +595,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 disabled={!ready}
                 loading={pending}
                 onClick={startGeneration}
-                className="font-bold shadow-xs px-2.5 sm:px-3.5"
+                className="font-bold shadow-xs px-3"
               >
-                <span className="hidden sm:inline">
-                  {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
-                </span>
-                <span className="sm:hidden">생성</span>
+                {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
               </Button>
             </div>
           ) : null}
@@ -1013,33 +1010,11 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               />
             ))}
 
-            {/* 하단 완성 안내 및 간결한 보조 생성 바 */}
-            {!ready ? (
+            {/* 장면 묘사 미입력 컷이 있을 때 안내 */}
+            {!ready && (
               <p className="rounded-xl bg-warning-tint/70 border border-warning/30 px-4 py-3 text-body-sm text-warning text-center font-medium shadow-2xs">
-                ⚠️ 모든 컷의 장면 묘사를 입력하면 상단에서 이미지 생성을 시작할 수 있어요.
+                ⚠️ 모든 컷의 장면 묘사를 입력하면 이미지 생성을 시작할 수 있어요.
               </p>
-            ) : (
-              <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-surface-card p-4 shadow-2xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🚀</span>
-                  <span className="text-body-sm font-bold text-ink">
-                    총 {sb.cuts.length}컷 콘티 완성
-                  </span>
-                  <span className="text-caption text-ink-muted">
-                    ({props.aspectRatio} · {props.stylePreset})
-                  </span>
-                </div>
-                <Button
-                  size="md"
-                  cost={cost}
-                  disabled={!ready}
-                  loading={pending}
-                  onClick={startGeneration}
-                  className="font-bold shadow-xs px-5"
-                >
-                  {tier === "pro" ? "💎 Pro 이미지 생성 시작" : "⚡ 일반 이미지 생성 시작"}
-                </Button>
-              </div>
             )}
           </div>
         )}
@@ -1047,9 +1022,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         )}
       </main>
 
-      {/* 모바일 하단 플로팅 바 (2단계 컷 콘티 편집 시) */}
+      {/* 모바일 하단 플로팅 바 (2단계 컷 콘티 편집 시 모바일 전용 노출) */}
       {step === "cuts" && sb && sb.cuts.length > 0 && (
-        <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
+        <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md sm:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
           <div className="flex items-center gap-2">
             <div
               role="radiogroup"
