@@ -33,7 +33,7 @@ export function getImageGenerator(tier?: GenerationTier): ImageGenerator {
 
   // 1. Tier 가 명시적으로 주어진 경우
   if (tier === "standard") {
-    if (provider === "openai" || provider.includes("gpt-image")) {
+    if (provider === "openai" || provider.includes("gpt-image") || (!provider && process.env.OPENAI_API_KEY)) {
       return new OpenAIImageGenerator("gpt-image-2.5-flare", "medium");
     }
     if (provider === "google") return new GoogleImagenGenerator();
@@ -43,7 +43,7 @@ export function getImageGenerator(tier?: GenerationTier): ImageGenerator {
   }
 
   if (tier === "pro") {
-    if (provider === "openai" || provider.includes("gpt-image")) {
+    if (provider === "openai" || provider.includes("gpt-image") || (!provider && process.env.OPENAI_API_KEY)) {
       return new OpenAIImageGenerator("gpt-image-2.5-sunburst", "high");
     }
     if (provider === "google") return new GoogleImagenGenerator();
