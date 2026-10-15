@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText,
@@ -33,6 +33,7 @@ import {
   EmptyState,
   Field,
   Modal,
+  Toast,
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CREDIT_COST } from "@/contracts/credit";
@@ -147,6 +148,24 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   });
 
   const canProceedToCuts = Boolean(sb && sb.cuts && sb.cuts.length > 0);
+
+  // 단계 이동 제한 안내 토스트 상태
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2800);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // 사연&기획이 완료(콘티 생성)되지 않으면 컷 콘티 단계로 이동 불가
   useEffect(() => {
@@ -501,6 +520,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         current="storyboard"
         credits={props.credits}
         hasGenerated={props.hasGenerated}
+        onBlockedStepClick={() => {
+          showToast("콘티 단계(이미지 생성)를 완성해야 편집 및 게시로 넘어갈 수 있어요.");
+        }}
       />
 
       {/* 1, 2단계 스텝 네비게이션 & 빠른 이미지 생성 탑 바 */}
@@ -539,18 +561,21 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
             {/* 2단계 */}
             <button
               type="button"
-              disabled={!canProceedToCuts}
               onClick={() => {
-                if (canProceedToCuts) setStep("cuts");
+                if (canProceedToCuts) {
+                  setStep("cuts");
+                } else {
+                  showToast("사연 & 기획 단계를 완성해야 콘티 편집으로 넘어갈 수 있어요.");
+                }
               }}
               title={canProceedToCuts ? undefined : "사연을 입력하고 콘티를 먼저 생성해 주세요"}
               className={cn(
-                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all",
+                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
                 step === "cuts"
                   ? "bg-brand text-on-brand shadow-2xs font-bold"
                   : canProceedToCuts
-                    ? "text-ink-muted hover:bg-surface-sunken hover:text-ink cursor-pointer"
-                    : "text-ink-subtle opacity-40 cursor-not-allowed",
+                    ? "text-ink-muted hover:bg-surface-sunken hover:text-ink"
+                    : "text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60",
               )}
             >
               <span
@@ -1175,6 +1200,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
           </>
         }
       />
+
+      {/* 단계 이동 제한 안내 토스트 */}
+      <Toast message={toastMessage} />
     </div>
   );
 }

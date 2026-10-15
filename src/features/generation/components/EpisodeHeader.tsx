@@ -26,6 +26,8 @@ export interface EpisodeHeaderProps {
   hideActionOnMobile?: boolean;
   /** 콘티 단계 등에서 이미지 생성이 아직 진행되지 않아 편집/게시 진입이 불가능한지 여부 */
   hasGenerated?: boolean;
+  /** 미완료 상태에서 비활성화된 단계를 클릭했을 때 호출되는 콜백 */
+  onBlockedStepClick?: (step: GenerationStep) => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function EpisodeHeader({
   action,
   hideActionOnMobile = false,
   hasGenerated = true,
+  onBlockedStepClick,
 }: EpisodeHeaderProps) {
   const isCurrentStep = (stepKey: GenerationStep) =>
     stepKey === current || (stepKey === "editor" && current === "generate");
@@ -49,6 +52,10 @@ export function EpisodeHeader({
     if (stepKey === "storyboard") return false;
     if (current === "storyboard" && !hasGenerated) return true;
     return false;
+  };
+
+  const handleBlockedClick = (stepKey: GenerationStep) => {
+    onBlockedStepClick?.(stepKey);
   };
 
   return (
@@ -91,13 +98,15 @@ export function EpisodeHeader({
 
             if (disabled) {
               return (
-                <span
+                <button
                   key={step.key}
+                  type="button"
+                  onClick={() => handleBlockedClick(step.key)}
                   title="콘티 단계에서 이미지 생성을 먼저 진행해 주세요"
-                  className="flex h-control-sm items-center rounded-lg px-3.5 text-label font-medium text-ink-subtle opacity-40 cursor-not-allowed select-none"
+                  className="flex h-control-sm items-center rounded-lg px-3.5 text-label font-medium text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60 cursor-pointer select-none transition-all"
                 >
                   {step.label}
-                </span>
+                </button>
               );
             }
 
@@ -139,13 +148,15 @@ export function EpisodeHeader({
 
             if (disabled) {
               return (
-                <span
+                <button
                   key={step.key}
+                  type="button"
+                  onClick={() => handleBlockedClick(step.key)}
                   title="콘티 단계에서 이미지 생성을 먼저 진행해 주세요"
-                  className="flex h-8 items-center justify-center rounded-md text-xs text-ink-subtle opacity-40 cursor-not-allowed select-none"
+                  className="flex h-8 items-center justify-center rounded-md text-xs text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60 cursor-pointer select-none transition-all"
                 >
                   {step.label}
-                </span>
+                </button>
               );
             }
 
