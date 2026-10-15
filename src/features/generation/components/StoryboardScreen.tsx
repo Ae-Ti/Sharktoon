@@ -642,7 +642,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 onClick={startGeneration}
                 className="font-bold shadow-xs px-3"
               >
-                {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
+                {tier === "pro" ? "Pro 이미지 생성" : "일반 이미지 생성"}
               </Button>
             </div>
           ) : null}
@@ -1095,7 +1095,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               onClick={startGeneration}
               className="flex-1 font-bold shadow-xs"
             >
-              {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
+              {tier === "pro" ? "Pro 생성" : "일반 생성"}
             </Button>
           </div>
         </div>
