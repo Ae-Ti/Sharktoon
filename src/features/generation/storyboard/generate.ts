@@ -15,7 +15,7 @@ import {
 } from "./prompt";
 import { screenText } from "../safety/rules";
 import { ALLOWED, blocked, type SafetyVerdict } from "../safety/types";
-import type { Storyboard, StoryboardCut } from "../types/storyboard";
+import { EMOTION_LABEL, type CutEmotion, type Storyboard, type StoryboardCut } from "../types/storyboard";
 import { mockStoryboard } from "./mock";
 import { isAnthropicConfigured, parseStructured } from "../llm";
 
@@ -404,27 +404,55 @@ function toStoryboard(
   const cutsSource = rawCutsList.length > 0 ? rawCutsList : mockStoryboard(input).cuts;
   const characters = toCharacters(res.characters);
 
-  const rawCuts: StoryboardCut[] = cutsSource.map((cut: any, i: number) => ({
-    id: seq("cut"),
-    index: i + 1,
-    scene: cut.scene || "장면 묘사",
-    characterIds: (Array.isArray(cut.characters) ? cut.characters : (cut.characterIds || ["ch_me"]))
-      .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c)))),
-    emotion: cut.emotion || "calm",
-    camera: cut.camera || "medium",
-    dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => ({
-      id: seq("ln"),
-      speakerId: normalizeSpeakerId(line.speaker ?? line.speakerId, characters),
-      text: line.text || "",
-      balloon: line.balloon || "normal",
-    })),
-    narration:
-      typeof cut.narration === "string" &&
-      cut.narration.trim().length > 0 &&
-      cut.narration.trim() !== "없음"
-        ? cut.narration.trim()
-        : undefined,
-  }));
+  const rawCuts: StoryboardCut[] = cutsSource.map((cut: any, i: number) => {
+    const rawScene =
+      cut.scene ||
+      cut.scene_description ||
+      cut.description ||
+      cut.visual ||
+      cut.image_prompt ||
+      cut.prompt ||
+      cut.action;
+
+    let sceneText =
+      typeof rawScene === "string" && rawScene.trim().length > 0 && rawScene.trim() !== "장면 묘사"
+        ? rawScene.trim()
+        : "";
+
+    if (!sceneText) {
+      const lineTexts = (Array.isArray(cut.dialogue) ? cut.dialogue : [])
+        .map((l: any) => (typeof l === "string" ? l : l?.text))
+        .filter(Boolean)
+        .join(" ");
+      const emotionKor = EMOTION_LABEL[cut.emotion as CutEmotion] || "생생한";
+      const beat = (input.story || "").slice(0, 35);
+      sceneText = lineTexts
+        ? `고정 다크 그레이 후드티 차림의 20대 여성 주인공(나)이 ${emotionKor} 표정으로 상황에 반응하는 모습. 대화 상황: "${lineTexts.slice(0, 30)}"`
+        : `${beat}의 상황. 고정 다크 그레이 후드티 차림의 20대 여성 주인공(나)이 ${emotionKor} 표정으로 서 있는 장면.`;
+    }
+
+    return {
+      id: seq("cut"),
+      index: i + 1,
+      scene: sceneText,
+      characterIds: (Array.isArray(cut.characters) ? cut.characters : (cut.characterIds || ["ch_me"]))
+        .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c)))),
+      emotion: cut.emotion || "calm",
+      camera: cut.camera || "medium",
+      dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => ({
+        id: seq("ln"),
+        speakerId: normalizeSpeakerId(line.speaker ?? line.speakerId, characters),
+        text: line.text || "",
+        balloon: line.balloon || "normal",
+      })),
+      narration:
+        typeof cut.narration === "string" &&
+        cut.narration.trim().length > 0 &&
+        cut.narration.trim() !== "없음"
+          ? cut.narration.trim()
+          : undefined,
+    };
+  });
 
   const cuts = refineStoryboardCuts(rawCuts);
   const hooks = toHooks(res.hooks);

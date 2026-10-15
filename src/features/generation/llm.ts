@@ -17,7 +17,8 @@ export function isAnthropicConfigured(): boolean {
   return Boolean(
     process.env.ANTHROPIC_API_KEY ||
     process.env.GOOGLE_AI_API_KEY ||
-    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY ||
+    process.env.OPENAI_API_KEY,
   );
 }
 
@@ -37,15 +38,22 @@ export async function parseStructured<S extends z.ZodType>(input: {
   user: string;
 }): Promise<StructuredResult<z.infer<S>>> {
   if (process.env.ANTHROPIC_API_KEY) {
-    return parseStructuredAnthropic(input);
+    const res = await parseStructuredAnthropic(input);
+    if (res.ok || res.reason === "refusal") return res;
   }
 
   const googleKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
   if (googleKey) {
-    return parseStructuredGemini(input, googleKey);
+    const res = await parseStructuredGemini(input, googleKey);
+    if (res.ok || res.reason === "refusal") return res;
   }
 
-  return { ok: false, reason: "error", message: "LLM API 키가 설정되지 않았습니다." };
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    return parseStructuredOpenAI(input, openaiKey);
+  }
+
+  return { ok: false, reason: "error", message: "사용 가능한 LLM API 키가 없습니다." };
 }
 
 async function parseStructuredAnthropic<S extends z.ZodType>(input: {
@@ -106,7 +114,7 @@ async function parseStructuredGemini<S extends z.ZodType>(
     "중요 규칙: cuts, characters, hooks, ctas 필드는 객체가 아니라 반드시 배열(Array [ ... ]) 형식이어야 합니다.",
   ].join("\n");
 
-  const models = ["gemini-3.5-flash-lite", "gemini-3.5-flash"];
+  const models = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"];
   let lastError: Error | null = null;
 
   for (const model of models) {
@@ -154,4 +162,54 @@ async function parseStructuredGemini<S extends z.ZodType>(
     reason: "error",
     message: lastError?.message || "콘티 생성 모델 호출에 실패했습니다.",
   };
+}
+
+async function parseStructuredOpenAI<S extends z.ZodType>(
+  input: {
+    schema: S;
+    system: string;
+    user: string;
+  },
+  apiKey: string,
+): Promise<StructuredResult<z.infer<S>>> {
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: input.system },
+          { role: "user", content: input.user },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenAI API 호출 실패 (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("OpenAI 응답에 내용이 없습니다.");
+
+    const json = JSON.parse(content);
+    const parsed = input.schema.safeParse(json);
+    if (!parsed.success) {
+      console.warn("[openai-structured] Zod validation issue, attempting partial recovery:", parsed.error);
+      return { ok: true, data: json as z.infer<S> };
+    }
+    return { ok: true, data: parsed.data };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: "error",
+      message: e instanceof Error ? e.message : "OpenAI 모델 호출 실패",
+    };
+  }
 }
