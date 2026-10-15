@@ -23,12 +23,17 @@ export default async function Page({
   const context = await loadEpisodeContext(episodeId);
   if (!context) notFound();
 
+  const store = await getGenerationStore();
   const repo = await getRepository();
-  const [saved, credit, allSeries] = await Promise.all([
-    (await getGenerationStore()).getStoryboard(episodeId),
+  const [saved, credit, allSeries, cuts, latestJob] = await Promise.all([
+    store.getStoryboard(episodeId),
     repo.getCredit(),
     repo.listSeries(),
+    store.listCuts(episodeId),
+    store.getLatestJob(episodeId),
   ]);
+
+  const hasGenerated = Boolean(latestJob || cuts.some((c) => Boolean(c.imageUrl)));
 
   return (
     <StoryboardScreen
@@ -45,6 +50,7 @@ export default async function Page({
       cutCount={context.cutCount}
       allSeries={allSeries}
       isNewDraft={sParams?.new === "1"}
+      hasGenerated={hasGenerated}
       {...titlesOf(context)}
     />
   );

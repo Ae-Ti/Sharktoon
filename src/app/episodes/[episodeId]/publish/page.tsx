@@ -29,6 +29,11 @@ export default async function Page({ params }: { params: Promise<{ episodeId: st
   ]);
   if (!saved) redirect(`/episodes/${episodeId}/storyboard`);
 
+  const ready = records.filter((r) => r.imageUrl);
+  if (ready.length === 0) {
+    redirect(`/episodes/${episodeId}/storyboard`);
+  }
+
   // 캐러셀 순서는 콘티 순서다. 저장된 레이어가 없으면 편집기와 같은 규칙으로 처음 트리를 만든다.
   const slides = saved.storyboard.cuts.map((cut) => {
     const r = records.find((x) => x.cutId === cut.id);

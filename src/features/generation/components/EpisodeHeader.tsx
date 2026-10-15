@@ -24,6 +24,8 @@ export interface EpisodeHeaderProps {
   action?: ReactNode;
   /** 모바일 화면(하단 고정 바가 있는 경우 등)에서 상단 헤더 액션을 숨김 */
   hideActionOnMobile?: boolean;
+  /** 콘티 단계 등에서 이미지 생성이 아직 진행되지 않아 편집/게시 진입이 불가능한지 여부 */
+  hasGenerated?: boolean;
 }
 
 /**
@@ -38,9 +40,16 @@ export function EpisodeHeader({
   credits,
   action,
   hideActionOnMobile = false,
+  hasGenerated = true,
 }: EpisodeHeaderProps) {
   const isCurrentStep = (stepKey: GenerationStep) =>
     stepKey === current || (stepKey === "editor" && current === "generate");
+
+  const isStepDisabled = (stepKey: GenerationStep) => {
+    if (stepKey === "storyboard") return false;
+    if (current === "storyboard" && !hasGenerated) return true;
+    return false;
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-card/95 backdrop-blur-md">
@@ -78,6 +87,20 @@ export function EpisodeHeader({
         <nav aria-label="제작 단계 (데스크톱)" className="hidden md:flex items-center gap-1 ml-2">
           {STEPS.map((step) => {
             const active = isCurrentStep(step.key);
+            const disabled = isStepDisabled(step.key);
+
+            if (disabled) {
+              return (
+                <span
+                  key={step.key}
+                  title="콘티 단계에서 이미지 생성을 먼저 진행해 주세요"
+                  className="flex h-control-sm items-center rounded-lg px-3.5 text-label font-medium text-ink-subtle opacity-40 cursor-not-allowed select-none"
+                >
+                  {step.label}
+                </span>
+              );
+            }
+
             return (
               <Link
                 key={step.key}
@@ -112,6 +135,20 @@ export function EpisodeHeader({
         <nav aria-label="제작 단계 (모바일)" className="grid grid-cols-3 gap-1.5">
           {STEPS.map((step) => {
             const active = isCurrentStep(step.key);
+            const disabled = isStepDisabled(step.key);
+
+            if (disabled) {
+              return (
+                <span
+                  key={step.key}
+                  title="콘티 단계에서 이미지 생성을 먼저 진행해 주세요"
+                  className="flex h-8 items-center justify-center rounded-md text-xs text-ink-subtle opacity-40 cursor-not-allowed select-none"
+                >
+                  {step.label}
+                </span>
+              );
+            }
+
             return (
               <Link
                 key={step.key}

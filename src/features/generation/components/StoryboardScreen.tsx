@@ -93,6 +93,7 @@ export interface StoryboardScreenProps {
   cutCount?: number;
   allSeries?: SeriesSummary[];
   isNewDraft?: boolean;
+  hasGenerated?: boolean;
 }
 
 function normalizeStoryboardNarration(sb: Storyboard | null): Storyboard | null {
@@ -144,6 +145,15 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
     }
     return props.initial && props.initial.cuts.length > 0 ? "cuts" : "story";
   });
+
+  const canProceedToCuts = Boolean(sb && sb.cuts && sb.cuts.length > 0);
+
+  // 사연&기획이 완료(콘티 생성)되지 않으면 컷 콘티 단계로 이동 불가
+  useEffect(() => {
+    if (!canProceedToCuts && step === "cuts") {
+      setStep("story");
+    }
+  }, [canProceedToCuts, step]);
 
   // 이미지(카톡/글 캡처) OCR 추출 상태
   const [analyzingImage, setAnalyzingImage] = useState(false);
@@ -490,6 +500,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         episodeTitle={props.episodeTitle}
         current="storyboard"
         credits={props.credits}
+        hasGenerated={props.hasGenerated}
       />
 
       {/* 1, 2단계 스텝 네비게이션 & 빠른 이미지 생성 탑 바 */}
@@ -521,17 +532,25 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               <span>사연 & 기획</span>
             </button>
 
-            <ChevronRight className="size-4 text-ink-subtle select-none shrink-0" />
+            <ChevronRight
+              className={cn("size-4 text-ink-subtle select-none shrink-0", !canProceedToCuts && "opacity-40")}
+            />
 
             {/* 2단계 */}
             <button
               type="button"
-              onClick={() => setStep("cuts")}
+              disabled={!canProceedToCuts}
+              onClick={() => {
+                if (canProceedToCuts) setStep("cuts");
+              }}
+              title={canProceedToCuts ? undefined : "사연을 입력하고 콘티를 먼저 생성해 주세요"}
               className={cn(
-                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all",
                 step === "cuts"
                   ? "bg-brand text-on-brand shadow-2xs font-bold"
-                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+                  : canProceedToCuts
+                    ? "text-ink-muted hover:bg-surface-sunken hover:text-ink cursor-pointer"
+                    : "text-ink-subtle opacity-40 cursor-not-allowed",
               )}
             >
               <span
