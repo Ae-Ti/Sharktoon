@@ -180,7 +180,7 @@ function normalizeSpeakerId(
 }
 
 function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
-  return cuts.map((cut) => {
+  const refined = cuts.map((cut) => {
     let scene = cut.scene;
     let charIds = (Array.isArray(cut.characterIds) ? cut.characterIds : [])
       .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c))));
@@ -301,6 +301,61 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
       camera,
     };
   });
+
+  // 8. 나레이션 절제 보정 (Narration Sparsity Enforcement)
+  // 인스타툰에서는 모든 컷에 나레이션이 들어가면 화면이 조잡해지고 가독성이 떨어짐.
+  // 4~10컷 기준 전체 중 최대 1~2개 컷(주로 1컷 착수 또는 마지막 컷 여운/수습)에만 한정.
+  const totalCuts = refined.length;
+
+  // 8-1. 빈 문자열 또는 공백, "없음" 등 무의미한 나레이션 정리
+  for (const c of refined) {
+    if (c.narration) {
+      const trimmed = c.narration.trim();
+      if (!trimmed || trimmed === "없음" || trimmed === "None" || trimmed === "null") {
+        c.narration = undefined;
+      } else {
+        c.narration = trimmed;
+      }
+    }
+  }
+
+  // 8-2. 중간 컷(1컷과 마지막 컷 제외) 중 대사가 있는 컷은 나레이션 제거
+  for (const c of refined) {
+    const isFirst = c.index === 1;
+    const isLast = c.index === totalCuts;
+    const hasDialogue = Array.isArray(c.dialogue) && c.dialogue.length > 0;
+    if (!isFirst && !isLast && hasDialogue) {
+      c.narration = undefined;
+    }
+  }
+
+  // 8-3. 나레이션이 들어간 컷이 2개를 초과하면, 1컷과 마지막 컷 우선 남기고 나머지 중간 컷 나레이션 제거
+  let cutsWithNarration = refined.filter((c) => c.narration != null);
+  if (cutsWithNarration.length > 2) {
+    for (const c of refined) {
+      const isFirst = c.index === 1;
+      const isLast = c.index === totalCuts;
+      if (!isFirst && !isLast) {
+        c.narration = undefined;
+      }
+    }
+  }
+
+  // 8-4. 만약 여전히 2개 초과라면, 최대 2개만 남기고 나머지는 정리
+  cutsWithNarration = refined.filter((c) => c.narration != null);
+  if (cutsWithNarration.length > 2) {
+    let count = 0;
+    for (const c of refined) {
+      if (c.narration != null) {
+        count++;
+        if (count > 2) {
+          c.narration = undefined;
+        }
+      }
+    }
+  }
+
+  return refined;
 }
 
 function toHooks(raw: unknown): { text: string; rationale: string }[] {
@@ -363,7 +418,12 @@ function toStoryboard(
       text: line.text || "",
       balloon: line.balloon || "normal",
     })),
-    narration: cut.narration === "" ? undefined : cut.narration,
+    narration:
+      typeof cut.narration === "string" &&
+      cut.narration.trim().length > 0 &&
+      cut.narration.trim() !== "없음"
+        ? cut.narration.trim()
+        : undefined,
   }));
 
   const cuts = refineStoryboardCuts(rawCuts);

@@ -63,7 +63,7 @@ const CutSchema = z.object({
   emotion: EMOTION,
   camera: CAMERA,
   dialogue: z.array(LineSchema),
-  /** 말풍선 밖 나레이션. 없으면 빈 문자열. */
+  /** 말풍선 밖 나레이션. 대사가 있거나 불필요한 컷은 반드시 빈 문자열 "" (전체 중 최대 1~2컷만 사용). */
   narration: z.string(),
 });
 
