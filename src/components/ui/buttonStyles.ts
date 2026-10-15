@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
  * 서버 컴포넌트에서도 불러야 하므로 "use client" 를 붙이지 않는다.
  */
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "cta";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
@@ -14,6 +14,7 @@ export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
     "bg-surface-card text-ink border border-border-control hover:bg-surface-sunken",
   ghost: "text-brand-ink hover:bg-brand-tint",
   danger: "bg-danger text-on-signal",
+  cta: "relative overflow-hidden bg-gradient-to-r from-[#077b8a] via-[#0eb8ce] to-[#0284c7] text-white border border-cyan-300/40 shadow-md shadow-cyan-600/25 hover:shadow-lg hover:shadow-cyan-500/40 hover:brightness-105 active:scale-98 transition-all",
 };
 
 export const BUTTON_SIZE: Record<ButtonSize, string> = {
@@ -28,6 +29,7 @@ export const BUTTON_COST: Record<ButtonVariant, string> = {
   danger: "bg-white/20",
   secondary: "bg-accent-tint text-accent-ink",
   ghost: "bg-accent-tint text-accent-ink",
+  cta: "bg-white/25 text-white",
 };
 
 export function buttonClasses({

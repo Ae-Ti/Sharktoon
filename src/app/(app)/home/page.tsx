@@ -4,7 +4,7 @@ import { Badge, ButtonLink, EmptyState } from "@/components/ui";
 import { getRepository, type EpisodeStatus } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
 
@@ -33,11 +33,17 @@ export default async function Page() {
         <ButtonLink
           href={series.length > 0 ? "/episodes/new" : "/onboarding/character"}
           size="lg"
-          variant="primary"
-          className="h-12 px-6 text-body font-extrabold shadow-sm hover:shadow-md ring-4 ring-brand/15 transition-all w-full sm:w-auto justify-center"
+          variant="cta"
+          className="group relative overflow-hidden h-12 px-6 text-body font-extrabold transition-all w-full sm:w-auto justify-center"
         >
-          <Plus className="size-5 shrink-0 stroke-[2.5]" />
-          <span>새 인스타툰 만들기</span>
+          {/* Shimmer 광택 효과 레이어 */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent animate-shimmer-sweep"
+          />
+          <Plus className="size-5 shrink-0 stroke-[2.8] text-cyan-100 group-hover:rotate-90 transition-transform duration-300 relative z-10" />
+          <span className="relative z-10 tracking-tight text-white drop-shadow-xs">새 인스타툰 만들기</span>
+          <Sparkles className="size-4 shrink-0 text-cyan-200 animate-pulse relative z-10" />
         </ButtonLink>
       </div>
 
