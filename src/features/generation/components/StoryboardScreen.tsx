@@ -811,7 +811,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                     type="button"
                     onClick={() => setCutCount(num)}
                     className={cn(
-                      "h-8.5 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs",
+                      "h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs",
                       cutCount === num
                         ? "border-brand bg-brand text-on-brand shadow-xs"
                         : "border-border/80 bg-surface-card text-ink hover:border-brand/60 hover:bg-surface-sunken/40"
@@ -1504,7 +1504,7 @@ function SpeakerPicker({
         onChange={(e) => onSelectSpeaker(e.target.value ? e.target.value : null)}
         aria-label="화자 선택"
         className={cn(
-          "h-8.5 pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs appearance-none",
+          "min-h-[38px] pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs appearance-none",
           isNarration
             ? "bg-surface-sunken/80 border-border text-ink-muted hover:bg-surface-sunken hover:text-ink"
             : isMe
@@ -1907,7 +1907,7 @@ function CutCard({
                       ? "인스타 피드 썸네일에 들어갈 표지 후킹 타이틀을 입력하세요"
                       : "첫 컷 상단에 들어갈 후킹 헤드라인을 입력하세요"
                   }
-                  className="h-8 rounded-lg border border-border-control/80 bg-surface-card px-3 text-body-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs"
+                  className="min-h-[38px] rounded-lg border border-border-control/80 bg-surface-card px-3 py-2 text-body-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs"
                 />
               </div>
             </div>
@@ -1982,7 +1982,7 @@ function CutCard({
                   value={currentCtaText}
                   onChange={(e) => onChangeCtaText?.(e.target.value)}
                   placeholder="마지막 컷 하단에 들어갈 참여 유도 문구를 입력하세요 (예: 댓글로 여러분의 생각을 알려주세요!)"
-                  className="h-8 rounded-lg border border-border-control/80 bg-surface-card px-3 text-body-sm text-ink focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-2xs"
+                  className="min-h-[38px] rounded-lg border border-border-control/80 bg-surface-card px-3 py-2 text-body-sm text-ink focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-2xs"
                 />
               </div>
             </div>
@@ -2129,7 +2129,7 @@ function CutCard({
                       value={line.balloon}
                       onChange={(e) => onChangeLineBalloon(line.id, e.target.value as BalloonKind)}
                       aria-label="말풍선 종류"
-                      className="h-8.5 pl-2.5 pr-7 rounded-lg border border-border/80 bg-surface-sunken/40 text-caption font-semibold text-ink focus:border-brand focus:outline-none transition-all cursor-pointer appearance-none"
+                      className="min-h-[38px] pl-2.5 pr-7 rounded-lg border border-border/80 bg-surface-sunken/40 text-caption font-semibold text-ink focus:border-brand focus:outline-none transition-all cursor-pointer appearance-none"
                     >
                       {Object.entries(BALLOON_LABEL).map(([kind, label]) => (
                         <option key={kind} value={kind}>
@@ -2141,25 +2141,27 @@ function CutCard({
                   </div>
                 </div>
 
-                {/* 대사/나레이션 텍스트 입력 */}
-                <input
-                  value={line.text}
-                  onChange={(e) => onChangeLine(line.id, e.target.value)}
-                  placeholder={!line.speakerId ? "나레이션 문구를 입력하세요" : "대사를 입력하세요"}
-                  aria-label={!line.speakerId ? `${cut.index}컷 나레이션` : `${cut.index}컷 대사`}
-                  className="h-8.5 min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
-                />
+                {/* 대사/나레이션 텍스트 입력 및 삭제 버튼 (모바일에서는 한 줄로 정렬) */}
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <input
+                    value={line.text}
+                    onChange={(e) => onChangeLine(line.id, e.target.value)}
+                    placeholder={!line.speakerId ? "나레이션 문구를 입력하세요" : "대사를 입력하세요"}
+                    aria-label={!line.speakerId ? `${cut.index}컷 나레이션` : `${cut.index}컷 대사`}
+                    className="min-h-[40px] sm:min-h-[38px] min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 py-2 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
+                  />
 
-                {/* 삭제 버튼 */}
-                <button
-                  type="button"
-                  onClick={() => onRemoveLine(line.id)}
-                  title={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
-                  aria-label={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
-                  className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                  {/* 삭제 버튼 */}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveLine(line.id)}
+                    title={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
+                    aria-label={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
+                    className="grid size-9 sm:size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
