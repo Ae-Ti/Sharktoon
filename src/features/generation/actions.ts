@@ -62,6 +62,10 @@ export async function generateStoryboardAction(input: {
   episodeId: string;
   /** 고쳐 쓴 사연. 없으면 회차에 저장된 사연을 쓴다. */
   story?: string;
+  /** 변경할 컷 수 (선택). */
+  cutCount?: number;
+  /** 변경할 소속 시리즈 ID (선택). */
+  seriesId?: string;
 }): Promise<ActionResult<{ storyboard: Storyboard; usedMock: boolean }>> {
   try {
     const { context } = await ownedEpisode(input.episodeId);
@@ -70,11 +74,26 @@ export async function generateStoryboardAction(input: {
       return { ok: false, kind: "error", message: "사연을 조금 더 적어주세요. 한 문장이면 충분해요." };
     }
 
-    // 1. 사연 기반 '사전 에셋 자동 생성(Pre-Asset Generation)'
     const repo = await getRepository();
+
+    // 0. 사연이나 컷 수, 시리즈 변경사항이 있으면 DB에 반영
+    if (
+      (input.story && input.story !== context.story) ||
+      (input.cutCount && input.cutCount !== context.cutCount) ||
+      (input.seriesId && input.seriesId !== context.seriesId)
+    ) {
+      await repo.updateEpisode(input.episodeId, {
+        story,
+        cutCount: input.cutCount,
+        seriesId: input.seriesId,
+      });
+    }
+
+    // 1. 사연 기반 '사전 에셋 자동 생성(Pre-Asset Generation)'
     try {
       const extractedEntities = await extractEntitiesFromStory(story);
       const currentAssets = await repo.listAssets();
+      const targetSeriesId = input.seriesId ?? context.seriesId;
       const seriesAssetIds = [...context.assets.map((a) => a.id)];
 
       for (const ent of extractedEntities) {
@@ -92,7 +111,7 @@ export async function generateStoryboardAction(input: {
           seriesAssetIds.push(created.id);
         }
       }
-      await repo.setSeriesAssets(context.seriesId, seriesAssetIds);
+      await repo.setSeriesAssets(targetSeriesId, seriesAssetIds);
     } catch (e) {
       console.error("[generateStoryboardAction] Pre-Asset generation error:", e);
     }
@@ -105,7 +124,7 @@ export async function generateStoryboardAction(input: {
       story,
       episodeId: freshContext.episodeId,
       seriesId: freshContext.seriesId,
-      cutCount: freshContext.cutCount,
+      cutCount: input.cutCount ?? freshContext.cutCount,
       seriesRule: describeRule(freshContext),
       fixedCharacters: characterNames(freshContext),
     });

@@ -378,6 +378,32 @@ export const mockRepository: PlatformRepository = {
     return ep;
   },
 
+  async updateEpisode(episodeId: string, input: { story?: string; cutCount?: number; seriesId?: string }) {
+    for (const s of S.series) {
+      const epIndex = s.episodes.findIndex((e) => e.id === episodeId);
+      if (epIndex === -1) continue;
+      const ep = s.episodes[epIndex];
+
+      if (input.story !== undefined) {
+        S.stories[ep.id] = input.story;
+        ep.title = input.story.slice(0, 20) || null;
+      }
+      if (input.cutCount !== undefined) {
+        ep.cutCount = input.cutCount;
+      }
+      if (input.seriesId && input.seriesId !== s.id) {
+        s.episodes.splice(epIndex, 1);
+        s.episodeCount = s.episodes.length;
+        const targetSeries = S.series.find((x) => x.id === input.seriesId);
+        if (targetSeries) {
+          targetSeries.episodes.push(ep);
+          targetSeries.episodeCount = targetSeries.episodes.length;
+        }
+      }
+      return;
+    }
+  },
+
   async getResumable() {
     for (const s of S.series) {
       const ep = [...s.episodes]

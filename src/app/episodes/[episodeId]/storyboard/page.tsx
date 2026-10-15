@@ -13,16 +13,21 @@ export const metadata = { title: "콘티 — 샥툰" };
 
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ episodeId: string }>;
+  searchParams?: Promise<{ new?: string }>;
 }) {
   const { episodeId } = await params;
+  const sParams = await searchParams;
   const context = await loadEpisodeContext(episodeId);
   if (!context) notFound();
 
-  const [saved, credit] = await Promise.all([
+  const repo = await getRepository();
+  const [saved, credit, allSeries] = await Promise.all([
     (await getGenerationStore()).getStoryboard(episodeId),
-    (await getRepository()).getCredit(),
+    repo.getCredit(),
+    repo.listSeries(),
   ]);
 
   return (
@@ -36,6 +41,10 @@ export default async function Page({
       stylePreset={context.rule.stylePreset}
       aspectRatio={context.rule.aspectRatio}
       credits={credit.balance}
+      seriesId={context.seriesId}
+      cutCount={context.cutCount}
+      allSeries={allSeries}
+      isNewDraft={sParams?.new === "1"}
       {...titlesOf(context)}
     />
   );

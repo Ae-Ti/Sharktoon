@@ -473,6 +473,18 @@ export const supabaseRepository: PlatformRepository = {
     };
   },
 
+  async updateEpisode(episodeId: string, input: { story?: string; cutCount?: number; seriesId?: string }) {
+    const db = await createClient();
+    const patch: { story?: string; cut_count?: number; series_id?: string } = {};
+    if (input.story !== undefined) patch.story = input.story;
+    if (input.cutCount !== undefined) patch.cut_count = input.cutCount;
+    if (input.seriesId !== undefined) patch.series_id = input.seriesId;
+    if (Object.keys(patch).length > 0) {
+      const { error } = await db.from("episodes").update(patch).eq("id", episodeId);
+      if (error) throw error;
+    }
+  },
+
   async getResumable() {
     const db = await createClient();
     const { data } = await db
