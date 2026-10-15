@@ -209,7 +209,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
           </Button>
         }
       >
-        <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto p-1.5 -m-1.5">
           {seriesList.map((s) => {
             const isSelected = selectedSeriesId === s.id;
             return (
@@ -221,7 +221,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
                   setOpenSelectSeriesModal(false);
                 }}
                 className={cn(
-                  "flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer",
+                  "flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer focus:outline-none",
                   isSelected
                     ? "border-brand bg-brand-tint/50 shadow-xs ring-2 ring-brand/30"
                     : "border-border/80 bg-surface-card hover:border-brand/60 hover:bg-surface-sunken/40"
