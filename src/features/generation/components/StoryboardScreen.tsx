@@ -11,6 +11,17 @@ import {
   CheckCircle2,
   Wand2,
   Plus,
+  Clapperboard,
+  Camera,
+  Smile,
+  MapPin,
+  MessageSquare,
+  Scroll,
+  ChevronDown,
+  ChevronUp,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
@@ -1307,16 +1318,17 @@ function LocationTagPicker({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink hover:border-border-control transition-colors"
+        className="flex h-8 items-center gap-1.5 rounded-full border border-border/80 bg-surface-card hover:bg-surface-sunken hover:border-border-control px-2.5 text-caption font-bold text-ink transition-all cursor-pointer shadow-2xs"
       >
+        <MapPin className="size-3.5 text-ink-muted shrink-0" />
         {isSolid && (
           <span
-            className="size-2.5 rounded-full border border-black/15"
+            className="size-2.5 rounded-full border border-black/15 shrink-0"
             style={{ backgroundColor: background?.colorHex ?? "#FFF9F0" }}
           />
         )}
-        <span>{currentLabel}</span>
-        <span className="text-[10px] text-ink-muted">▾</span>
+        <span className="max-w-[120px] truncate">{currentLabel}</span>
+        <ChevronDown className="size-3 text-ink-muted shrink-0" />
       </button>
 
       {open && (
@@ -1440,20 +1452,29 @@ function SpeakerPicker({
   characters: StoryboardCharacter[];
   onSelectSpeaker: (speakerId: string | null) => void;
 }) {
+  const isMe = speakerId === "ch_me" || (!speakerId && characters[0]?.key === "ch_me");
   return (
-    <select
-      value={speakerId ?? ""}
-      onChange={(e) => onSelectSpeaker(e.target.value ? e.target.value : null)}
-      aria-label="화자 선택"
-      className="h-control-sm max-w-[100px] truncate rounded border border-border bg-surface-card px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
-    >
-      <option value="">화자 없음</option>
-      {characters.map((ch) => (
-        <option key={ch.key} value={ch.key}>
-          {ch.name}
-        </option>
-      ))}
-    </select>
+    <div className="relative inline-flex items-center">
+      <select
+        value={speakerId ?? ""}
+        onChange={(e) => onSelectSpeaker(e.target.value ? e.target.value : null)}
+        aria-label="화자 선택"
+        className={cn(
+          "h-8.5 pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs",
+          isMe
+            ? "bg-brand-tint border-brand/40 text-brand"
+            : "bg-surface-sunken/60 border-border text-ink hover:bg-surface-sunken"
+        )}
+      >
+        <option value="">화자 없음</option>
+        {characters.map((ch) => (
+          <option key={ch.key} value={ch.key}>
+            {ch.name}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 size-3 text-ink-muted" />
+    </div>
   );
 }
 
@@ -1515,157 +1536,228 @@ function CutCard({
         ? cut.background.customName
         : DEFAULT_LOCATIONS.find((l) => l.id === cut.background?.preset)?.label ?? "거실";
 
+  // 1. 비선택 상태 (컴팩트 & 세련된 인스타툰 컷 요약 카드)
   if (!selected) {
     return (
       <article
         onClick={onSelect}
         className={cn(
-          "group flex cursor-pointer flex-col gap-2 rounded-xl border bg-surface-card p-3.5 transition-all hover:border-brand/50 hover:bg-surface-sunken/20 hover:shadow-2xs",
+          "group flex cursor-pointer flex-col gap-3 rounded-2xl border bg-surface-card p-4 transition-all duration-200 hover:border-brand/60 hover:shadow-sm hover:bg-surface-card/95 relative overflow-hidden",
           cut.isCover
-            ? "border-brand/50 bg-brand-tint/15 shadow-2xs"
-            : "border-border",
+            ? "border-brand/40 bg-brand-tint/10 shadow-2xs"
+            : "border-border/80 shadow-2xs"
         )}
       >
+        {/* 상단 컷 인덱스 & 역할 뱃지 & 순서 툴바 */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
-            {cut.isCover ? "표지" : cut.index}
+          <span
+            className={cn(
+              "grid h-6.5 min-w-7 px-1.5 place-items-center rounded-md text-[11px] font-black tracking-wider shadow-2xs",
+              cut.isCover ? "bg-brand text-on-brand" : "bg-ink text-surface-card"
+            )}
+          >
+            {cut.isCover ? "COVER" : `CUT ${cut.index}`}
           </span>
+
           {cut.isCover ? (
-            <Badge tone="brand">🌟 표지 컷 (인스타 썸네일)</Badge>
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2.5 py-0.5 text-[11px] font-bold text-brand">
+              🌟 표지 컷 (인스타 썸네일)
+            </span>
           ) : (
             <>
-              {cut.index === (hasCoverCut ? 2 : 1) && <Badge tone="brand">후킹 컷</Badge>}
-              {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
+              {cut.index === (hasCoverCut ? 2 : 1) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2 py-0.5 text-[11px] font-bold text-brand">
+                  🔥 후킹 컷
+                </span>
+              )}
+              {cut.index === total && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                  🎯 CTA 컷
+                </span>
+              )}
             </>
           )}
 
-          <span className="rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
-            {EMOTION_LABEL[cut.emotion]}
-          </span>
-          <span className="rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
-            {CAMERA_LABEL[cut.camera]}
-          </span>
-          <span className="max-w-[140px] truncate rounded bg-surface-sunken px-2 py-0.5 text-caption font-medium text-ink-muted">
-            {bgLabel}
-          </span>
+          {/* 연출 태그 칩 */}
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken/70 border border-border/60 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+              <Smile className="size-3 text-ink-subtle" />
+              {EMOTION_LABEL[cut.emotion]}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken/70 border border-border/60 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+              <Camera className="size-3 text-ink-subtle" />
+              {CAMERA_LABEL[cut.camera]}
+            </span>
+            <span className="inline-flex items-center gap-1 max-w-[130px] truncate rounded-full bg-surface-sunken/70 border border-border/60 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+              <MapPin className="size-3 text-ink-subtle shrink-0" />
+              <span className="truncate">{bgLabel}</span>
+            </span>
+          </div>
 
+          {/* 우측 퀵 액션 툴바 */}
           <div
-            className="ml-auto flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100"
+            className="ml-auto flex items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
-              ↑
+              <ArrowUp className="size-3.5" />
             </IconButton>
-            <IconButton
-              label="아래로"
-              onClick={() => onMove(1)}
-              disabled={cut.index === total}
-            >
-              ↓
+            <IconButton label="아래로" onClick={() => onMove(1)} disabled={cut.index === total}>
+              <ArrowDown className="size-3.5" />
             </IconButton>
             <IconButton label="아래에 컷 추가" onClick={onAddAfter}>
-              +
+              <Plus className="size-3.5" />
             </IconButton>
-            <IconButton label="컷 삭제" onClick={onRemove} disabled={total === 1}>
-              ✕
+            <IconButton label="컷 삭제" onClick={onRemove} disabled={total === 1} danger>
+              <Trash2 className="size-3.5" />
             </IconButton>
           </div>
         </div>
 
-        {/* 장면 내용 */}
-        <div className="flex items-start gap-2 pt-1 text-body-sm">
-          <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
-            장면
-          </span>
-          <p className="flex-1 whitespace-pre-wrap text-ink-muted leading-relaxed">
-            {cut.scene ? cut.scene : <span className="italic text-ink-subtle">장면 묘사가 비어있어요.</span>}
+        {/* 장면 내용 지문 박스 */}
+        <div className="flex items-start gap-2.5 rounded-xl bg-surface-sunken/35 p-2.5 border border-border/40">
+          <div className="flex items-center gap-1 shrink-0 rounded bg-brand-tint/60 px-1.5 py-0.5 text-[10px] font-bold text-brand">
+            <Clapperboard className="size-3" />
+            <span>장면</span>
+          </div>
+          <p className="flex-1 text-body-sm text-ink-muted leading-relaxed line-clamp-2">
+            {cut.scene ? (
+              cut.scene
+            ) : (
+              <span className="italic text-ink-subtle">
+                장면 묘사가 비어있어요. 클릭해서 입력해 주세요.
+              </span>
+            )}
           </p>
         </div>
 
-        {/* 대사 목록 내용 */}
+        {/* 대사 & 나레이션 요약 미리보기 */}
         {cut.dialogue.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-lg bg-surface-sunken/40 p-2.5">
-            <div className="flex items-center gap-1.5 text-caption font-semibold text-ink-muted">
-              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
-                대사
-              </span>
-              <span className="text-[11px] text-ink-subtle">({cut.dialogue.length})</span>
+          <div className="flex flex-col gap-1.5 rounded-xl bg-surface-sunken/25 p-2 border border-border/30">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-muted">
+              <MessageSquare className="size-3 text-brand" />
+              <span>대사 {cut.dialogue.length}개</span>
             </div>
-            <ul className="flex flex-col gap-1.5">
-              {cut.dialogue.map((line) => {
+            <ul className="flex flex-col gap-1">
+              {cut.dialogue.slice(0, 2).map((line) => {
                 const speaker = nameOf(line.speakerId);
                 return (
-                  <li key={line.id} className="flex items-start gap-2 text-body-sm">
-                    <span className="shrink-0 text-[13px] font-semibold text-ink">
-                      {speaker}:
-                    </span>
-                    <span className="flex-1 text-[13px] leading-snug text-ink-muted">
-                      &ldquo;{line.text || "(대사 없음)"}&rdquo;
-                    </span>
-                    <span className="shrink-0 rounded border border-border/80 bg-surface-card px-1.5 py-0.5 text-[10px] text-ink-subtle">
+                  <li key={line.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
+                    <span className="font-bold text-ink shrink-0">{speaker}:</span>
+                    <span className="truncate text-ink-muted">&ldquo;{line.text || "(대사 없음)"}&rdquo;</span>
+                    <span className="text-[10px] text-ink-subtle rounded bg-surface-card px-1 py-0.5 border border-border/50 shrink-0">
                       {BALLOON_LABEL[line.balloon]}
                     </span>
                   </li>
                 );
               })}
+              {cut.dialogue.length > 2 && (
+                <li className="text-[10px] text-ink-subtle pl-1 font-medium">
+                  외 {cut.dialogue.length - 2}개 대사 더 보기...
+                </li>
+              )}
             </ul>
           </div>
         )}
 
-        {/* 나레이션 내용 */}
-        {cut.narration && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-body-sm">
-            <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">
-              나레이션
-            </span>
-            <p className="flex-1 whitespace-pre-wrap text-[13px] leading-snug text-amber-900">
-              {cut.narration}
-            </p>
+        {/* 하단 푸터 바 */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-2 text-caption">
+          <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
+            {cut.narration && (
+              <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium">
+                <Scroll className="size-2.5" /> 나레이션 포함
+              </span>
+            )}
+            <span>{cut.dialogue.length > 0 ? `대사 ${cut.dialogue.length}개` : "대사 없음"}</span>
           </div>
-        )}
-
-        {/* 카드 하단 메타 및 클릭 안내 */}
-        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-caption">
-          <span className="text-[11px] text-ink-subtle">
-            {cut.dialogue.length > 0 ? `대사 ${cut.dialogue.length}개` : "대사 없음"}
-            {cut.narration ? " · 나레이션 포함" : ""}
-          </span>
-          <span className="text-[11px] font-semibold text-brand group-hover:underline">
-            클릭하여 편집 ▾
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-brand group-hover:underline">
+            편집하기 <ChevronDown className="size-3.5" />
           </span>
         </div>
       </article>
     );
   }
 
+  // 2. 선택 상태 (상세 편집 뷰)
   return (
     <article
       className={cn(
-        "flex flex-col gap-3 rounded-xl border-2 bg-surface-card p-[15px] shadow-sm transition-colors",
-        cut.isCover ? "border-brand ring-2 ring-brand/20 bg-brand-tint/5" : "border-brand",
+        "flex flex-col gap-4 rounded-2xl border-2 bg-surface-card p-5 shadow-md ring-4 ring-brand/10 transition-all",
+        cut.isCover ? "border-brand ring-brand/20 bg-brand-tint/5" : "border-brand",
       )}
     >
-      {/* 컷 헤더: 번호, 후킹/CTA 뱃지, 감정/카메라/장소 드롭다운, 순서/삭제 버튼 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="grid size-7 place-items-center rounded-md bg-surface-sunken text-label font-bold tabular-nums text-ink-muted">
-          {cut.isCover ? "표지" : cut.index}
+      {/* 1. 상단 메인 헤더: 컷 넘버 & 특수 배지 & 우측 액션 버튼들 */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={cn(
+              "grid h-7 min-w-8 px-2 place-items-center rounded-lg text-xs font-black tracking-wider shadow-2xs",
+              cut.isCover ? "bg-brand text-on-brand" : "bg-ink text-surface-card"
+            )}
+          >
+            {cut.isCover ? "COVER" : `CUT ${cut.index}`}
+          </span>
+          {cut.isCover ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-3 py-1 text-xs font-bold text-brand shadow-2xs">
+              🌟 표지 컷 (인스타 썸네일)
+            </span>
+          ) : (
+            <>
+              {cut.index === (hasCoverCut ? 2 : 1) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2.5 py-0.5 text-xs font-bold text-brand">
+                  🔥 후킹 컷
+                </span>
+              )}
+              {cut.index === total && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-xs font-bold text-amber-700">
+                  🎯 CTA 컷
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* 우측 접기 및 순서 이동/삭제 툴바 */}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={onSelect}
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand-tint transition-colors cursor-pointer mr-1"
+          >
+            접기 <ChevronUp className="size-3.5" />
+          </button>
+          <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
+            <ArrowUp className="size-4" />
+          </IconButton>
+          <IconButton label="아래로" onClick={() => onMove(1)} disabled={cut.index === total}>
+            <ArrowDown className="size-4" />
+          </IconButton>
+          <IconButton label="아래에 컷 추가" onClick={onAddAfter}>
+            <Plus className="size-4" />
+          </IconButton>
+          <IconButton label="컷 삭제" onClick={onRemove} disabled={total === 1} danger>
+            <Trash2 className="size-4" />
+          </IconButton>
+        </div>
+      </div>
+
+      {/* 2. 연출 파라미터 서브바 (감정, 구도, 장소) */}
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-xl bg-surface-sunken/45 p-2.5 border border-border/70"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="text-[11px] font-bold text-ink-muted flex items-center gap-1 mr-1">
+          <Clapperboard className="size-3.5 text-brand" /> 연출 설정
         </span>
-        {cut.isCover ? (
-          <Badge tone="brand">🌟 표지 컷 (인스타 썸네일)</Badge>
-        ) : (
-          <>
-            {cut.index === (hasCoverCut ? 2 : 1) && <Badge tone="brand">후킹 컷</Badge>}
-            {cut.index === total && <Badge tone="brand">CTA 컷</Badge>}
-          </>
-        )}
 
         {/* 감정 선택 */}
-        <div onClick={(e) => e.stopPropagation()}>
+        <div className="relative inline-flex items-center">
+          <Smile className="pointer-events-none absolute left-2.5 size-3.5 text-ink-muted" />
           <select
             value={cut.emotion}
             onChange={(e) => onChangeEmotion(e.target.value as CutEmotion)}
             aria-label={`${cut.index}컷 감정`}
-            className="h-7 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+            className="h-8 pl-8 pr-6 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs"
           >
             {Object.entries(EMOTION_LABEL).map(([val, label]) => (
               <option key={val} value={val}>
@@ -1673,15 +1765,17 @@ function CutCard({
               </option>
             ))}
           </select>
+          <ChevronDown className="pointer-events-none absolute right-2 size-3 text-ink-muted" />
         </div>
 
         {/* 카메라 구도 선택 */}
-        <div onClick={(e) => e.stopPropagation()}>
+        <div className="relative inline-flex items-center">
+          <Camera className="pointer-events-none absolute left-2.5 size-3.5 text-ink-muted" />
           <select
             value={cut.camera}
             onChange={(e) => onChangeCamera(e.target.value as CameraShot)}
             aria-label={`${cut.index}컷 카메라 구도`}
-            className="h-7 rounded-md border border-border bg-surface-sunken px-2 text-caption font-medium text-ink focus:border-brand focus:outline-none"
+            className="h-8 pl-8 pr-6 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs"
           >
             {Object.entries(CAMERA_LABEL).map(([val, label]) => (
               <option key={val} value={val}>
@@ -1689,6 +1783,7 @@ function CutCard({
               </option>
             ))}
           </select>
+          <ChevronDown className="pointer-events-none absolute right-2 size-3 text-ink-muted" />
         </div>
 
         {/* 장소 노션 태그 선택기 */}
@@ -1706,85 +1801,82 @@ function CutCard({
           }
           onAddCustomLocation={onAddCustomLocation}
         />
-
-        {/* 컷 이동 및 추가/삭제 버튼 */}
-        <div className="ml-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={onSelect}
-            className="mr-1 cursor-pointer rounded px-2 py-0.5 text-caption font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors"
-          >
-            접기 ▴
-          </button>
-          <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
-            ↑
-          </IconButton>
-          <IconButton
-            label="아래로"
-            onClick={() => onMove(1)}
-            disabled={cut.index === total}
-          >
-            ↓
-          </IconButton>
-          <IconButton label="아래에 컷 추가" onClick={onAddAfter}>
-            +
-          </IconButton>
-          <IconButton label="컷 삭제" onClick={onRemove} disabled={total === 1}>
-            ✕
-          </IconButton>
-        </div>
       </div>
 
-      {/* 장면 묘사 (그림 프롬프트 초안) - 이모티콘 없이 깔끔한 텍스트 */}
-      <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {/* 3. 장면 묘사 입력 박스 (핵심 시각 연출 지문) */}
+      <div
+        className="flex flex-col gap-2 rounded-xl border border-border bg-surface-sunken/30 p-3.5 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 focus-within:bg-surface-card transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
-          <label className="text-caption font-semibold text-ink-muted">
-            장면 묘사
-          </label>
-          <span className="text-[11px] text-ink-subtle">AI 이미지 생성 프롬프트</span>
+          <div className="flex items-center gap-1.5">
+            <Film className="size-4 text-brand" />
+            <label className="text-body-sm font-bold text-ink">
+              장면 묘사
+            </label>
+            <span className="text-[11px] text-ink-muted font-normal">
+              (만화 연출 지문)
+            </span>
+          </div>
+          <span className="rounded-full bg-brand-tint border border-brand/20 px-2 py-0.5 text-[10px] font-bold text-brand shadow-2xs">
+            AI 이미지 프롬프트에 자동 반영
+          </span>
         </div>
         <textarea
           value={cut.scene}
           onChange={(e) => onChangeScene(e.target.value)}
-          placeholder="장면 묘사를 입력해주세요 (예: 카페 창가 자리에서 심각한 표정으로 스마트폰을 보는 주인공)"
-          rows={2}
+          placeholder="인물의 행동, 포즈, 표정, 소품과의 상호작용 등을 묘사해주세요 (예: 카페 창가에서 심각한 표정으로 커피잔을 쥐고 스마트폰을 응시하는 주인공)"
+          rows={3}
           aria-label={`${cut.index}컷 장면 묘사`}
-          className="w-full resize-y rounded-md border border-border-control bg-surface-card p-2.5 text-body-sm text-ink placeholder:text-ink-subtle focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+          className="w-full resize-y rounded-lg border border-border-control/60 bg-surface-card p-3 text-body-sm text-ink leading-relaxed placeholder:text-ink-subtle focus-visible:outline-none focus:border-brand shadow-2xs"
         />
       </div>
 
-      {/* 대사 및 말풍선 관리 - 이모티콘 제거 */}
-      <div className="flex flex-col gap-2 pt-1 border-t border-border-subtle" onClick={(e) => e.stopPropagation()}>
+      {/* 4. 대사 및 말풍선 관리 */}
+      <div className="flex flex-col gap-2.5 pt-1" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <span className="text-caption font-semibold text-ink-muted">
-            대사 {cut.dialogue.length > 0 && `(${cut.dialogue.length})`}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <MessageSquare className="size-4 text-brand" />
+            <span className="text-body-sm font-bold text-ink">
+              대사 & 말풍선
+            </span>
+            <span className="grid size-5 place-items-center rounded-full bg-brand-tint text-[10px] font-extrabold text-brand">
+              {cut.dialogue.length}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onAddLine}
-              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-caption font-semibold text-brand hover:bg-brand-tint transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg bg-brand-tint border border-brand/30 px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-on-brand transition-all cursor-pointer shadow-2xs"
             >
-              + 대사 추가
+              <Plus className="size-3.5" /> 대사 추가
             </button>
             {cut.narration == null && (
               <button
                 type="button"
                 onClick={onAddNarration}
-                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-caption font-semibold text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-500/20 transition-all cursor-pointer"
               >
-                + 나레이션 추가
+                <Scroll className="size-3.5" /> + 나레이션 추가
               </button>
             )}
           </div>
         </div>
 
-        {cut.dialogue.length > 0 && (
+        {cut.dialogue.length === 0 ? (
+          <div className="flex items-center justify-center rounded-xl border border-dashed border-border/80 bg-surface-sunken/30 py-3 text-caption text-ink-muted">
+            대사가 없는 무음 컷입니다. (상황이나 감정 위주의 컷)
+          </div>
+        ) : (
           <ul className="flex flex-col gap-2">
             {cut.dialogue.map((line) => (
-              <li key={line.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-sunken/40 p-2">
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* 인물/화자 드롭다운 (선택 및 새 인물 추가 가능) */}
+              <li
+                key={line.id}
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-border/80 bg-surface-card p-2.5 shadow-2xs hover:border-brand/40 transition-all"
+              >
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* 인물 화자 선택 */}
                   <SpeakerPicker
                     speakerId={line.speakerId}
                     characters={characters}
@@ -1792,18 +1884,21 @@ function CutCard({
                   />
 
                   {/* 말풍선 종류 선택 */}
-                  <select
-                    value={line.balloon}
-                    onChange={(e) => onChangeLineBalloon(line.id, e.target.value as BalloonKind)}
-                    aria-label="말풍선 종류"
-                    className="h-control-sm rounded border border-border bg-surface-card px-1.5 text-caption font-medium text-ink focus:border-brand focus:outline-none"
-                  >
-                    {Object.entries(BALLOON_LABEL).map(([kind, label]) => (
-                      <option key={kind} value={kind}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative inline-flex items-center">
+                    <select
+                      value={line.balloon}
+                      onChange={(e) => onChangeLineBalloon(line.id, e.target.value as BalloonKind)}
+                      aria-label="말풍선 종류"
+                      className="h-8.5 pl-2.5 pr-6 rounded-lg border border-border/80 bg-surface-sunken/40 text-caption font-semibold text-ink focus:border-brand focus:outline-none transition-all cursor-pointer"
+                    >
+                      {Object.entries(BALLOON_LABEL).map(([kind, label]) => (
+                        <option key={kind} value={kind}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-1.5 size-3 text-ink-muted" />
+                  </div>
                 </div>
 
                 {/* 대사 텍스트 입력 */}
@@ -1812,7 +1907,7 @@ function CutCard({
                   onChange={(e) => onChangeLine(line.id, e.target.value)}
                   placeholder="대사를 입력하세요"
                   aria-label={`${cut.index}컷 대사`}
-                  className="h-control-sm min-w-0 flex-1 rounded border border-border-control bg-surface-card px-2.5 text-body-sm text-ink placeholder:text-ink-subtle focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+                  className="h-8.5 min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
                 />
 
                 {/* 대사 삭제 버튼 */}
@@ -1821,34 +1916,37 @@ function CutCard({
                   onClick={() => onRemoveLine(line.id)}
                   title="대사 삭제"
                   aria-label="대사 삭제"
-                  className="grid size-control-sm shrink-0 place-items-center rounded text-caption text-ink-muted hover:bg-surface-sunken hover:text-danger"
+                  className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
                 >
-                  ✕
+                  <Trash2 className="size-4" />
                 </button>
               </li>
             ))}
           </ul>
         )}
 
-        {/* 나레이션 박스 관리 - 이모티콘 제거 */}
+        {/* 5. 나레이션 박스 관리 */}
         {cut.narration != null && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-dashed border-border-control bg-surface-sunken p-2">
-            <span className="shrink-0 text-caption font-semibold text-ink-muted">나레이션</span>
+          <div className="flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/8 p-2.5 shadow-2xs">
+            <div className="flex items-center gap-1 shrink-0 px-1 text-amber-800 font-bold text-caption">
+              <Scroll className="size-4 text-amber-600" />
+              <span>나레이션</span>
+            </div>
             <input
               value={cut.narration}
               onChange={(e) => onChangeNarration(e.target.value)}
-              placeholder="나레이션 문구를 입력하세요"
+              placeholder="나레이션 문구를 입력하세요 (예: 그날은 유독 퇴근길이 길었다...)"
               aria-label={`${cut.index}컷 나레이션`}
-              className="h-control-sm min-w-0 flex-1 rounded border border-border-control bg-surface-card px-2.5 text-body-sm text-ink focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-amber-500/30 bg-surface-card px-3 text-body-sm text-ink placeholder:text-amber-800/40 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-2xs"
             />
             <button
               type="button"
               onClick={onRemoveNarration}
               title="나레이션 삭제"
               aria-label="나레이션 삭제"
-              className="grid size-control-sm shrink-0 place-items-center rounded text-caption text-ink-muted hover:bg-surface-sunken hover:text-danger"
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-amber-800/70 hover:bg-amber-500/20 hover:text-danger transition-colors cursor-pointer"
             >
-              ✕
+              <Trash2 className="size-4" />
             </button>
           </div>
         )}
@@ -1891,11 +1989,13 @@ function IconButton({
   onClick,
   disabled,
   children,
+  danger = false,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   children: React.ReactNode;
+  danger?: boolean;
 }) {
   return (
     <button
@@ -1907,7 +2007,13 @@ function IconButton({
         e.stopPropagation();
         onClick();
       }}
-      className="grid size-control-sm cursor-pointer place-items-center rounded-md text-label text-ink-muted hover:bg-surface-sunken hover:text-ink disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent"
+      className={cn(
+        "grid size-7.5 cursor-pointer place-items-center rounded-lg text-caption font-semibold transition-all",
+        danger
+          ? "text-ink-muted hover:bg-danger/10 hover:text-danger"
+          : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+        "disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+      )}
     >
       {children}
     </button>
