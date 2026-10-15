@@ -1664,8 +1664,8 @@ function CutCard({
         <div className="flex items-center justify-between border-t border-border/50 pt-2 text-caption">
           <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
             {cut.narration && (
-              <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium">
-                <Scroll className="size-2.5" /> 나레이션 포함
+              <span className="inline-flex items-center gap-1 text-ink-muted bg-surface-sunken/80 border border-border/60 px-1.5 py-0.5 rounded font-medium">
+                <Scroll className="size-2.5 text-ink-subtle" /> 나레이션 포함
               </span>
             )}
             <span>{cut.dialogue.length > 0 ? `대사 ${cut.dialogue.length}개` : "대사 없음"}</span>
@@ -1856,9 +1856,9 @@ function CutCard({
               <button
                 type="button"
                 onClick={onAddNarration}
-                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-500/20 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1 rounded-lg border border-border-control/80 bg-surface-sunken/50 px-2.5 py-1 text-xs font-bold text-ink hover:bg-surface-sunken hover:border-brand/40 transition-all cursor-pointer shadow-2xs"
               >
-                <Scroll className="size-3.5" /> + 나레이션 추가
+                <Scroll className="size-3.5 text-ink-muted" /> + 나레이션 추가
               </button>
             )}
           </div>
@@ -1925,11 +1925,11 @@ function CutCard({
           </ul>
         )}
 
-        {/* 5. 나레이션 박스 관리 */}
+        {/* 5. 나레이션 박스 관리 (대사 박스와 톤 일원화) */}
         {cut.narration != null && (
-          <div className="flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/8 p-2.5 shadow-2xs">
-            <div className="flex items-center gap-1 shrink-0 px-1 text-amber-800 font-bold text-caption">
-              <Scroll className="size-4 text-amber-600" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-border/80 bg-surface-card p-2.5 shadow-2xs hover:border-brand/40 transition-all">
+            <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-surface-sunken/60 text-ink font-bold text-caption border border-border/60">
+              <Scroll className="size-4 text-ink-muted" />
               <span>나레이션</span>
             </div>
             <input
@@ -1937,14 +1937,14 @@ function CutCard({
               onChange={(e) => onChangeNarration(e.target.value)}
               placeholder="나레이션 문구를 입력하세요 (예: 그날은 유독 퇴근길이 길었다...)"
               aria-label={`${cut.index}컷 나레이션`}
-              className="h-9 min-w-0 flex-1 rounded-lg border border-amber-500/30 bg-surface-card px-3 text-body-sm text-ink placeholder:text-amber-800/40 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-2xs"
+              className="h-8.5 min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
             />
             <button
               type="button"
               onClick={onRemoveNarration}
               title="나레이션 삭제"
               aria-label="나레이션 삭제"
-              className="grid size-8 shrink-0 place-items-center rounded-lg text-amber-800/70 hover:bg-amber-500/20 hover:text-danger transition-colors cursor-pointer"
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
             >
               <Trash2 className="size-4" />
             </button>
