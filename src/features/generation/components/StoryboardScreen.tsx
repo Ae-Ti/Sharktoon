@@ -634,20 +634,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         {/* 1단계: 사연 & 시리즈 기획 패널 */}
         {step === "story" && (
           <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-surface-card p-5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-border/70 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="grid size-7 place-items-center rounded-lg bg-brand-tint text-base font-bold text-brand shadow-2xs">
-                  📝
-                </span>
-                <div>
-                  <h2 className="text-label font-bold text-ink">1단계 · 사연 & 시리즈 기획</h2>
-                  <p className="text-caption text-ink-muted">
-                    시리즈와 컷 수를 고르고 사연을 입력하세요. 사연을 수정하면 언제든 콘티를 새로 짤 수 있어요.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* 시리즈 선택 row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/70 bg-surface-sunken/40 p-3.5">
               <div className="flex items-center gap-3 min-w-0">
