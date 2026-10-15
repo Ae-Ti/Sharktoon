@@ -33,20 +33,28 @@ export function getImageGenerator(tier?: GenerationTier): ImageGenerator {
 
   // 1. Tier 가 명시적으로 주어진 경우
   if (tier === "standard") {
-    if (provider === "openai" || provider.includes("gpt-image") || (!provider && process.env.OPENAI_API_KEY)) {
+    if (provider === "fal-dev") return new FalFluxGenerator("dev");
+    if (provider === "fal" || provider === "fal-schnell") return new FalFluxGenerator("schnell");
+    if (provider === "openai" || provider.includes("gpt-image")) {
       return new OpenAIImageGenerator("gpt-image-2.5-flare", "medium");
     }
     if (provider === "google") return new GoogleImagenGenerator();
-    if (process.env.FAL_KEY || process.env.FAL_API_KEY || provider === "fal" || provider === "fal-schnell") {
-      return new FalFluxGenerator("schnell");
-    }
+
+    // 명시적 provider가 없을 때 키 기반 자동 선택
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY) return new FalFluxGenerator("schnell");
+    if (process.env.OPENAI_API_KEY) return new OpenAIImageGenerator("gpt-image-2.5-flare", "medium");
   }
 
   if (tier === "pro") {
-    if (provider === "openai" || provider.includes("gpt-image") || (!provider && process.env.OPENAI_API_KEY)) {
+    if (provider === "fal-dev") return new FalFluxGenerator("dev");
+    if (provider === "openai" || provider.includes("gpt-image")) {
       return new OpenAIImageGenerator("gpt-image-2.5-sunburst", "high");
     }
     if (provider === "google") return new GoogleImagenGenerator();
+    if (provider === "comfyui" || provider === "comfy" || provider === "fal-comfy") return new ComfyUIGenerator();
+
+    // 명시적 provider가 없을 때 키 기반 자동 선택
+    if (process.env.OPENAI_API_KEY) return new OpenAIImageGenerator("gpt-image-2.5-sunburst", "high");
     return new ComfyUIGenerator();
   }
 
