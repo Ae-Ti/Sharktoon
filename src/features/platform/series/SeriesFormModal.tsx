@@ -30,6 +30,7 @@ export interface SeriesFormModalProps {
   initialTitle?: string;
   initialRule?: SeriesRule;
   onCreated?: (series: { id: string; title: string }) => void;
+  sheetOnMobile?: boolean;
 }
 
 export function SeriesFormModal({
@@ -39,6 +40,7 @@ export function SeriesFormModal({
   initialTitle = "",
   initialRule = DEFAULT_RULE,
   onCreated,
+  sheetOnMobile = false,
 }: SeriesFormModalProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
@@ -97,6 +99,7 @@ export function SeriesFormModal({
     <Modal
       open={open}
       onClose={onClose}
+      sheetOnMobile={sheetOnMobile}
       size="md"
       title={editing ? "생성 규칙 수정" : "새 시리즈"}
       description={

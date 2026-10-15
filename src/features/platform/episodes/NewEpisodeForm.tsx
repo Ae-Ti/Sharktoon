@@ -181,6 +181,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
       <SeriesFormModal
         open={openNewSeriesModal}
         onClose={() => setOpenNewSeriesModal(false)}
+        sheetOnMobile={false}
         onCreated={(newS) => {
           const created: SeriesSummary = {
             id: newS.id,
@@ -199,6 +200,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
       <Modal
         open={openSelectSeriesModal}
         onClose={() => setOpenSelectSeriesModal(false)}
+        sheetOnMobile={false}
         title="시리즈 불러오기"
         description="이어서 연재할 시리즈를 선택해 주세요."
         footer={

@@ -63,19 +63,18 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        "m-0 max-h-dvh w-full border-0 bg-transparent p-0 text-ink",
-        // 모바일: 아래 붙는 시트. 데스크톱: 가운데.
+        "border-0 bg-transparent p-0 text-ink outline-hidden",
+        // 모바일: sheetOnMobile 이 true 면 아래 붙는 시트, false 면 화면 정중앙
         sheetOnMobile
-          ? "mt-auto mb-0 sm:my-auto"
-          : "my-auto",
-        "sm:mx-auto",
+          ? "m-0 mt-auto mb-0 w-full max-h-dvh sm:my-auto sm:mx-auto sm:w-auto sm:max-h-[calc(100dvh-40px)]"
+          : "my-auto mx-auto w-[calc(100%-32px)] sm:w-full max-h-[calc(100dvh-40px)]",
         size === "sm" ? "sm:max-w-[420px]" : "sm:max-w-[560px]",
       )}
     >
       <div
         className={cn(
-          "flex flex-col gap-4 bg-surface-card p-6 shadow-lg",
-          sheetOnMobile ? "rounded-t-xl sm:rounded-xl" : "rounded-xl",
+          "flex flex-col gap-4 bg-surface-card p-6 shadow-lg max-h-[calc(100dvh-40px)] overflow-y-auto",
+          sheetOnMobile ? "rounded-t-2xl sm:rounded-2xl" : "rounded-2xl",
         )}
       >
         <div className="flex items-start justify-between gap-4">
