@@ -1460,7 +1460,7 @@ function SpeakerPicker({
         onChange={(e) => onSelectSpeaker(e.target.value ? e.target.value : null)}
         aria-label="화자 선택"
         className={cn(
-          "h-8.5 pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs",
+          "h-8.5 pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs appearance-none",
           isMe
             ? "bg-brand-tint border-brand/40 text-brand"
             : "bg-surface-sunken/60 border-border text-ink hover:bg-surface-sunken"
@@ -1757,7 +1757,7 @@ function CutCard({
             value={cut.emotion}
             onChange={(e) => onChangeEmotion(e.target.value as CutEmotion)}
             aria-label={`${cut.index}컷 감정`}
-            className="h-8 pl-8 pr-6 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs"
+            className="h-8 pl-8 pr-7 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs appearance-none"
           >
             {Object.entries(EMOTION_LABEL).map(([val, label]) => (
               <option key={val} value={val}>
@@ -1775,7 +1775,7 @@ function CutCard({
             value={cut.camera}
             onChange={(e) => onChangeCamera(e.target.value as CameraShot)}
             aria-label={`${cut.index}컷 카메라 구도`}
-            className="h-8 pl-8 pr-6 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs"
+            className="h-8 pl-8 pr-7 rounded-full border border-border/80 bg-surface-card text-caption font-bold text-ink hover:border-border-control focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none transition-all cursor-pointer shadow-2xs appearance-none"
           >
             {Object.entries(CAMERA_LABEL).map(([val, label]) => (
               <option key={val} value={val}>
@@ -1889,7 +1889,7 @@ function CutCard({
                       value={line.balloon}
                       onChange={(e) => onChangeLineBalloon(line.id, e.target.value as BalloonKind)}
                       aria-label="말풍선 종류"
-                      className="h-8.5 pl-2.5 pr-6 rounded-lg border border-border/80 bg-surface-sunken/40 text-caption font-semibold text-ink focus:border-brand focus:outline-none transition-all cursor-pointer"
+                      className="h-8.5 pl-2.5 pr-7 rounded-lg border border-border/80 bg-surface-sunken/40 text-caption font-semibold text-ink focus:border-brand focus:outline-none transition-all cursor-pointer appearance-none"
                     >
                       {Object.entries(BALLOON_LABEL).map(([kind, label]) => (
                         <option key={kind} value={kind}>
