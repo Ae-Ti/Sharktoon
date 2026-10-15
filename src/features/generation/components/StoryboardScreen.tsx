@@ -333,7 +333,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   }
 
   const hasCoverCut = sb?.cuts.some((c) => c.isCover) ?? false;
-  const hookCutIndex = hasCoverCut ? 2 : 1;
 
   function toggleCoverCut(enable: boolean) {
     setSb((s) => {
@@ -411,15 +410,37 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   }
 
   function selectHook(id: string) {
-    setSb((s) => (s ? { ...s, selectedHookId: id } : s));
+    setSb((s) => {
+      if (!s) return s;
+      const selected = s.hookOptions.find((h) => h.id === id);
+      const text = selected?.text ?? "";
+      const nextCuts = text
+        ? s.cuts.map((c) => {
+            if (!c.isCover) return c;
+            const updatedScene = c.scene.includes("[표지/타이틀 커버]")
+              ? c.scene.replace(/\[표지\/타이틀 커버\] "[^"]*"/, `[표지/타이틀 커버] "${text}"`)
+              : `[표지/타이틀 커버] "${text}" - ${c.scene}`;
+            return { ...c, scene: updatedScene };
+          })
+        : s.cuts;
+      return { ...s, selectedHookId: id, cuts: nextCuts };
+    });
   }
 
   function changeHookText(text: string) {
     setSb((s) => {
       if (!s || !s.selectedHookId) return s;
+      const nextCuts = s.cuts.map((c) => {
+        if (!c.isCover) return c;
+        const updatedScene = c.scene.includes("[표지/타이틀 커버]")
+          ? c.scene.replace(/\[표지\/타이틀 커버\] "[^"]*"/, `[표지/타이틀 커버] "${text}"`)
+          : `[표지/타이틀 커버] "${text}" - ${c.scene}`;
+        return { ...c, scene: updatedScene };
+      });
       return {
         ...s,
         hookOptions: s.hookOptions.map((h) => (h.id === s.selectedHookId ? { ...h, text } : h)),
+        cuts: nextCuts,
       };
     });
   }
@@ -470,16 +491,17 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         credits={props.credits}
       />
 
-      {/* 1, 2단계 스텝 네비게이션 탭 바 */}
+      {/* 1, 2단계 스텝 네비게이션 & 빠른 이미지 생성 탑 바 */}
       <div className="sticky top-0 z-20 border-b border-border bg-surface-card/95 backdrop-blur-md shadow-2xs">
-        <div className="mx-auto flex max-w-[880px] items-center justify-between px-4 py-2.5">
-          <nav aria-label="콘티 제작 단계" className="flex items-center gap-1.5 sm:gap-2">
+        <div className="mx-auto flex max-w-[880px] items-center justify-between px-3 sm:px-4 py-2 gap-2">
+          {/* 좌측: 1, 2단계 스텝 버튼 */}
+          <nav aria-label="콘티 제작 단계" className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* 1단계 */}
             <button
               type="button"
               onClick={() => setStep("story")}
               className={cn(
-                "flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
                 step === "story"
                   ? "bg-brand text-on-brand shadow-2xs font-bold"
                   : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
@@ -505,7 +527,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               type="button"
               onClick={() => setStep("cuts")}
               className={cn(
-                "flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
+                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
                 step === "cuts"
                   ? "bg-brand text-on-brand shadow-2xs font-bold"
                   : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
@@ -537,30 +559,63 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
             </button>
           </nav>
 
-          {/* 우측 보조 빠른 이동 버튼 */}
-          <div className="flex items-center gap-2">
-            {step === "story" && sb && sb.cuts.length > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStep("cuts")}
-                className="font-bold text-brand hover:text-brand text-xs gap-1"
+          {/* 우측: 품질 토글(일반/Pro) + 이미지 생성 버튼 */}
+          {sb && sb.cuts.length > 0 ? (
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* 생성 품질 토글 */}
+              <div
+                role="radiogroup"
+                aria-label="생성 품질"
+                className="flex items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
               >
-                <span>콘티로 넘어가기</span>
-                <ChevronRight className="size-3.5" />
-              </Button>
-            ) : step === "cuts" ? (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tier === "standard"}
+                  onClick={() => setTier("standard")}
+                  className={cn(
+                    "cursor-pointer rounded-md px-2 sm:px-2.5 py-1 transition-all text-xs",
+                    tier === "standard"
+                      ? "bg-surface-card text-ink shadow-2xs font-bold"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                  title="표준 화질 빠른 생성 (컷당 1크레딧)"
+                >
+                  ⚡ 일반
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tier === "pro"}
+                  onClick={() => setTier("pro")}
+                  className={cn(
+                    "cursor-pointer rounded-md px-2 sm:px-2.5 py-1 transition-all text-xs",
+                    tier === "pro"
+                      ? "bg-brand text-on-brand shadow-2xs font-bold"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                  title="고화질 디테일 생성 (컷당 2크레딧)"
+                >
+                  💎 Pro
+                </button>
+              </div>
+
+              {/* 이미지 생성 버튼 */}
               <Button
-                variant="ghost"
                 size="sm"
-                onClick={() => setStep("story")}
-                className="text-ink-muted hover:text-ink text-xs gap-1"
+                cost={cost}
+                disabled={!ready}
+                loading={pending}
+                onClick={startGeneration}
+                className="font-bold shadow-xs px-2.5 sm:px-3.5"
               >
-                <PenSquare className="size-3.5" />
-                <span>사연 수정</span>
+                <span className="hidden sm:inline">
+                  {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
+                </span>
+                <span className="sm:hidden">생성</span>
               </Button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -830,40 +885,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         {/* 2단계: 컷 콘티 편집 */}
         {step === "cuts" && (
           <div className="flex flex-col gap-4">
-            {/* 상단 사연 & 기획 확인 배너 (1단계로 빠른 복귀) */}
-            <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-surface-card px-4 py-3 shadow-2xs">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-tint text-brand font-bold text-sm shadow-2xs">
-                  📝
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-body-sm font-bold text-ink">사연 & 시리즈 기획</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-2 py-0.5 text-[11px] font-bold text-brand">
-                      <BookOpen className="size-3" />
-                      {currentSeries?.title ?? props.seriesTitle}
-                    </span>
-                    {sb && (
-                      <span className="inline-flex items-center rounded-full bg-surface-sunken border border-border/60 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
-                        총 {sb.cuts.length}컷
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-body-sm text-ink-muted truncate max-w-xl">
-                    {story ? `“${story}”` : "입력된 사연이 없습니다."}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setStep("story")}
-                className="shrink-0 font-semibold gap-1 text-xs ml-3"
-              >
-                <PenSquare className="size-3.5" />
-                <span>사연 & 기획 수정</span>
-              </Button>
-            </div>
 
             {usedMock && (
               <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
@@ -999,8 +1020,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                     dialogue: cut.dialogue.map((l) => (l.id === lineId ? { ...l, balloon } : l)),
                   })
                 }
-                // 후킹 인라인 통합 props (1컷 또는 커버 다음 첫 컷)
-                isHookCut={!cut.isCover && cut.index === hookCutIndex}
+                // 후킹 인라인 통합 props: 표지 컷이 있으면 표지 컷에, 없으면 1컷에 전달
+                isHookCut={hasCoverCut ? Boolean(cut.isCover) : cut.index === 1}
                 hookOptions={sb.hookOptions}
                 selectedHookId={sb.selectedHookId}
                 onToggleHook={toggleHook}
@@ -1016,104 +1037,34 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               />
             ))}
 
-            {/* 3. 하단 최종 이미지 생성 확인 & 실행 카드 */}
-            <div className="rounded-2xl border-2 border-brand/40 bg-surface-card p-5 shadow-sm flex flex-col gap-4 mt-2">
-              <div className="flex items-center justify-between border-b border-border/80 pb-3">
+            {/* 하단 완성 안내 및 간결한 보조 생성 바 */}
+            {!ready ? (
+              <p className="rounded-xl bg-warning-tint/70 border border-warning/30 px-4 py-3 text-body-sm text-warning text-center font-medium shadow-2xs">
+                ⚠️ 모든 컷의 장면 묘사를 입력하면 상단에서 이미지 생성을 시작할 수 있어요.
+              </p>
+            ) : (
+              <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-surface-card p-4 shadow-2xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🚀</span>
-                  <h3 className="text-label font-bold text-ink">이미지 생성 준비 완료</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-caption text-ink-muted">내 보유 크레딧:</span>
-                  <Badge tone="brand">{props.credits}C</Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl bg-surface-sunken/60 p-3.5 text-caption border border-border/60">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-muted">총 컷수</span>
-                  <span className="font-bold text-ink text-body-sm">
-                    {sb.cuts.length}컷 {hasCoverCut ? "(표지 포함)" : ""}
+                  <span className="text-base">🚀</span>
+                  <span className="text-body-sm font-bold text-ink">
+                    총 {sb.cuts.length}컷 콘티 완성
                   </span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-muted">화면 비율</span>
-                  <span className="font-bold text-ink text-body-sm">{props.aspectRatio}</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-muted">화풍 프리셋</span>
-                  <span className="font-bold text-ink text-body-sm">{props.stylePreset}</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-muted">소요 크레딧</span>
-                  <span className="font-bold text-brand text-body-sm">{cost} 크레딧</span>
-                </div>
-              </div>
-
-              {/* 생성 품질 토글 */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                <div className="flex flex-col">
-                  <span className="text-label font-bold text-ink">생성 품질 엔진 선택</span>
                   <span className="text-caption text-ink-muted">
-                    {tier === "pro"
-                      ? "💎 Pro: 캐릭터 디테일과 화질을 높인 고품질 생성 (컷당 2 크레딧)"
-                      : "⚡ 일반: 표준 모델 빠른 생성 (컷당 1 크레딧)"}
+                    ({props.aspectRatio} · {props.stylePreset})
                   </span>
                 </div>
-                <div
-                  role="radiogroup"
-                  aria-label="생성 품질"
-                  className="flex items-center self-start sm:self-auto rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+                <Button
+                  size="md"
+                  cost={cost}
+                  disabled={!ready}
+                  loading={pending}
+                  onClick={startGeneration}
+                  className="font-bold shadow-xs px-5"
                 >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={tier === "standard"}
-                    onClick={() => setTier("standard")}
-                    className={cn(
-                      "cursor-pointer rounded-md px-3 py-1.5 transition-all",
-                      tier === "standard"
-                        ? "bg-surface-card text-ink shadow-2xs font-bold"
-                        : "text-ink-muted hover:text-ink",
-                    )}
-                  >
-                    ⚡ 일반 (1C)
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={tier === "pro"}
-                    onClick={() => setTier("pro")}
-                    className={cn(
-                      "cursor-pointer rounded-md px-3 py-1.5 transition-all",
-                      tier === "pro"
-                        ? "bg-brand text-on-brand shadow-2xs font-bold"
-                        : "text-ink-muted hover:text-ink",
-                    )}
-                  >
-                    💎 Pro (2C)
-                  </button>
-                </div>
+                  {tier === "pro" ? "💎 Pro 이미지 생성 시작" : "⚡ 일반 이미지 생성 시작"}
+                </Button>
               </div>
-
-              {!ready && (
-                <p className="rounded-lg bg-warning-tint px-3 py-2 text-body-sm text-warning">
-                  모든 컷의 장면 묘사를 입력하면 이미지 생성을 시작할 수 있어요.
-                </p>
-              )}
-
-              <Button
-                size="lg"
-                block
-                cost={cost}
-                disabled={!ready}
-                loading={pending}
-                onClick={startGeneration}
-                className="text-base font-bold py-3.5 shadow-sm"
-              >
-                {tier === "pro" ? "💎 Pro 이미지 생성 시작" : "⚡ 일반 이미지 생성 시작"}
-              </Button>
-            </div>
+            )}
           </div>
         )}
           </div>
@@ -1683,6 +1634,7 @@ function CutCard({
 
   const currentHookText = hookOptions.find((h) => h.id === selectedHookId)?.text ?? "";
   const currentCtaText = ctaOptions.find((c) => c.id === selectedCtaId)?.text ?? "";
+  const displayCutLabel = cut.isCover ? "COVER" : `CUT ${hasCoverCut ? cut.index - 1 : cut.index}`;
 
   // 1. 비선택 상태 (컴팩트 & 세련된 인스타툰 컷 요약 카드)
   if (!selected) {
@@ -1704,7 +1656,7 @@ function CutCard({
               cut.isCover ? "bg-brand text-on-brand" : "bg-ink text-surface-card"
             )}
           >
-            {cut.isCover ? "COVER" : `CUT ${cut.index}`}
+            {displayCutLabel}
           </span>
 
           {cut.isCover ? (
@@ -1769,10 +1721,12 @@ function CutCard({
           </div>
         </div>
 
-        {/* 후킹 요약 배너 (1컷 비선택 상태) */}
+        {/* 후킹 / 표지 타이틀 요약 배너 (비선택 상태) */}
         {isHookCut && selectedHookId && currentHookText && (
           <div className="flex items-center gap-2 rounded-xl bg-brand-tint/30 border border-brand/30 px-3 py-1.5 text-xs">
-            <span className="font-extrabold text-brand shrink-0">🔥 후킹 배너:</span>
+            <span className="font-extrabold text-brand shrink-0">
+              {cut.isCover ? "🌟 표지 타이틀:" : "🔥 후킹 배너:"}
+            </span>
             <span className="text-ink font-semibold truncate">&ldquo;{currentHookText}&rdquo;</span>
           </div>
         )}
@@ -1856,7 +1810,7 @@ function CutCard({
               cut.isCover ? "bg-brand text-on-brand" : "bg-ink text-surface-card"
             )}
           >
-            {cut.isCover ? "COVER" : `CUT ${cut.index}`}
+            {displayCutLabel}
           </span>
           {cut.isCover ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint border border-brand/30 px-3 py-1 text-xs font-bold text-brand shadow-2xs">
@@ -1902,7 +1856,7 @@ function CutCard({
         </div>
       </div>
 
-      {/* 1컷 인라인 후킹 헤드라인 설정 섹션 */}
+      {/* 후킹 헤드라인 / 표지 타이틀 인라인 설정 섹션 */}
       {isHookCut && (
         <div
           className="flex flex-col gap-2.5 rounded-xl border border-brand/40 bg-brand-tint/15 p-3.5 shadow-2xs"
@@ -1911,19 +1865,23 @@ function CutCard({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="grid size-6 place-items-center rounded-lg bg-brand text-on-brand font-bold text-xs shadow-2xs">
-                🔥
+                {cut.isCover ? "🌟" : "🔥"}
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-body-sm font-bold text-ink">1컷 후킹 헤드라인 설정</span>
+                  <span className="text-body-sm font-bold text-ink">
+                    {cut.isCover ? "표지 썸네일 후킹 타이틀 설정" : "1컷 후킹 헤드라인 설정"}
+                  </span>
                   {selectedHookId ? (
-                    <Badge tone="brand">배너 켜짐</Badge>
+                    <Badge tone="brand">{cut.isCover ? "타이틀 켜짐" : "배너 켜짐"}</Badge>
                   ) : (
-                    <Badge tone="neutral">배너 꺼짐</Badge>
+                    <Badge tone="neutral">{cut.isCover ? "타이틀 꺼짐" : "배너 꺼짐"}</Badge>
                   )}
                 </div>
                 <p className="text-[11px] text-ink-muted">
-                  첫 컷 상단 강조 배너 및 인스타그램 캡션 첫 줄로 자동 적용됩니다.
+                  {cut.isCover
+                    ? "인스타그램 피드 썸네일 및 카드뉴스 첫 장의 메인 헤드라인 타이틀입니다."
+                    : "첫 컷 상단 강조 배너 및 인스타그램 캡션 첫 줄로 자동 적용됩니다."}
                 </p>
               </div>
             </div>
@@ -1933,14 +1891,18 @@ function CutCard({
                 onClick={() => onToggleHook(!selectedHookId)}
                 className="rounded-lg border border-brand/40 bg-surface-card px-2.5 py-1 text-caption font-bold text-brand hover:bg-brand hover:text-white transition-all cursor-pointer shadow-2xs"
               >
-                {selectedHookId ? "후킹 끄기" : "후킹 켜기"}
+                {selectedHookId
+                  ? cut.isCover ? "타이틀 끄기" : "후킹 끄기"
+                  : cut.isCover ? "타이틀 켜기" : "후킹 켜기"}
               </button>
             )}
           </div>
 
           {selectedHookId && (
             <div className="flex flex-col gap-2 pt-2 border-t border-brand/20">
-              <span className="text-[11px] font-bold text-ink-muted">AI 추천 후킹 문구 선택:</span>
+              <span className="text-[11px] font-bold text-ink-muted">
+                {cut.isCover ? "AI 추천 표지 타이틀 선택:" : "AI 추천 후킹 문구 선택:"}
+              </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {hookOptions.map((opt) => {
                   const isSelected = selectedHookId === opt.id;
@@ -1964,11 +1926,17 @@ function CutCard({
               </div>
 
               <div className="flex flex-col gap-1 pt-1">
-                <label className="text-[11px] font-bold text-ink-muted">후킹 문구 직접 수정:</label>
+                <label className="text-[11px] font-bold text-ink-muted">
+                  {cut.isCover ? "표지 타이틀 직접 수정:" : "후킹 문구 직접 수정:"}
+                </label>
                 <input
                   value={currentHookText}
                   onChange={(e) => onChangeHookText?.(e.target.value)}
-                  placeholder="첫 컷 상단에 들어갈 후킹 헤드라인을 입력하세요"
+                  placeholder={
+                    cut.isCover
+                      ? "인스타 피드 썸네일에 들어갈 표지 후킹 타이틀을 입력하세요"
+                      : "첫 컷 상단에 들어갈 후킹 헤드라인을 입력하세요"
+                  }
                   className="h-8 rounded-lg border border-border-control/80 bg-surface-card px-3 text-body-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs"
                 />
               </div>
