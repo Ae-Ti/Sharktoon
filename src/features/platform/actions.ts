@@ -8,7 +8,7 @@ import { removeObjects } from "@/lib/supabase/storage";
 import { getRepository } from "./data";
 import { checkUpload, resolveImages, storeImage, storeUpload } from "./data/images";
 import type { AssetInput, SeriesInput, SeriesRule } from "./data/types";
-import { extractCharacterFeaturesFromSelfie } from "./vision";
+import { extractCharacterFeaturesFromSelfie, extractStoryFromImage } from "./vision";
 
 /** 출석 체크. 하루 1크레딧, 7일 연속이면 3크레딧을 더 준다. */
 export async function checkInAction(): Promise<
@@ -370,3 +370,34 @@ export async function grantPurchaseAction(input: {
     return fail(e);
   }
 }
+
+/** 이미지(카톡 캡처, SNS 글 등)에서 인스타툰 사연 내용 추출 */
+export async function extractStoryFromImageAction(
+  formData: FormData,
+): Promise<{ ok: true; story: string } | { ok: false; message: string }> {
+  try {
+    const file = formData.get("image");
+    if (!(file instanceof File)) {
+      return { ok: false, message: "이미지 파일이 전송되지 않았습니다." };
+    }
+    const validFile = checkUpload(file);
+    const bytes = await validFile.arrayBuffer();
+    const story = await extractStoryFromImage({
+      buffer: bytes,
+      mimeType: file.type || "image/jpeg",
+    });
+    if (!story) {
+      return {
+        ok: false,
+        message: "이미지에서 대화나 사연 내용을 인식하지 못했습니다. 텍스트를 직접 입력해 주세요.",
+      };
+    }
+    return { ok: true, story };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "이미지 분석 중 오류가 발생했습니다.",
+    };
+  }
+}
+

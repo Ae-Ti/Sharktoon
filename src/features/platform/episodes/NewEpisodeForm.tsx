@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { BookOpen, Layers, Lightbulb, Sparkles, Plus, Check } from "lucide-react";
+import { BookOpen, Layers, Lightbulb, Sparkles, Plus, Check, Camera, AlertCircle, Upload } from "lucide-react";
 import { Button, Field, Badge, Modal } from "@/components/ui";
-import { startEpisodeAction } from "@/features/platform/actions";
+import { startEpisodeAction, extractStoryFromImageAction } from "@/features/platform/actions";
 import { SeriesFormModal } from "@/features/platform/series/SeriesFormModal";
 import type { SeriesSummary } from "@/features/platform/data/types";
 import { cn } from "@/lib/cn";
@@ -34,7 +34,38 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // 이미지(카톡 캡처 등) 업로드 및 AI 사연 추출 상태
+  const [analyzingImage, setAnalyzingImage] = useState(false);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
+  const [uploadedImageName, setUploadedImageName] = useState<string | null>(null);
+  const [visionError, setVisionError] = useState<string | null>(null);
+
   const selectedSeries = seriesList.find((s) => s.id === selectedSeriesId) ?? null;
+
+  async function handleImageFile(file: File) {
+    if (!file) return;
+    setVisionError(null);
+    setAnalyzingImage(true);
+    setUploadedImageName(file.name);
+
+    const previewUrl = URL.createObjectURL(file);
+    setUploadedImagePreview(previewUrl);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await extractStoryFromImageAction(formData);
+      if (res.ok) {
+        setStory(res.story);
+      } else {
+        setVisionError(res.message);
+      }
+    } catch {
+      setVisionError("이미지 분석 중 문제가 발생했습니다.");
+    } finally {
+      setAnalyzingImage(false);
+    }
+  }
 
   function handleCreate() {
     if (!story.trim()) return;
@@ -214,15 +245,83 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
 
       {/* 2. 사연 입력 섹션 */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-title font-semibold text-ink">사연 내용</h2>
+          <label className="flex items-center gap-1.5 cursor-pointer rounded-lg border border-brand/40 bg-brand-tint px-3 py-1.5 text-caption font-bold text-brand hover:bg-brand-hover hover:text-white transition-all shadow-2xs">
+            <Camera className="size-3.5" />
+            <span>카톡/글 캡처 올리기</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              disabled={analyzingImage}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageFile(file);
+              }}
+            />
+          </label>
+        </div>
+
+        {/* 첨부된 이미지 미리보기 & 분석 상태 */}
+        {uploadedImagePreview && (
+          <div className="flex items-center justify-between rounded-xl border border-brand/30 bg-brand-tint/20 p-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={uploadedImagePreview}
+                alt="첨부된 캡처"
+                className="size-14 rounded-lg object-cover border border-border/80 shrink-0 shadow-2xs"
+              />
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-body-sm font-bold text-ink truncate">
+                    {uploadedImageName}
+                  </span>
+                  {analyzingImage && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-brand animate-pulse">
+                      <Sparkles className="size-3 animate-spin" />
+                      AI 텍스트 추출 중...
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-ink-muted leading-tight">
+                  {analyzingImage
+                    ? "카톡 대화와 글 내용을 AI가 읽어 사연 텍스트로 자동 변환하고 있어요."
+                    : "이미지 속 대화와 사연을 추출했습니다. 내용을 확인하고 자유롭게 수정해 보세요!"}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={analyzingImage}
+              onClick={() => {
+                setUploadedImagePreview(null);
+                setUploadedImageName(null);
+              }}
+              className="text-caption font-medium text-ink-muted hover:text-danger px-2 py-1 cursor-pointer transition-colors shrink-0"
+            >
+              삭제
+            </button>
+          </div>
+        )}
+
+        {visionError && (
+          <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger-tint px-3 py-2 text-caption text-danger">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{visionError}</span>
+          </div>
+        )}
+
         <Field
-          label="사연 내용"
+          label=""
           multiline
-          rows={5}
+          rows={6}
           value={story}
           onChange={setStory}
-          placeholder="이번 회차에서 다룰 재미있는 에피소드나 대화를 적어주세요. (카카오톡 대화 형식도 가능해요)"
+          placeholder="이번 회차에서 다룰 재미있는 에피소드나 대화를 적어주세요. 카톡 대화 형식도 가능해요!&#10;(우측 상단의 '카톡/글 캡처 올리기'로 스크린샷을 올리면 AI가 자동으로 읽어드려요)"
           help="콘티 생성은 크레딧을 소모하지 않습니다."
-          maxLength={500}
+          maxLength={1000}
         />
 
         {/* 추천 소재 칩 */}
