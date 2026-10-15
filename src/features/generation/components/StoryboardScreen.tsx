@@ -1617,9 +1617,16 @@ function CutCard({
 
           {/* 우측 퀵 액션 툴바 */}
           <div
-            className="ml-auto flex items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100"
+            className="ml-auto flex items-center gap-1"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              onClick={onSelect}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand-tint transition-colors cursor-pointer mr-1"
+            >
+              편집하기 <ChevronDown className="size-3.5" />
+            </button>
             <IconButton label="위로" onClick={() => onMove(-1)} disabled={cut.index === 1}>
               <ArrowUp className="size-3.5" />
             </IconButton>
@@ -1698,13 +1705,8 @@ function CutCard({
         )}
 
         {/* 하단 푸터 바 */}
-        <div className="flex items-center justify-between border-t border-border/50 pt-2 text-caption">
-          <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
-            <span>{cut.dialogue.length > 0 ? `대사/나레이션 ${cut.dialogue.length}개` : "대사 없음"}</span>
-          </div>
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-brand group-hover:underline">
-            편집하기 <ChevronDown className="size-3.5" />
-          </span>
+        <div className="flex items-center border-t border-border/50 pt-2 text-caption text-[11px] text-ink-subtle">
+          <span>{cut.dialogue.length > 0 ? `대사/나레이션 ${cut.dialogue.length}개` : "대사 없음"}</span>
         </div>
       </article>
     );
