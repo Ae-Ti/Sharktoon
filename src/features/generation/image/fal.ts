@@ -15,6 +15,8 @@ import {
   type CutGenerationResult,
   type ImageGenerator,
 } from "@/contracts/generation";
+import { buildStructuredWebtoonPrompt } from "./promptBuilder";
+
 
 export function getApiKey(): string {
   const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
@@ -158,132 +160,17 @@ export class FalFluxGenerator implements ImageGenerator {
       ? await translateToVisualEnglishPrompt(activeTraits.join(", "), apiKey)
       : "";
 
-    const hasVetInCut = cutText.includes("수의사") || cutText.includes("의사");
-    const humanPresenceRule = hasVetInCut
-      ? `[Human Characters in this panel]: Exactly TWO distinct humans on opposite sides:
-1) Male Veterinarian (on the left side): 40-year-old Korean male doctor with neat short black hair and glasses, wearing a blue collared shirt and clean white medical lab coat with stethoscope around neck. (STRICTLY NO hoodie on doctor, NO white hair).
-2) Female Protagonist (on the right side): 20-year-old Korean civilian pet owner with dark black hair tied in low ponytail with side bangs, wearing an oversized dark grey hoodie. (STRICTLY NO lab coat on protagonist, NO stethoscope on protagonist, STRICTLY black hair).`
-      : `[Human Characters in this panel]: Exactly ONE human: ONLY the female protagonist (나). Strictly NO other people, NO male characters, NO veterinarian, NO doctor, NO second person, NO bystanders in this panel.`;
-
-    // 1. 카메라 프레이밍 및 구도 다양화 감지
-    let cameraFraming = "Dynamic medium shot (waist up), eye-level angle";
-    if (cutText.includes("익스트림 클로즈업") || cutText.includes("extreme_close_up")) {
-      cameraFraming = "Intense dramatic extreme close-up shot focused tightly on expressive comic facial reaction, wide eyes, and trembling mouth";
-    } else if (cutText.includes("클로즈업") || cutText.includes("close_up")) {
-      cameraFraming = "Close-up portrait shot (upper chest and expressive head), dynamic comic reaction framing";
-    } else if (cutText.includes("부감") || cutText.includes("top_down") || cutText.includes("하이앵글")) {
-      cameraFraming = "High-angle shot (looking down from above), overhead comic perspective showing character's interaction with the cat and props on the floor";
-    } else if (cutText.includes("오버 숄더") || cutText.includes("over_shoulder")) {
-      cameraFraming = "Over-the-shoulder shot framing one character from behind looking across at the other character's dramatic reaction";
-    } else if (cutText.includes("익스트림 롱") || cutText.includes("extreme_wide")) {
-      cameraFraming = "Wide establishing shot showing the entire room environment and full standing character figures";
-    } else if (cutText.includes("롱") || cutText.includes("wide") || cutText.includes("풀샷")) {
-      cameraFraming = "Full-length body shot showing characters from head to shoes with architectural background depth";
-    } else if (cutText.includes("로우앵글") || cutText.includes("low_angle")) {
-      cameraFraming = "Dynamic low-angle shot looking up, creating comic drama and tension";
-    }
-
-    // 2. 배경 엔진 (단색 컬러 vs 3D 스케치업풍 인테리어)
-    let backgroundPrompt = "";
-    let isSolidColor = false;
-    if (cutText.includes("단색") || cutText.includes("solid_color")) {
-      isSolidColor = true;
-      const hexMatch = cutText.match(/#[0-9a-fA-F]{6}/);
-      const colorHex = hexMatch ? hexMatch[0] : "#FFF9F0";
-      backgroundPrompt = `[Background]: Solid flat pastel background (${colorHex}), minimalist clean comic colored backdrop, zero clutter, clean graphic design negative space, studio color backdrop.`;
-    } else if (cutText.includes("동물병원") || cutText.includes("진료실") || cutText.includes("vet_clinic")) {
-      backgroundPrompt = `[Environment & Background]: Fully illustrated detailed veterinary clinic interior setting with architectural depth. Stainless steel examination counter, background shelves stocked with pet medicines and veterinary supplies, medical posters on the wall, clinic window and consultation desk, overhead clinical ambient lighting, strictly NO empty background, NO plain white void.`;
-    } else if (cutText.includes("현관") || cutText.includes("entrance")) {
-      backgroundPrompt = `[Environment & Background]: Fully illustrated modern Korean apartment entrance hallway setting with architectural depth. Digital door lock front door, shoe rack with shoes, clean tiled entryway floor, baseboards, hallway wall molding, ceiling entrance lighting, strictly NO empty background, NO plain white void.`;
-    } else if (cutText.includes("침실") || cutText.includes("침대") || cutText.includes("bedroom")) {
-      backgroundPrompt = `[Environment & Background]: Fully illustrated cozy Korean bedroom interior setting with architectural depth. Neat bed with duvet, wooden nightstand, desk, bookshelf, curtains with soft daylight, strictly NO empty background, NO plain white void.`;
-    } else if (cutText.includes("카페") || cutText.includes("cafe")) {
-      backgroundPrompt = `[Environment & Background]: Fully illustrated cozy aesthetic cafe interior setting with architectural depth. Wooden tables, cafe counter in background, warm pendant lights, large glass cafe window with city view, strictly NO empty background, NO plain white void.`;
-    } else if (cutText.includes("사무실") || cutText.includes("회사") || cutText.includes("office")) {
-      backgroundPrompt = `[Environment & Background]: Fully illustrated modern corporate office interior setting with architectural depth. Office desks, monitors, office partition, water cooler in background, professional interior lighting, strictly NO empty background, NO plain white void.`;
-    } else {
-      const customBgMatch = cutText.match(/배경:\s*([^/]+)/);
-      const customBg = customBgMatch ? customBgMatch[1].trim() : "";
-      if (customBg && !customBg.includes("단색") && !customBg.includes("거실")) {
-        backgroundPrompt = `[Environment & Background]: Fully illustrated detailed ${customBg} setting with architectural depth and environmental props, strictly NO empty background, NO plain white void.`;
-      } else if (cutText.includes("거실") || cutText.includes("소파")) {
-        // 거실이 명시된 경우
-        backgroundPrompt = `[Environment & Background]: Fully illustrated cozy modern Korean apartment living room interior setting with architectural depth. Warm light wooden flooring with subtle grain, fabric sofa and cushions in the background, low coffee table, baseboards, window blinds with ambient daylight, lived-in interior props, strictly NO empty background, NO plain white void.`;
-      } else {
-        // 기본 모던 실내 배경
-        backgroundPrompt = `[Environment & Background]: Fully illustrated clean modern interior indoor setting with subtle architectural depth, neat walls, natural flooring, environmental props fitting the scene, strictly NO empty background, NO plain white void.`;
-      }
-    }
-
-    // 3. 동물 일관성 및 의상 오류 방지
-    const hasCatInCut = cutText.includes("고양이") || cutText.includes("냥이") || cutText.includes("cat");
-    const animalRule = hasCatInCut
-      ? `[Animal Consistency]: A small adult domestic Korean shorthair orange tabby cat (white chest and paws, realistic quadruped cat anatomy, natural body size about 4kg, strictly NO clothes on cat, NO clothes zipper on cat, natural feline fur, natural paws).`
-      : "";
-
+    const structured = buildStructuredWebtoonPrompt({
+      cutIndex: req.index,
+      cutText,
+      visualScene,
+      stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+      characterAppearance,
+    });
+    const prompt = structured.prompt;
+    const negative_prompt = structured.negativePrompt;
     const seed = getEpisodeSeed(req.episodeId, req.index, req.attempt ?? 1);
 
-    const negative_prompt = [
-      "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
-      "photorealistic, 3d render, cgi, octane render, unreal engine, volumetric lighting, airbrushed skin, skin pores, realistic photography, oil painting",
-      "semi-realistic, 3d model, computer graphics, realistic human face, soft focus, blurry lines",
-      "inconsistent art style, varying stroke weight, sketch, rough draft, messy lines, painterly, watercolor wash, airbrush gradients",
-      "chibi, SD, super deformed, oversized head, dwarf, tiny body, toddler proportions, baby body, distorted anatomy, short stubby limbs",
-      "giant eyes, huge bug eyes covering half of face, oversized anime doll eyes, baby face, toddler face, infant cheeks, compressed jaw",
-      "high bun, topknot, hair bun, messy bun, hair scrunchie, hair updo, chignon, wearing hood over head, hood pulled up, hood covering head, altered hairstyle, different hairstyle, white hair on protagonist, grey hair on protagonist",
-      "cat ears on human, animal ears on human, animal headband, tail on human",
-      "human clothes on cat, hoodie on cat, clothes zipper on cat, giant oversized cat, mutated animal paws",
-      "doctor coat on protagonist, scrubs on protagonist, stethoscope on protagonist, hoodie on doctor",
-      !hasVetInCut ? "veterinarian, male doctor, medical coat, extra people, male characters" : "",
-      !isSolidColor ? "empty background, blank background, simple background, white background, white void, solid color background, floating character, missing background, plain featureless wall, minimalist void" : "",
-    ].filter(Boolean).join(", ");
-
-    // 4. 감정에 따른 만화적 표정 큐 (극적이고 과장된 만화 리액션 강제)
-    let emotionCue = "";
-    if (cutText.includes("놀람") || cutText.includes("surprise") || cutText.includes("당황") || cutText.includes("식은땀") || cutText.includes("경악")) {
-      emotionCue = "[Facial Expression & Comical Mood]: Highly exaggerated comic shock expression: wide panicked manga eyes, big visible nervous cold sweat drop on temple, comical open screaming/gasping mouth, flustered flushed cheeks.";
-    } else if (cutText.includes("분노") || cutText.includes("anger") || cutText.includes("화난") || cutText.includes("하악질") || cutText.includes("짜증")) {
-      emotionCue = "[Facial Expression & Comical Mood]: Comical angry furrowed eyebrows, intense pouty scowl; cat hissing fiercely with bared sharp teeth, flattened airplane ears, bristled arched back.";
-    } else if (cutText.includes("슬픔") || cutText.includes("sadness") || cutText.includes("억울") || cutText.includes("지친") || cutText.includes("한숨")) {
-      emotionCue = "[Facial Expression & Comical Mood]: Comical wronged despair, trembling watery eyes, downturned pouty mouth, completely exhausted slump in comical misery.";
-    } else if (cutText.includes("사랑") || cutText.includes("love") || cutText.includes("기쁨") || cutText.includes("joy") || cutText.includes("츄르") || cutText.includes("간절")) {
-      emotionCue = "[Facial Expression & Comical Mood]: Pleading gentle comic smile with sweat drops, desperate comical appeasing expression holding treats; cat with huge sparkling starry eyes eagerly staring at treats.";
-    } else {
-      emotionCue = "[Facial Expression & Comical Mood]: Highly expressive dynamic Korean webtoon facial reaction fitting the active comic scene.";
-    }
-
-    // 5. 소품 상호작용 강화 큐 (손동작과 물리적 상호작용 우선)
-    let propInteractionCue = "";
-    if (cutText.includes("츄르") || cutText.includes("간식") || cutText.includes("puree")) {
-      propInteractionCue = "[Props & Hands Interaction]: Main character's hands are actively holding and squeezing a slender red tube sachet of cat puree treat, with creamy treat paste protruding from the tip directly toward the cat's mouth.";
-    } else if (cutText.includes("카드") || cutText.includes("결제")) {
-      propInteractionCue = "[Props & Hands Interaction]: Main character is holding and extending a credit card in hand towards the counter.";
-    } else if (cutText.includes("이동장") || cutText.includes("캐리어")) {
-      propInteractionCue = "[Props & Scene Props]: A plastic pet travel carrier box rests open on the floor nearby.";
-    }
-
-    const prompt = [
-      `[MASTER EPISODE ART ANCHOR: 2D ANIMATION CEL ARTWORK, KOREAN WEBTOON AESTHETIC]`,
-      `Art Direction & Style: ${stylePrompt}.`,
-      `Strict Medium & Rendering Constraints: 100% 2D flat digital graphic novel illustration, uniform clean 1.8px black contour lineart, flat solid cel shading fills with zero smooth airbrush gradients, zero 3D rendering, zero photorealism. Strictly identical color grading, identical line stroke weight, and identical visual aesthetic across all panels in this episode.`,
-      `[Scene Dynamic Action & Composition]: ${visualScene}.`,
-      emotionCue,
-      propInteractionCue,
-      `[Camera & Composition]: ${cameraFraming}.`,
-      backgroundPrompt,
-      `[Body & Anatomy]: Natural adult 6.8 heads tall Korean webtoon anatomy, slender human silhouette, normal head-to-body ratio, strictly NO chibi, NO SD, NO oversized head.`,
-      `[Protagonist Identity Lock]: 20-year-old Korean civilian girl with natural human ears (STRICTLY NO animal ears, NO cat ears, NO headband, NO animal costume, NO tail). Exact same hairstyle across all cuts: black hair tied back loosely into a low ponytail behind the neck with two distinct side curtain bangs framing her cheekbones, forehead partially visible. Exact same signature outfit across all cuts: oversized charcoal-grey hoodie (#373737, hood down) over plain white t-shirt, dark pants, sneakers.`,
-      humanPresenceRule,
-      animalRule,
-      characterAppearance ? `[Asset Reference]: ${characterAppearance}.` : "",
-      `[Lighting & Color Contract]: Soft warm interior ambient daylight (#FFFDF8 highlights), uniform color palette across all panels, zero neon lighting, zero photographic specular reflections.`,
-      `[Strict Negative Constraints]: Under NO circumstances should any human character have cat ears, animal ears, or animal headbands. The female protagonist is strictly a civilian pet owner; she must NEVER wear a white lab coat, doctor coat, medical scrubs, or stethoscope. ${
-        !hasVetInCut
-          ? "STRICTLY NO veterinarian, NO doctor, NO male characters in this panel. There is ONLY one person: the female protagonist."
-          : ""
-      }`,
-      `Requirements: Pure visual animation artwork, textless composition, clean drawing, consistent 6.8-head adult webtoon anatomy, strictly identical face and art style as character reference sheet.`,
-    ].filter(Boolean).join("\n");
 
     console.log(`\n🎨 [FLUX Cut ${req.index}] Final Prompt:\n${prompt}\n`);
     console.log(`🛑 [FLUX Cut ${req.index}] Negative Prompt:\n${negative_prompt}\n`);

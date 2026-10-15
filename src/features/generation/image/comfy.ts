@@ -26,6 +26,8 @@ import {
   resolveStylePrompt,
   translateToVisualEnglishPrompt,
 } from "./fal";
+import { buildStructuredWebtoonPrompt } from "./promptBuilder";
+
 
 export interface ComfyWorkflowNode {
   class_type: string;
@@ -332,27 +334,16 @@ export class ComfyUIGenerator implements ImageGenerator {
 
     const hasCatInCut = cutText.includes("고양이") || cutText.includes("냥이") || cutText.includes("cat");
 
-    // 2. Base Positive & Negative Prompts
-    const positivePrompt = [
-      `A clean 2D animation illustration, soft line art style, Korean webtoon aesthetic.`,
-      `Art Style: soft line art, ${stylePrompt}, clean ink lineart, flat solid cel shading with crisp shadow boundaries, zero gradients.`,
-      `[Key Dynamic Action & Poses]: ${visualScene}.`,
-      `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult human proportions, strictly NO chibi, NO super-deformed.`,
-      `[Protagonist]: 20-year-old Korean human girl, natural ears, signature low ponytail with curtain bangs, oversized dark grey hoodie.`,
-      hasCatInCut
-        ? `[Animal]: Small adult domestic orange tabby cat with white paws, realistic quadruped feline anatomy, NO clothes on cat.`
-        : "",
-    ].filter(Boolean).join("\n");
+    // 2. Base Positive & Negative Prompts (Codex Invariant Architecture)
+    const structured = buildStructuredWebtoonPrompt({
+      cutIndex: req.index,
+      cutText,
+      visualScene,
+      stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+    });
+    const positivePrompt = structured.prompt;
+    const negativePrompt = structured.negativePrompt;
 
-    const negativePrompt = [
-      "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, callout, captions, subtitle, sound effects, watermark, signature, logo, border, comic panel frame, multiple panels, split screen",
-      "semi-realistic, 3d render, photorealistic, chibi, SD, super deformed, oversized head, dwarf",
-      "giant bug eyes, high bun, topknot, messy bun, hair scrunchie, cat ears on human, animal headband",
-      "human clothes on cat, hoodie on cat, clothes zipper on cat",
-      "doctor coat on protagonist, scrubs on protagonist, stethoscope on protagonist",
-      !hasVetInCut ? "veterinarian, male doctor, medical coat, extra people" : "",
-      "empty background, white void, watermark",
-    ].filter(Boolean).join(", ");
 
     const referenceImageUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
 

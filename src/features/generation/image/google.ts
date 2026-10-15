@@ -39,6 +39,8 @@ function resolveStylePrompt(style?: string): string {
   }
 }
 
+import { buildStructuredWebtoonPrompt } from "./promptBuilder";
+
 export class GoogleImagenGenerator implements ImageGenerator {
   private modelName: string;
 
@@ -48,16 +50,16 @@ export class GoogleImagenGenerator implements ImageGenerator {
 
   async generateCut(req: CutGenerationRequest): Promise<CutGenerationResult> {
     const apiKey = getApiKey();
-    const stylePrompt = resolveStylePrompt(String(req.seriesRule?.stylePreset ?? "심플 라인"));
     const aspectRatio = req.seriesRule?.aspectRatio === "4:5" ? "3:4" : "1:1";
 
-    // 인스타툰 컷 프롬프트 구성 (텍스트나 말풍선은 Konva 캔버스에서 처리하므로 이미지엔 텍스트 없음 강조)
-    const prompt = [
-      `Korean webcomic illustration, single panel.`,
-      `Scene description: ${req.prompt}.`,
-      `Style: ${stylePrompt}.`,
-      `Requirements: 2D vector-like webtoon style, high quality digital illustration, textless pure artwork.`,
-    ].join(" ");
+    const structured = buildStructuredWebtoonPrompt({
+      cutIndex: req.index,
+      cutText: req.prompt,
+      visualScene: req.prompt,
+      stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+    });
+    const prompt = structured.prompt;
+
 
     const endpoint = `${GOOGLE_API_HOST}/models/${this.modelName}:predict?key=${apiKey}`;
 
