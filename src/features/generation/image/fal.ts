@@ -204,9 +204,7 @@ export class FalFluxGenerator implements ImageGenerator {
       ? "https://fal.run/fal-ai/flux-lora/inpainting"
       : usePuLID
         ? "https://fal.run/fal-ai/flux-pulid"
-        : this.variant === "dev"
-          ? "https://fal.run/fal-ai/flux-lora"
-          : `https://fal.run/fal-ai/flux/${this.variant}`;
+        : `https://fal.run/fal-ai/flux/${this.variant}`;
 
     const makeBaseBody = () => ({
       prompt,
@@ -216,7 +214,7 @@ export class FalFluxGenerator implements ImageGenerator {
       num_images: 1,
       seed,
       enable_safety_checker: true,
-      ...(this.variant === "dev" ? { loras, guidance_scale: 3.5 } : {}),
+      ...(this.variant === "dev" ? { guidance_scale: 3.5 } : {}),
     });
 
     const body: Record<string, unknown> = isInpainting
