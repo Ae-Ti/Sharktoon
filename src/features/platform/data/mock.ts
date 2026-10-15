@@ -166,7 +166,8 @@ const MOCK_POLICY: CreditPolicy = {
   attendanceDaily: 0.5,
   attendanceStreakDays: 7,
   attendanceStreakBonus: 1,
-  attendanceMonthlyCap: 3,
+  attendanceMonthlyCap: 9999, // 상한 제한 해제
+  attendanceMonthStreakBonus: 3, // 4주(28일) 연속 출석 시 3크레딧
   refundFeeRate: 0.1,
 };
 
@@ -231,12 +232,15 @@ export const mockRepository: PlatformRepository = {
       throw new Error("오늘은 이미 출석했습니다");
     }
     const streak = S.attendance.streak + 1;
-    // 실제 저장소와 같은 정책: 하루 0.5, 연속 보너스 1, 한 달 상한 3.
+    // 하루 0.5크레딧, 7일 연속 출석 시 1크레딧, 4주(28일) 연속 출석 시 3크레딧 보너스 (한 달 상한 없음)
     const p = MOCK_POLICY;
-    const room = Math.max(0, p.attendanceMonthlyCap - S.attendanceThisMonth);
-    const daily = Math.min(p.attendanceDaily, room);
-    const bonus =
-      streak % p.attendanceStreakDays === 0 ? Math.min(p.attendanceStreakBonus, room - daily) : 0;
+    const daily = p.attendanceDaily;
+    let bonus = 0;
+    if (streak % 28 === 0) {
+      bonus = p.attendanceMonthStreakBonus ?? 3;
+    } else if (streak % p.attendanceStreakDays === 0) {
+      bonus = p.attendanceStreakBonus;
+    }
     const granted = daily + bonus;
     S.attendanceThisMonth += granted;
     S.attendance = { checkedInToday: true, streak };

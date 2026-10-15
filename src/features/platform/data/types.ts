@@ -37,6 +37,7 @@ export interface CreditPolicy {
   attendanceStreakDays: number;
   attendanceStreakBonus: number;
   attendanceMonthlyCap: number;
+  attendanceMonthStreakBonus?: number;
   refundFeeRate: number;
 }
 
