@@ -83,7 +83,7 @@ async function main() {
 
   // --- 출석
   const a1 = await r.checkIn();
-  ok(a1.granted === 1.5 && a1.streak === 7, "7일째 출석 0.5 + 연속 보너스 1");
+  ok(a1.granted === 4 && a1.streak === 7, "7일째 출석 1 + 연속 보너스 3");
   try { await r.checkIn(); ok(false, "중복 출석 차단"); }
   catch { ok(true, "중복 출석 차단"); }
 

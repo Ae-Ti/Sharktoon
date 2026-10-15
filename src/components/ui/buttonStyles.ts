@@ -14,7 +14,7 @@ export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
     "bg-surface-card text-ink border border-border-control hover:bg-surface-sunken",
   ghost: "text-brand-ink hover:bg-brand-tint",
   danger: "bg-danger text-on-signal",
-  cta: "relative overflow-hidden bg-gradient-to-r from-[#077b8a] via-[#0eb8ce] to-[#0284c7] text-white border border-cyan-300/40 shadow-md shadow-cyan-600/25 hover:shadow-lg hover:shadow-cyan-500/40 hover:brightness-105 active:scale-98 transition-all",
+  cta: "relative overflow-hidden bg-gradient-to-r from-[#077b8a] via-[#0eb8ce] to-[#0284c7] text-white border border-cyan-300/40 shadow-md shadow-cyan-600/20 hover:shadow-lg hover:shadow-cyan-500/35 active:scale-98 transition-[box-shadow,transform,filter] duration-500 ease-out",
 };
 
 export const BUTTON_SIZE: Record<ButtonSize, string> = {

@@ -6,8 +6,6 @@ import { getRepository, usingMockData } from "@/features/platform/data";
 import { SideNav } from "@/features/platform/shell/SideNav";
 import { MobileNav } from "@/features/platform/shell/MobileNav";
 import { getSession } from "@/features/platform/auth/session";
-import { logoutAction } from "@/features/platform/auth/actions";
-import { LogOut, User } from "lucide-react";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -40,15 +38,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         </Link>
         <div className="flex items-center gap-2">
           <CreditPill balance={credit.balance} delta={credit.delta} />
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              title="로그아웃"
-              className="flex size-8 items-center justify-center rounded-lg border border-border/80 bg-surface-card text-ink-muted hover:text-danger hover:border-danger/40 transition-colors"
-            >
-              <LogOut className="size-4" />
-            </button>
-          </form>
         </div>
       </header>
 
@@ -60,7 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Link>
           <SideNav seriesHref={seriesHref} isAdmin={isAdmin} streak={attendance.streak} />
 
-          {/* 현재 로그인 세션 사용자 정보 & 로그아웃 & 크레딧 */}
+          {/* 현재 로그인 세션 사용자 정보 & 크레딧 */}
           <div className="flex flex-col gap-2.5 border-t border-border/80 pt-3 md:mt-auto md:px-1.5">
             <div className="flex items-center justify-between gap-1">
               <div className="flex min-w-0 flex-col">
@@ -83,16 +72,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <CreditPill balance={credit.balance} delta={credit.delta} />
-
-            <form action={logoutAction} className="mt-0.5">
-              <button
-                type="submit"
-                className="flex items-center gap-1.5 cursor-pointer text-[12px] text-ink-subtle hover:text-danger hover:underline transition-colors"
-              >
-                <LogOut className="size-3.5" />
-                <span>로그아웃</span>
-              </button>
-            </form>
           </div>
         </aside>
 

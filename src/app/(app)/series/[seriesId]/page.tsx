@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Badge, Button, ButtonLink } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
+import { InstagramIntegrationCard } from "@/features/platform/instagram/InstagramIntegrationCard";
 import type { EpisodeStatus } from "@/features/platform/data/types";
 import { cn } from "@/lib/cn";
 
@@ -171,16 +172,7 @@ export default async function Page({
           )}
         </div>
 
-        <div className="flex w-full shrink-0 flex-col gap-2.5 rounded-lg border border-dashed border-border-control p-5 lg:w-80">
-          <h2 className="text-title font-semibold">성과</h2>
-          <p className="text-body-sm text-ink-muted">
-            인스타그램 계정을 연결하면 회차별 도달·저장·공유가 여기에 쌓여요. 오픈 베타 범위예요.
-          </p>
-          <div className="flex-1" />
-          <Button variant="secondary" block disabled>
-            인스타그램 연결
-          </Button>
-        </div>
+        <InstagramIntegrationCard seriesTitle={series.title} />
       </section>
     </div>
   );

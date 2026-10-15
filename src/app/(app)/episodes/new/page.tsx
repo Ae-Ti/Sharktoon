@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getRepository } from "@/features/platform/data";
 import { NewEpisodeForm } from "@/features/platform/episodes/NewEpisodeForm";
 
@@ -13,10 +12,6 @@ export default async function NewEpisodePage({
   const { seriesId } = await searchParams;
   const repo = await getRepository();
   const allSeries = await repo.listSeries();
-
-  if (allSeries.length === 0) {
-    redirect("/onboarding/character");
-  }
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">

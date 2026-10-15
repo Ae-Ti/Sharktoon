@@ -44,11 +44,6 @@ export function SideNav({ seriesHref, isAdmin = false, streak = 0 }: SideNavProp
           >
             <Icon className={cn("size-4 shrink-0", active ? "text-brand" : "text-ink-muted")} />
             <span className="flex-1">{it.label}</span>
-            {it.href === "/settings" && streak > 0 ? (
-              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
-                🔥 {streak}일차
-              </span>
-            ) : null}
           </Link>
         );
       })}

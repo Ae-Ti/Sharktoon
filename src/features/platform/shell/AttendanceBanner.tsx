@@ -52,9 +52,9 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
 
   const daysInCycle = policy.attendanceStreakDays || 7;
-  const streakBonus = policy.attendanceStreakBonus || 1;
-  const monthBonus = policy.attendanceMonthStreakBonus || 3;
-  const dailyCredit = policy.attendanceDaily || 0.5;
+  const streakBonus = policy.attendanceStreakBonus ?? 3;
+  const monthBonus = policy.attendanceMonthStreakBonus ?? 5;
+  const dailyCredit = policy.attendanceDaily ?? 1;
 
   // 7일 사이클 계산
   const cycleDay = done

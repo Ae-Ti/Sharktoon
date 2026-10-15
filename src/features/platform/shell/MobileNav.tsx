@@ -42,11 +42,6 @@ export function MobileNav({ seriesHref, streak = 0 }: MobileNavProps) {
           >
             <div className="relative">
               <Icon className="size-5 shrink-0" />
-              {it.href === "/settings" && streak > 0 && (
-                <span className="absolute -top-1.5 -right-3 rounded-full bg-brand px-1 text-[9px] font-bold text-on-brand leading-tight">
-                  {streak}
-                </span>
-              )}
             </div>
             <span className="text-[11px] leading-none">{it.label}</span>
           </Link>

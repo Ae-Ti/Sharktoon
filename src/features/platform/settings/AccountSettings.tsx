@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { User, Coins, RotateCcw, ShieldAlert, AlertCircle, Calendar } from "lucide-react";
+import { User, Coins, RotateCcw, ShieldAlert, AlertCircle, Calendar, LogOut } from "lucide-react";
 import { Badge, Button, Field, Modal } from "@/components/ui";
 import {
   cancelAccountDeletionAction,
   requestAccountDeletionAction,
   requestRefundAction,
 } from "@/features/platform/actions";
+import { logoutAction } from "@/features/platform/auth/actions";
 import type {
   AccountStatus,
   CreditDetail,
@@ -113,7 +114,18 @@ export function AccountSettings({
               )}
             </div>
           </div>
-          <Badge tone="brand">{PLAN_LABEL[plan]}</Badge>
+          <div className="flex items-center gap-2.5">
+            <Badge tone="brand">{PLAN_LABEL[plan]}</Badge>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-card px-2.5 py-1 text-caption font-semibold text-ink-muted hover:text-danger hover:border-danger/40 transition-colors cursor-pointer"
+              >
+                <LogOut className="size-3.5" />
+                <span>로그아웃</span>
+              </button>
+            </form>
+          </div>
         </div>
         <dl className="grid grid-cols-3 gap-3 text-center">
           <Stat label="무상 크레딧" value={credit.byKind.free} />
@@ -129,7 +141,7 @@ export function AccountSettings({
           </p>
           <p className="text-ink-subtle">
             출석하면 하루 {policy.attendanceDaily}크레딧, {policy.attendanceStreakDays}일 연속이면{" "}
-            {policy.attendanceStreakBonus}크레딧을 더 드려요. 출석 크레딧은 한 달에 {policy.attendanceMonthlyCap}크레딧까지예요.
+            {policy.attendanceStreakBonus}크레딧, 4주(28일) 연속이면 {policy.attendanceMonthStreakBonus ?? 5}크레딧을 더 드려요.
           </p>
         </div>
       </section>

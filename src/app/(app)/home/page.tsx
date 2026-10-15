@@ -31,10 +31,10 @@ export default async function Page() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-title-lg font-bold">오늘도 한 화 올려볼까요?</h1>
         <ButtonLink
-          href={series.length > 0 ? "/episodes/new" : "/onboarding/character"}
+          href="/episodes/new"
           size="lg"
           variant="cta"
-          className="group relative overflow-hidden h-12 px-6 text-body font-extrabold transition-all w-full sm:w-auto justify-center"
+          className="group relative overflow-hidden h-12 px-6 text-body font-extrabold w-full sm:w-auto justify-center transition-[box-shadow,transform] duration-500 ease-out hover:-translate-y-0.5"
         >
           {/* Shimmer 광택 효과 레이어 */}
           <span
@@ -77,18 +77,28 @@ export default async function Page() {
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-title font-semibold">내 시리즈</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-title font-semibold">최근 시리즈</h2>
+          {series.length > 3 && (
+            <Link
+              href="/series"
+              className="text-caption font-semibold text-brand hover:underline"
+            >
+              전체 시리즈 ({series.length}) ↗
+            </Link>
+          )}
+        </div>
 
         {series.length === 0 ? (
           <EmptyState
             title="아직 시리즈가 없어요"
             description="첫 화를 만들면 같은 캐릭터로 다음 화를 이어갈 수 있어요."
-            actionLabel="첫 화 만들기 (온보딩)"
-            actionHref="/onboarding/character"
+            actionLabel="첫 화 만들기"
+            actionHref="/episodes/new"
           />
         ) : (
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-            {series.map((s) => (
+            {series.slice(0, 3).map((s) => (
               <li key={s.id}>
                 <Link
                   href={`/series/${s.id}`}

@@ -72,7 +72,7 @@ export function AssetLibrary({
 
   const kind = order[tab];
   const shown = displayedAssets.filter((a) => a.kind === kind);
-  const picked = shown.find((a) => a.id === pickedId) ?? shown[0] ?? null;
+  const picked = pickedId ? (displayedAssets.find((a) => a.id === pickedId) ?? null) : null;
 
   function handleSelectSeries(seriesId: string | null) {
     setSelectedSeriesId(seriesId);
@@ -209,62 +209,101 @@ export function AssetLibrary({
         items={order.map((k) => ({ label: LABEL[k], count: displayedCounts[k] }))}
       />
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="min-w-0 flex-1">
-          {shown.length === 0 ? (
-            <EmptyState
-              title={
-                currentSeries
-                  ? `‘${currentSeries.title}’에 등록된 ${LABEL[kind]} 에셋이 없어요`
-                  : `아직 등록한 ${LABEL[kind]} 에셋이 없어요`
-              }
-              description={
-                currentSeries
-                  ? `이 시리즈의 모든 회차 생성 시 고정 레퍼런스로 활용할 ${LABEL[kind]}을 추가해 보세요.`
-                  : "한 번 등록해 두면 다음 화부터 자동으로 같이 그려져요."
-              }
-              actionLabel={currentSeries ? `‘${currentSeries.title}’에 ${LABEL[kind]} 추가` : "에셋 추가"}
-              onAction={() => setForm({ open: true, asset: null })}
-            />
-          ) : (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
-              {shown.map((a) => {
-                const memberSeries = seriesState.filter((s) => s.assetIds.includes(a.id));
-                return (
-                  <li key={a.id} className="relative">
-                    <AssetCard
-                      name={a.name}
-                      kind={LABEL[a.kind]}
-                      kindTone={a.kind === "character" ? "brand" : "neutral"}
-                      usedIn={a.usedIn}
-                      selected={picked?.id === a.id}
-                      thumb={
-                        a.thumbUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={a.thumbUrl} alt="" className="size-full object-cover" />
-                        ) : undefined
-                      }
-                      onClick={() => setPickedId(a.id)}
-                    />
-                    {selectedSeriesId === null && memberSeries.length > 0 && (
-                      <div className="pointer-events-none absolute top-2 right-2 flex max-w-[85%] justify-end">
-                        <span className="truncate rounded-md border border-border/80 bg-surface-card/95 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted shadow-2xs backdrop-blur-xs">
-                          📁 {memberSeries[0].title}
-                          {memberSeries.length > 1 ? ` 외 ${memberSeries.length - 1}` : ""}
-                        </span>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+      <div className="w-full">
+        {shown.length === 0 ? (
+          <EmptyState
+            title={
+              currentSeries
+                ? `‘${currentSeries.title}’에 등록된 ${LABEL[kind]} 에셋이 없어요`
+                : `아직 등록한 ${LABEL[kind]} 에셋이 없어요`
+            }
+            description={
+              currentSeries
+                ? `이 시리즈의 모든 회차 생성 시 고정 레퍼런스로 활용할 ${LABEL[kind]}을 추가해 보세요.`
+                : "한 번 등록해 두면 다음 화부터 자동으로 같이 그려져요."
+            }
+            actionLabel={currentSeries ? `‘${currentSeries.title}’에 ${LABEL[kind]} 추가` : "에셋 추가"}
+            onAction={() => setForm({ open: true, asset: null })}
+          />
+        ) : (
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+            {shown.map((a) => {
+              const memberSeries = seriesState.filter((s) => s.assetIds.includes(a.id));
+              return (
+                <li key={a.id} className="relative">
+                  <AssetCard
+                    name={a.name}
+                    kind={LABEL[a.kind]}
+                    kindTone={a.kind === "character" ? "brand" : "neutral"}
+                    usedIn={a.usedIn}
+                    selected={picked?.id === a.id}
+                    thumb={
+                      a.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.thumbUrl} alt="" className="size-full object-cover" />
+                      ) : undefined
+                    }
+                    onClick={() => setPickedId(a.id)}
+                  />
+                  {selectedSeriesId === null && memberSeries.length > 0 && (
+                    <div className="pointer-events-none absolute top-2 right-2 flex max-w-[85%] justify-end">
+                      <span className="truncate rounded-md border border-border/80 bg-surface-card/95 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted shadow-2xs backdrop-blur-xs">
+                        📁 {memberSeries[0].title}
+                        {memberSeries.length > 1 ? ` 외 ${memberSeries.length - 1}` : ""}
+                      </span>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
-        {picked && (
-          <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs lg:w-80">
+      {/* 에셋 상세 화면 중앙 모달 */}
+      {picked && (
+        <Modal
+          open={Boolean(picked)}
+          onClose={() => setPickedId(null)}
+          size="md"
+          title={picked.name}
+          description={`${LABEL[picked.kind]} 에셋 상세 정보`}
+          footer={
+            <div className="flex w-full items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirmDelete(true);
+                }}
+                className="gap-1.5 text-ink-muted hover:text-danger hover:bg-danger-tint/30"
+              >
+                <Trash2 className="size-4" />
+                삭제
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => setPickedId(null)}>
+                  닫기
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const target = picked;
+                    setPickedId(null);
+                    setForm({ open: true, asset: target });
+                  }}
+                  className="gap-1.5"
+                >
+                  <Edit3 className="size-4" />
+                  수정
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-1">
             {picked.referenceUrls.length > 0 ? (
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-2">
                 {picked.referenceUrls.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -272,25 +311,25 @@ export function AssetLibrary({
                     src={url}
                     alt={`레퍼런스 ${i + 1}`}
                     className={cn(
-                      "aspect-square w-full rounded-lg border border-border/70 object-cover",
+                      "aspect-square w-full rounded-lg border border-border/70 object-cover shadow-2xs",
                       i === 0 && "col-span-2 row-span-2",
                     )}
                   />
                 ))}
               </div>
             ) : (
-              <div className="grid h-45 place-items-center rounded-lg bg-surface-sunken px-4 text-center text-caption text-ink-subtle">
+              <div className="grid h-36 place-items-center rounded-lg bg-surface-sunken px-4 text-center text-caption text-ink-subtle">
                 {picked.kind === "character"
                   ? "캐릭터 시트 · 정면 / 측면 / 표정 4종 / 전신"
                   : "레퍼런스 이미지"}
               </div>
             )}
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-title font-semibold">{picked.name}</h2>
-              {picked.description && (
-                <p className="text-body-sm text-ink-muted">{picked.description}</p>
-              )}
-            </div>
+
+            {picked.description && (
+              <div className="rounded-xl border border-border/70 bg-surface-sunken/40 p-3.5">
+                <p className="text-body-sm text-ink leading-relaxed">{picked.description}</p>
+              </div>
+            )}
 
             {picked.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -300,11 +339,9 @@ export function AssetLibrary({
               </div>
             )}
 
-            <div className="h-px bg-border/80" />
-
             {/* 소속 시리즈 지정/표시 */}
             {seriesState.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 rounded-xl border border-border/70 p-3.5">
                 <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
                   <Folder className="size-3.5 text-ink-muted" />
                   <span>소속 시리즈 (고정 에셋)</span>
@@ -342,10 +379,8 @@ export function AssetLibrary({
               </div>
             )}
 
-            <div className="h-px bg-border/80" />
-
             {/* 에셋을 쓰는 회차 */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 rounded-xl border border-border/70 p-3.5">
               <div className="flex items-center gap-1.5 text-label font-semibold text-ink">
                 <Film className="size-3.5 text-ink-muted" />
                 <span>이 에셋을 쓰는 회차</span>
@@ -360,36 +395,12 @@ export function AssetLibrary({
                 )}
               </div>
               <p className="text-caption text-ink-muted leading-relaxed">
-                바꾸면 이 회차들의 캐릭터가 달라 보일 수 있어요. 지난 회차는 그대로 두고 다음 화부터 적용해요.
+                에셋을 변경하면 이후 생성되는 새 회차부터 새 모습이 반영돼요.
               </p>
             </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <Button
-                variant="secondary"
-                block
-                onClick={() => setForm({ open: true, asset: picked })}
-                className="gap-1.5"
-              >
-                <Edit3 className="size-4" />
-                수정
-              </Button>
-              <Button
-                variant="ghost"
-                block
-                onClick={() => {
-                  setDeleteError(null);
-                  setConfirmDelete(true);
-                }}
-                className="gap-1.5 text-ink-muted hover:text-danger hover:bg-danger-tint/30"
-              >
-                <Trash2 className="size-4" />
-                삭제
-              </Button>
-            </div>
-          </aside>
-        )}
-      </div>
+          </div>
+        </Modal>
+      )}
 
       <AssetFormModal
         key={`${form.open}-${form.asset?.id ?? "new"}-${kind}-${selectedSeriesId ?? "all"}`}

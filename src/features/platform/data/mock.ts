@@ -163,11 +163,11 @@ function newId(prefix: string) {
 
 const MOCK_POLICY: CreditPolicy = {
   signupBonus: 8,
-  attendanceDaily: 0.5,
+  attendanceDaily: 1, // 매일 1크레딧
   attendanceStreakDays: 7,
-  attendanceStreakBonus: 1,
+  attendanceStreakBonus: 3, // 7일 연속 출석 시 +3크레딧 (당일 총 4크레딧)
   attendanceMonthlyCap: 9999, // 상한 제한 해제
-  attendanceMonthStreakBonus: 3, // 4주(28일) 연속 출석 시 3크레딧
+  attendanceMonthStreakBonus: 5, // 4주(28일) 연속 출석 시 +5크레딧
   refundFeeRate: 0.1,
 };
 
@@ -232,12 +232,12 @@ export const mockRepository: PlatformRepository = {
       throw new Error("오늘은 이미 출석했습니다");
     }
     const streak = S.attendance.streak + 1;
-    // 하루 0.5크레딧, 7일 연속 출석 시 1크레딧, 4주(28일) 연속 출석 시 3크레딧 보너스 (한 달 상한 없음)
+    // 하루 1크레딧, 7일 연속 출석 시 3크레딧, 4주(28일) 연속 출석 시 5크레딧 보너스 (한 달 상한 없음)
     const p = MOCK_POLICY;
     const daily = p.attendanceDaily;
     let bonus = 0;
     if (streak % 28 === 0) {
-      bonus = p.attendanceMonthStreakBonus ?? 3;
+      bonus = p.attendanceMonthStreakBonus ?? 5;
     } else if (streak % p.attendanceStreakDays === 0) {
       bonus = p.attendanceStreakBonus;
     }

@@ -29,6 +29,7 @@ export interface SeriesFormModalProps {
   seriesId?: string;
   initialTitle?: string;
   initialRule?: SeriesRule;
+  onCreated?: (series: { id: string; title: string }) => void;
 }
 
 export function SeriesFormModal({
@@ -37,6 +38,7 @@ export function SeriesFormModal({
   seriesId,
   initialTitle = "",
   initialRule = DEFAULT_RULE,
+  onCreated,
 }: SeriesFormModalProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
@@ -73,7 +75,13 @@ export function SeriesFormModal({
         return;
       }
       onClose();
-      if (!editing && "id" in r) router.push(`/series/${r.id}`);
+      if (!editing && "id" in r && typeof r.id === "string") {
+        if (onCreated) {
+          onCreated({ id: r.id, title: title.trim() });
+        } else {
+          router.push(`/series/${r.id}`);
+        }
+      }
     });
   }
 
