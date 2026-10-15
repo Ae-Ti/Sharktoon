@@ -137,6 +137,16 @@ export function mockStoryboard(input: MockStoryboardInput): Storyboard {
           : [{ id: id("ln"), speakerId: me, text: short(beat, 18), balloon: i === 2 ? "shout" : "normal" }];
     }
 
+    const narrText = i === 0 ? short(beat, 24) : last ? "오늘은 여기까지." : undefined;
+    if (narrText) {
+      dialogue.unshift({
+        id: id("ln"),
+        speakerId: null,
+        text: narrText,
+        balloon: "narration_box",
+      });
+    }
+
     return {
       id: id("cut"),
       index: i + 1,
@@ -145,7 +155,6 @@ export function mockStoryboard(input: MockStoryboardInput): Storyboard {
       emotion: plan.emotion,
       camera: plan.camera,
       dialogue,
-      narration: i === 0 ? short(beat, 24) : last ? "오늘은 여기까지." : undefined,
     };
   });
 

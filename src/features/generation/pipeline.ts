@@ -206,7 +206,8 @@ export async function startGeneration(
   // 컷 장면은 그대로 프롬프트가 되므로 여기서도 필터를 건다.
   // 콘티 단계를 통과했어도 사용자가 장면을 직접 고쳤을 수 있다.
   for (const cut of storyboard.cuts) {
-    const verdict = screenText(`${cut.scene} ${cut.narration ?? ""}`);
+    const dialogueText = cut.dialogue.map((d) => d.text).join(" ");
+    const verdict = screenText(`${cut.scene} ${cut.narration ?? ""} ${dialogueText}`);
     if (!verdict.allowed) {
       return { ok: false, reason: "safety", message: verdict.message! };
     }

@@ -87,7 +87,24 @@ export function buildLayerTree(input: {
       height: 160,
     };
 
-    if (!line.speakerId || line.balloon === "none") {
+    if (line.balloon === "narration_box" || (!line.speakerId && line.balloon !== "none")) {
+      layers.push({
+        ...textLayer({
+          id: `ly_line_${line.id}`,
+          name: "나레이션 박스",
+          kind: "narration",
+          text: line.text,
+          box: { x: 60, y: top + i * 140, width: W - 120, height: 110 },
+          fontSize: 36,
+          align: "left",
+        }),
+        balloon: "narration_box",
+        overridesSeriesStyle: false,
+      });
+      return;
+    }
+
+    if (line.balloon === "none") {
       layers.push(textLayer({
         id: `ly_line_${line.id}`,
         name: `효과음 "${line.text.slice(0, 6)}"`,
@@ -124,7 +141,7 @@ export function buildLayerTree(input: {
   });
 
   let bottom = H - 60;
-  if (cut.narration) {
+  if (cut.narration && !cut.dialogue.some((d) => !d.speakerId || d.balloon === "narration_box")) {
     bottom -= 110;
     layers.push({
       ...textLayer({

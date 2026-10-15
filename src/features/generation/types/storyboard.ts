@@ -156,7 +156,7 @@ export interface Storyboard {
 }
 
 export function characterName(storyboard: Pick<Storyboard, "characters">, key: string | null): string {
-  if (!key) return "효과음";
+  if (!key) return "나레이션";
   if (key === "[object Object]" || key.includes("object Object")) return "나";
   const found = storyboard.characters.find((c) => c.key === key || c.name === key);
   if (found && !found.name.includes("object Object")) return found.name;

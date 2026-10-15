@@ -93,9 +93,34 @@ export interface StoryboardScreenProps {
   isNewDraft?: boolean;
 }
 
+function normalizeStoryboardNarration(sb: Storyboard | null): Storyboard | null {
+  if (!sb) return null;
+  let changed = false;
+  const cuts = sb.cuts.map((cut) => {
+    if (cut.narration && !cut.dialogue.some((d) => !d.speakerId || d.balloon === "narration_box")) {
+      changed = true;
+      return {
+        ...cut,
+        dialogue: [
+          {
+            id: `line_narr_${cut.id}`,
+            speakerId: null,
+            text: cut.narration,
+            balloon: "narration_box" as const,
+          },
+          ...cut.dialogue,
+        ],
+        narration: undefined,
+      };
+    }
+    return cut;
+  });
+  return changed ? { ...sb, cuts } : sb;
+}
+
 export function StoryboardScreen(props: StoryboardScreenProps) {
   const router = useRouter();
-  const [sb, setSb] = useState<Storyboard | null>(props.initial);
+  const [sb, setSb] = useState<Storyboard | null>(() => normalizeStoryboardNarration(props.initial));
   const [usedMock, setUsedMock] = useState(props.usedMock);
   const [story, setStory] = useState(props.initial?.story || props.story || "");
   const [cutCount, setCutCount] = useState<number>(
@@ -144,9 +169,10 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
       seriesId: selectedSeriesId ?? undefined,
     }).then((r) => {
       if (r.ok) {
-        setSb(r.data.storyboard);
+        const normalized = normalizeStoryboardNarration(r.data.storyboard)!;
+        setSb(normalized);
         setUsedMock(r.data.usedMock);
-        setSelectedId(r.data.storyboard.cuts[0]?.id ?? null);
+        setSelectedId(normalized.cuts[0]?.id ?? null);
         setIsPlanningExpanded(false);
       } else {
         setNotice(r.message);
@@ -227,10 +253,11 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         seriesId: selectedSeriesId ?? undefined,
       });
       if (res.ok) {
-        lastSaved.current = JSON.stringify(res.data.storyboard);
-        setSb(res.data.storyboard);
+        const normalized = normalizeStoryboardNarration(res.data.storyboard)!;
+        lastSaved.current = JSON.stringify(normalized);
+        setSb(normalized);
         setUsedMock(res.data.usedMock);
-        setSelectedId(res.data.storyboard.cuts[0]?.id ?? null);
+        setSelectedId(normalized.cuts[0]?.id ?? null);
         setIsPlanningExpanded(false);
       } else {
         if (res.kind === "credit") {
@@ -836,9 +863,15 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                         speakerId && !c.characterIds.includes(speakerId)
                           ? [...c.characterIds, speakerId]
                           : c.characterIds;
-                      const nextDialogue = c.dialogue.map((l) =>
-                        l.id === lineId ? { ...l, speakerId } : l,
-                      );
+                      const nextDialogue = c.dialogue.map((l) => {
+                        if (l.id !== lineId) return l;
+                        const nextBalloon: BalloonKind = !speakerId
+                          ? "narration_box"
+                          : l.balloon === "narration_box"
+                            ? "normal"
+                            : l.balloon;
+                        return { ...l, speakerId, balloon: nextBalloon };
+                      });
                       return {
                         ...c,
                         characterIds: nextCharIds,
@@ -853,9 +886,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                     dialogue: cut.dialogue.map((l) => (l.id === lineId ? { ...l, balloon } : l)),
                   })
                 }
-                onAddNarration={() => patchCut(cut.id, { narration: "" })}
-                onRemoveNarration={() => patchCut(cut.id, { narration: undefined })}
-                onChangeNarration={(narration) => patchCut(cut.id, { narration })}
                 // 후킹 인라인 통합 props (1컷 또는 커버 다음 첫 컷)
                 isHookCut={!cut.isCover && cut.index === hookCutIndex}
                 hookOptions={sb.hookOptions}
@@ -1417,7 +1447,8 @@ function SpeakerPicker({
   characters: StoryboardCharacter[];
   onSelectSpeaker: (speakerId: string | null) => void;
 }) {
-  const isMe = speakerId === "ch_me" || (!speakerId && characters[0]?.key === "ch_me");
+  const isMe = speakerId === "ch_me";
+  const isNarration = !speakerId;
   return (
     <div className="relative inline-flex items-center">
       <select
@@ -1426,12 +1457,14 @@ function SpeakerPicker({
         aria-label="화자 선택"
         className={cn(
           "h-8.5 pl-3 pr-7 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs appearance-none",
-          isMe
-            ? "bg-brand-tint border-brand/40 text-brand"
-            : "bg-surface-sunken/60 border-border text-ink hover:bg-surface-sunken"
+          isNarration
+            ? "bg-surface-sunken/80 border-border text-ink-muted hover:bg-surface-sunken hover:text-ink"
+            : isMe
+              ? "bg-brand-tint border-brand/40 text-brand"
+              : "bg-surface-sunken/60 border-border text-ink hover:bg-surface-sunken"
         )}
       >
-        <option value="">화자 없음</option>
+        <option value="">나레이션 (화자 없음)</option>
         {characters.map((ch) => (
           <option key={ch.key} value={ch.key}>
             {ch.name}
@@ -1464,9 +1497,6 @@ function CutCard({
   onChangeLine,
   onChangeLineSpeaker,
   onChangeLineBalloon,
-  onAddNarration,
-  onRemoveNarration,
-  onChangeNarration,
   hasCoverCut,
   // 후킹 인라인 통합 props
   isHookCut,
@@ -1503,9 +1533,6 @@ function CutCard({
   onChangeLine: (lineId: string, text: string) => void;
   onChangeLineSpeaker: (lineId: string, speakerId: string | null) => void;
   onChangeLineBalloon: (lineId: string, balloon: BalloonKind) => void;
-  onAddNarration: () => void;
-  onRemoveNarration: () => void;
-  onChangeNarration: (text: string) => void;
   hasCoverCut?: boolean;
   isHookCut?: boolean;
   hookOptions?: { id: string; text: string }[];
@@ -1646,15 +1673,15 @@ function CutCard({
           <div className="flex flex-col gap-1.5 rounded-xl bg-surface-sunken/25 p-2 border border-border/30">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-muted">
               <MessageSquare className="size-3 text-brand" />
-              <span>대사 {cut.dialogue.length}개</span>
+              <span>대사/나레이션 {cut.dialogue.length}개</span>
             </div>
             <ul className="flex flex-col gap-1">
               {cut.dialogue.slice(0, 2).map((line) => {
-                const speaker = nameOf(line.speakerId);
+                const speaker = !line.speakerId ? "나레이션" : nameOf(line.speakerId);
                 return (
                   <li key={line.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
                     <span className="font-bold text-ink shrink-0">{speaker}:</span>
-                    <span className="truncate text-ink-muted">&ldquo;{line.text || "(대사 없음)"}&rdquo;</span>
+                    <span className="truncate text-ink-muted">&ldquo;{line.text || "(내용 없음)"}&rdquo;</span>
                     <span className="text-[10px] text-ink-subtle rounded bg-surface-card px-1 py-0.5 border border-border/50 shrink-0">
                       {BALLOON_LABEL[line.balloon]}
                     </span>
@@ -1663,7 +1690,7 @@ function CutCard({
               })}
               {cut.dialogue.length > 2 && (
                 <li className="text-[10px] text-ink-subtle pl-1 font-medium">
-                  외 {cut.dialogue.length - 2}개 대사 더 보기...
+                  외 {cut.dialogue.length - 2}개 더 보기...
                 </li>
               )}
             </ul>
@@ -1673,12 +1700,7 @@ function CutCard({
         {/* 하단 푸터 바 */}
         <div className="flex items-center justify-between border-t border-border/50 pt-2 text-caption">
           <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
-            {cut.narration && (
-              <span className="inline-flex items-center gap-1 text-ink-muted bg-surface-sunken/80 border border-border/60 px-1.5 py-0.5 rounded font-medium">
-                <Scroll className="size-2.5 text-ink-subtle" /> 나레이션 포함
-              </span>
-            )}
-            <span>{cut.dialogue.length > 0 ? `대사 ${cut.dialogue.length}개` : "대사 없음"}</span>
+            <span>{cut.dialogue.length > 0 ? `대사/나레이션 ${cut.dialogue.length}개` : "대사 없음"}</span>
           </div>
           <span className="inline-flex items-center gap-1 text-xs font-bold text-brand group-hover:underline">
             편집하기 <ChevronDown className="size-3.5" />
@@ -1992,13 +2014,13 @@ function CutCard({
         />
       </div>
 
-      {/* 4. 대사 및 말풍선 관리 */}
+      {/* 4. 대사 및 말풍선/나레이션 관리 */}
       <div className="flex flex-col gap-2.5 pt-1" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <MessageSquare className="size-4 text-brand" />
             <span className="text-body-sm font-bold text-ink">
-              대사 & 말풍선
+              대사 & 나레이션
             </span>
             <span className="grid size-5 place-items-center rounded-full bg-brand-tint text-[10px] font-extrabold text-brand">
               {cut.dialogue.length}
@@ -2010,23 +2032,14 @@ function CutCard({
               onClick={onAddLine}
               className="inline-flex items-center gap-1 rounded-lg bg-brand-tint border border-brand/30 px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-on-brand transition-all cursor-pointer shadow-2xs"
             >
-              <Plus className="size-3.5" /> 대사 추가
+              <Plus className="size-3.5" /> 대사/나레이션 추가
             </button>
-            {cut.narration == null && (
-              <button
-                type="button"
-                onClick={onAddNarration}
-                className="inline-flex items-center gap-1 rounded-lg border border-border-control/80 bg-surface-sunken/50 px-2.5 py-1 text-xs font-bold text-ink hover:bg-surface-sunken hover:border-brand/40 transition-all cursor-pointer shadow-2xs"
-              >
-                <Scroll className="size-3.5 text-ink-muted" /> + 나레이션 추가
-              </button>
-            )}
           </div>
         </div>
 
         {cut.dialogue.length === 0 ? (
           <div className="flex items-center justify-center rounded-xl border border-dashed border-border/80 bg-surface-sunken/30 py-3 text-caption text-ink-muted">
-            대사가 없는 무음 컷입니다. (상황이나 감정 위주의 컷)
+            대사 또는 나레이션이 없는 무음 컷입니다. (상황이나 감정 위주의 컷)
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -2036,7 +2049,7 @@ function CutCard({
                 className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-border/80 bg-surface-card p-2.5 shadow-2xs hover:border-brand/40 transition-all"
               >
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* 인물 화자 선택 */}
+                  {/* 인물 화자 선택 (화자 없음 = 나레이션) */}
                   <SpeakerPicker
                     speakerId={line.speakerId}
                     characters={characters}
@@ -2061,21 +2074,21 @@ function CutCard({
                   </div>
                 </div>
 
-                {/* 대사 텍스트 입력 */}
+                {/* 대사/나레이션 텍스트 입력 */}
                 <input
                   value={line.text}
                   onChange={(e) => onChangeLine(line.id, e.target.value)}
-                  placeholder="대사를 입력하세요"
-                  aria-label={`${cut.index}컷 대사`}
+                  placeholder={!line.speakerId ? "나레이션 문구를 입력하세요" : "대사를 입력하세요"}
+                  aria-label={!line.speakerId ? `${cut.index}컷 나레이션` : `${cut.index}컷 대사`}
                   className="h-8.5 min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
                 />
 
-                {/* 대사 삭제 버튼 */}
+                {/* 삭제 버튼 */}
                 <button
                   type="button"
                   onClick={() => onRemoveLine(line.id)}
-                  title="대사 삭제"
-                  aria-label="대사 삭제"
+                  title={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
+                  aria-label={!line.speakerId ? "나레이션 삭제" : "대사 삭제"}
                   className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
                 >
                   <Trash2 className="size-4" />
@@ -2083,32 +2096,6 @@ function CutCard({
               </li>
             ))}
           </ul>
-        )}
-
-        {/* 5. 나레이션 박스 관리 (대사 박스와 톤 일원화) */}
-        {cut.narration != null && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-border/80 bg-surface-card p-2.5 shadow-2xs hover:border-brand/40 transition-all">
-            <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-surface-sunken/60 text-ink font-bold text-caption border border-border/60">
-              <Scroll className="size-4 text-ink-muted" />
-              <span>나레이션</span>
-            </div>
-            <input
-              value={cut.narration}
-              onChange={(e) => onChangeNarration(e.target.value)}
-              placeholder="나레이션 문구를 입력하세요 (예: 그날은 유독 퇴근길이 길었다...)"
-              aria-label={`${cut.index}컷 나레이션`}
-              className="h-8.5 min-w-0 flex-1 rounded-lg border border-border-control/60 bg-surface-sunken/20 px-3 text-body-sm text-ink placeholder:text-ink-subtle focus:bg-surface-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-2xs transition-all"
-            />
-            <button
-              type="button"
-              onClick={onRemoveNarration}
-              title="나레이션 삭제"
-              aria-label="나레이션 삭제"
-              className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer"
-            >
-              <Trash2 className="size-4" />
-            </button>
-          </div>
         )}
       </div>
     </article>

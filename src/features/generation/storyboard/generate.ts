@@ -148,7 +148,16 @@ function normalizeSpeakerId(
   registerUnknown = true,
 ): string | null {
   const extracted = extractSpeakerId(rawSpeaker);
-  if (!extracted) return null;
+  if (
+    !extracted ||
+    extracted === "나레이션" ||
+    extracted === "화자없음" ||
+    extracted === "화자 없음" ||
+    extracted.toLowerCase() === "narration" ||
+    extracted.toLowerCase() === "none"
+  ) {
+    return null;
+  }
 
   // 1. 이미 존재하는 key 와 일치하는 경우
   const matchByKey = characters.find((c) => c.key === extracted);
@@ -355,6 +364,19 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
     }
   }
 
+  // 8-5. 유효한 나레이션을 dialogue 내의 화자 없는 나레이션 라인으로 통합
+  for (const c of refined) {
+    if (c.narration && !c.dialogue.some((d) => !d.speakerId || d.balloon === "narration_box")) {
+      c.dialogue.unshift({
+        id: `ln_narr_${crypto.randomUUID().slice(0, 8)}`,
+        speakerId: null,
+        text: c.narration,
+        balloon: "narration_box",
+      });
+      c.narration = undefined;
+    }
+  }
+
   return refined;
 }
 
@@ -439,12 +461,15 @@ function toStoryboard(
         .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c)))),
       emotion: cut.emotion || "calm",
       camera: cut.camera || "medium",
-      dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => ({
-        id: seq("ln"),
-        speakerId: normalizeSpeakerId(line.speaker ?? line.speakerId, characters),
-        text: line.text || "",
-        balloon: line.balloon || "normal",
-      })),
+      dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => {
+        const spId = normalizeSpeakerId(line.speaker ?? line.speakerId, characters);
+        return {
+          id: seq("ln"),
+          speakerId: spId,
+          text: line.text || "",
+          balloon: (!spId && (!line.balloon || line.balloon === "normal")) ? "narration_box" : (line.balloon || "normal"),
+        };
+      }),
       narration:
         typeof cut.narration === "string" &&
         cut.narration.trim().length > 0 &&
