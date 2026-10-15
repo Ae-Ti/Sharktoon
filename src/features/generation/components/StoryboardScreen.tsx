@@ -852,18 +852,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   : "콘티 생성은 크레딧을 소모하지 않습니다."}
               </span>
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                {sb && sb.cuts.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="md"
-                    onClick={() => setStep("cuts")}
-                    className="font-bold gap-1 shadow-xs"
-                  >
-                    <span>컷 콘티로 넘어가기 ({sb.cuts.length}컷)</span>
-                    <ChevronRight className="size-4" />
-                  </Button>
-                )}
                 <Button
                   size="md"
                   loading={pending}
@@ -1071,68 +1059,56 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         )}
       </main>
 
-      {/* 모바일 하단 플로팅 바 */}
-      {sb && sb.cuts.length > 0 && (
+      {/* 모바일 하단 플로팅 바 (2단계 컷 콘티 편집 시) */}
+      {step === "cuts" && sb && sb.cuts.length > 0 && (
         <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md lg:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
-          {step === "story" ? (
+          <div className="flex items-center gap-2">
+            <div
+              role="radiogroup"
+              aria-label="생성 품질"
+              className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "standard"}
+                onClick={() => setTier("standard")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  tier === "standard"
+                    ? "bg-surface-card text-ink shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                ⚡ 일반
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={tier === "pro"}
+                onClick={() => setTier("pro")}
+                className={cn(
+                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  tier === "pro"
+                    ? "bg-brand text-on-brand shadow-2xs font-bold"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                💎 Pro
+              </button>
+            </div>
             <Button
               size="md"
               block
-              onClick={() => setStep("cuts")}
-              className="font-bold shadow-xs gap-1"
+              cost={cost}
+              disabled={!ready}
+              loading={pending}
+              onClick={startGeneration}
+              className="flex-1 font-bold shadow-xs"
             >
-              <span>컷 콘티로 넘어가기 ({sb.cuts.length}컷)</span>
-              <ChevronRight className="size-4" />
+              {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
             </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div
-                role="radiogroup"
-                aria-label="생성 품질"
-                className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={tier === "standard"}
-                  onClick={() => setTier("standard")}
-                  className={cn(
-                    "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                    tier === "standard"
-                      ? "bg-surface-card text-ink shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                >
-                  ⚡ 일반
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={tier === "pro"}
-                  onClick={() => setTier("pro")}
-                  className={cn(
-                    "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
-                    tier === "pro"
-                      ? "bg-brand text-on-brand shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                >
-                  💎 Pro
-                </button>
-              </div>
-              <Button
-                size="md"
-                block
-                cost={cost}
-                disabled={!ready}
-                loading={pending}
-                onClick={startGeneration}
-                className="flex-1 font-bold shadow-xs"
-              >
-                {tier === "pro" ? "💎 Pro 생성" : "⚡ 일반 생성"}
-              </Button>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
