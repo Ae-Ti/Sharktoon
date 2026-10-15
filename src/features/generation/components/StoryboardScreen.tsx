@@ -544,18 +544,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 2
               </span>
               <span>컷 콘티 편집</span>
-              {sb && sb.cuts.length > 0 && (
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold",
-                    step === "cuts"
-                      ? "bg-white/20 text-white"
-                      : "bg-brand-tint text-brand border border-brand/30",
-                  )}
-                >
-                  {sb.cuts.length}컷
-                </span>
-              )}
             </button>
           </nav>
 
