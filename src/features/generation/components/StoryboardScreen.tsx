@@ -185,18 +185,19 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
     });
   }, [sb, props.episodeId, story, cutCount, selectedSeriesId]);
 
-  // 편집 자동 저장
-  const [saveNote, setSaveNote] = useState<string | null>(null);
+  // 편집 자동 저장 (백그라운드 사일런트 저장)
   const lastSaved = useRef(JSON.stringify(props.initial));
   useEffect(() => {
     if (!sb) return;
     const body = JSON.stringify(sb);
     if (body === lastSaved.current) return;
     const timer = setTimeout(async () => {
-      setSaveNote("저장 중...");
       const r = await saveStoryboardAction(sb);
-      if (r.ok) lastSaved.current = body;
-      setSaveNote(r.ok ? "저장됨" : r.message);
+      if (r.ok) {
+        lastSaved.current = body;
+      } else {
+        setNotice(r.message);
+      }
     }, AUTOSAVE_MS);
     return () => clearTimeout(timer);
   }, [sb]);
@@ -605,11 +606,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
       </div>
 
       <main className="mx-auto max-w-[880px] p-4 pb-28 lg:pb-16 flex flex-col gap-5">
-        {saveNote && (
-          <p aria-live="polite" className="text-right text-caption text-ink-subtle">
-            {saveNote}
-          </p>
-        )}
         {notice && (
           <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
             {notice}
