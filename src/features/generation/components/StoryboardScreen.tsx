@@ -2042,7 +2042,7 @@ function CutCard({
           placeholder="인물의 행동, 포즈, 표정, 소품과의 상호작용 등을 묘사해주세요 (예: 카페 창가에서 심각한 표정으로 커피잔을 쥐고 스마트폰을 응시하는 주인공)"
           rows={3}
           aria-label={`${cut.index}컷 장면 묘사`}
-          className="w-full resize-y rounded-lg border border-border-control/60 bg-surface-card p-3 text-body-sm text-ink leading-relaxed placeholder:text-ink-subtle focus-visible:outline-none focus:border-brand shadow-2xs"
+          className="w-full resize-none rounded-lg border border-border-control/60 bg-surface-card p-3 text-body-sm text-ink leading-relaxed placeholder:text-ink-subtle focus-visible:outline-none focus:border-brand shadow-2xs"
         />
       </div>
 

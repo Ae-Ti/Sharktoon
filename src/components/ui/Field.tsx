@@ -44,6 +44,7 @@ export function Field({
     "w-full min-h-control-md rounded-md border bg-surface-card p-3",
     "text-body text-ink placeholder:text-ink-subtle",
     "focus:outline-2 focus:-outline-offset-1 focus:outline-brand",
+    multiline && "resize-none",
     invalid ? "border-danger" : "border-border-control focus:border-brand",
   );
 
