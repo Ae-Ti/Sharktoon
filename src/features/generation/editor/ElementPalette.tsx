@@ -130,10 +130,12 @@ export const ELEMENT_TEMPLATES: ElementTemplateItem[] = [
 export function buildLayerFromPreset(
   tree: CutLayerTree,
   presetId: ElementPresetId,
+  customText?: string,
 ): VectorTextLayer {
   const W = tree.canvas.width;
   const H = tree.canvas.height;
   const uid = crypto.randomUUID().slice(0, 8);
+  const textVal = customText?.trim();
 
   switch (presetId) {
     case "balloon_normal": {
@@ -149,7 +151,7 @@ export function buildLayerFromPreset(
           width,
           height,
         },
-        text: "대사를 적어요",
+        text: textVal || "대사를 적어요",
         balloon: "normal",
         tail: { x: Math.round(W / 2), y: Math.round((H + height) / 2 + 80) },
         style: {
@@ -174,7 +176,7 @@ export function buildLayerFromPreset(
           width,
           height,
         },
-        text: "속마음 생각...",
+        text: textVal || "속마음 생각...",
         balloon: "thought",
         tail: { x: Math.round(W / 2 - 40), y: Math.round(H * 0.35 + height + 70) },
         style: {
@@ -199,7 +201,7 @@ export function buildLayerFromPreset(
           width,
           height,
         },
-        text: "앗 깜짝이야!",
+        text: textVal || "앗 깜짝이야!",
         balloon: "shout",
         tail: { x: Math.round(W / 2 + 50), y: Math.round((H + height) / 2 + 90) },
         style: {
@@ -220,7 +222,7 @@ export function buildLayerFromPreset(
         name: "상단 나레이션",
         kind: "narration",
         box: { x: 60, y: 60, width, height },
-        text: "어느 날 오후...",
+        text: textVal || "어느 날 오후...",
         balloon: "narration_box",
         style: {
           fontFamily: "Gowun Dodum",
@@ -239,7 +241,7 @@ export function buildLayerFromPreset(
         name: "하단 나레이션",
         kind: "narration",
         box: { x: 60, y: H - height - 70, width, height },
-        text: "상황을 설명하는 나레이션",
+        text: textVal || "상황을 설명하는 나레이션",
         balloon: "narration_box",
         style: {
           fontFamily: "Gowun Dodum",
@@ -263,7 +265,7 @@ export function buildLayerFromPreset(
           width,
           height,
         },
-        text: "쿵!!",
+        text: textVal || "쿵!!",
         balloon: "none",
         style: {
           fontFamily: "Do Hyeon",
@@ -283,7 +285,7 @@ export function buildLayerFromPreset(
         name: "제목 · 후킹",
         kind: "text",
         box: { x: 60, y: 70, width, height },
-        text: "첫 컷 제목 문구",
+        text: textVal || "첫 컷 제목 문구",
         balloon: "none",
         style: {
           fontFamily: "Gowun Dodum",
@@ -309,7 +311,7 @@ export function buildLayerFromPreset(
           width,
           height,
         },
-        text: "여기에 글",
+        text: textVal || "여기에 글",
         balloon: "none",
         style: {
           fontFamily: "Gowun Dodum",

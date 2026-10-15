@@ -42,8 +42,10 @@ import {
   AlertTriangle,
   Loader2,
   CheckCircle2,
+  Plus,
 } from "lucide-react";
 import { EpisodeHeader } from "./EpisodeHeader";
+import { AddLayerModal } from "./AddLayerModal";
 import { useJobPolling } from "./useJobPolling";
 import { regenerateCutAction, retryFailedCutsAction } from "../actions";
 import type { GenerationJob, CutEditIntent } from "@/contracts/generation";
@@ -119,6 +121,7 @@ export function CutEditorScreen({
   const [renderingViewer, setRenderingViewer] = useState(false);
   const [viewerCuts, setViewerCuts] = useState<{ cutId: string; imageUrl?: string; index: number }[]>([]);
   const [mobileTab, setMobileTab] = useState<"layers" | "inspector">("layers");
+  const [addLayerModalOpen, setAddLayerModalOpen] = useState(false);
 
   // 실시간 잡 상태가 반영된 컷 목록
   const liveCuts = useMemo(() => {
@@ -237,8 +240,8 @@ export function CutEditorScreen({
   const rows = [...tree.layers].reverse();
 
   const handleAddPreset = useCallback(
-    (presetId: ElementPresetId) => {
-      const layer = buildLayerFromPreset(tree, presetId);
+    (presetId: ElementPresetId, customText?: string) => {
+      const layer = buildLayerFromPreset(tree, presetId, customText);
       editor.add(layer);
       editor.setSelectedId(layer.id);
       setMobileTab("inspector");
@@ -337,7 +340,6 @@ export function CutEditorScreen({
         canRedo={editor.canRedo}
         onUndo={editor.undo}
         onRedo={editor.redo}
-        onAddPreset={handleAddPreset}
         saveLabel={SAVE_LABEL[editor.saveState]}
         saveError={editor.saveState === "error"}
       />
@@ -415,7 +417,18 @@ export function CutEditorScreen({
           <div className={cn("flex flex-col gap-3", mobileTab === "layers" ? "block" : "hidden lg:block")}>
             <Panel
               title={`레이어 (${rows.length})`}
-              caption="위에 있는 것이 앞에 그려져요. 추가는 상단 툴바에서 해요."
+              caption="위 순서대로 캔버스에 겹쳐져 그려져요."
+              action={
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setAddLayerModalOpen(true)}
+                  className="gap-1.5 px-3 text-xs font-bold shadow-2xs shrink-0"
+                >
+                  <Plus className="size-3.5 stroke-[2.5]" />
+                  <span>레이어 추가</span>
+                </Button>
+              }
             >
               <div role="listbox" aria-label="레이어" className="flex flex-col">
                 {rows.map((layer, rowIndex) => {
@@ -592,6 +605,13 @@ export function CutEditorScreen({
               }))
         }
       />
+
+      {/* 모달로 옵션을 선택하여 새 레이어 생성 */}
+      <AddLayerModal
+        open={addLayerModalOpen}
+        onClose={() => setAddLayerModalOpen(false)}
+        onAdd={handleAddPreset}
+      />
     </div>
   );
 }
@@ -601,7 +621,6 @@ function Toolbar({
   canRedo,
   onUndo,
   onRedo,
-  onAddPreset,
   saveLabel,
   saveError,
 }: {
@@ -609,90 +628,33 @@ function Toolbar({
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onAddPreset: (presetId: ElementPresetId) => void;
   saveLabel: string;
   saveError: boolean;
 }) {
   return (
-    <div className="flex h-13 items-center gap-2 border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md overflow-x-auto overflow-y-hidden scrollbar-none">
-      <div className="flex items-center gap-1 shrink-0">
+    <div className="flex h-13 items-center justify-between border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md">
+      <div className="flex items-center gap-1.5 shrink-0">
         <ToolButton label="실행 취소 (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 className="size-4.5" />
         </ToolButton>
         <ToolButton label="다시 실행 (Ctrl+Shift+Z)" onClick={onRedo} disabled={!canRedo}>
           <Redo2 className="size-4.5" />
         </ToolButton>
+        <span className="mx-2 h-5 w-px bg-border/60 shrink-0" />
+        <span className="hidden sm:inline text-xs text-ink-muted">
+          캔버스에서 말풍선·텍스트를 클릭하여 직접 이동하고 편집할 수 있어요
+        </span>
       </div>
 
-      <span className="mx-2 h-5 w-px bg-border/60 shrink-0" />
-
-      {/* 레이어 추가는 이 툴바 한 곳에서만 한다. 우측 패널은 레이어 순서·속성 전용. */}
-      <div
-        role="group"
-        aria-label="레이어 추가"
-        className="scrollbar-none flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-1 min-w-0 flex-1"
-      >
-        {ADD_LAYER_ACTIONS.map((a) => (
-          <ActionButton
-            key={a.id}
-            icon={a.icon}
-            label={a.label}
-            title={a.title}
-            onClick={() => onAddPreset(a.id)}
-          />
-        ))}
-      </div>
-
-      <span className="ml-auto flex shrink-0 items-center gap-3">
-        {/* 자동 저장은 3초 디바운스다(PRD 성능). 저장 버튼을 따로 두지 않는다. */}
+      <div className="flex shrink-0 items-center gap-3">
         <span
           aria-live="polite"
           className={cn("text-caption font-medium", saveError ? "text-danger" : "text-ink-subtle")}
         >
           {saveLabel}
         </span>
-      </span>
+      </div>
     </div>
-  );
-}
-
-const ADD_LAYER_ACTIONS: {
-  id: ElementPresetId;
-  label: string;
-  title: string;
-  icon: React.ReactNode;
-}[] = [
-  { id: "balloon_normal", label: "말풍선", title: "대사 말풍선", icon: <MessageSquare className="size-3.5 text-brand" /> },
-  { id: "balloon_thought", label: "생각", title: "생각 / 속마음 말풍선", icon: <Cloud className="size-3.5 text-sky-500" /> },
-  { id: "balloon_shout", label: "외침", title: "외침 / 샤우트 말풍선", icon: <Flame className="size-3.5 text-rose-500" /> },
-  { id: "narration_top", label: "상단 나레이션", title: "컷 상단 나레이션 박스", icon: <Scroll className="size-3.5 text-amber-600" /> },
-  { id: "narration_bottom", label: "하단 나레이션", title: "컷 하단 나레이션 박스", icon: <PanelBottom className="size-3.5 text-amber-600" /> },
-  { id: "sfx", label: "효과음", title: "효과음 (SFX)", icon: <Zap className="size-3.5 text-yellow-500" /> },
-  { id: "title_hook", label: "제목", title: "제목 · 후킹 문구", icon: <Heading className="size-3.5 text-brand" /> },
-  { id: "text", label: "텍스트", title: "자유 텍스트", icon: <Type className="size-3.5 text-violet-500" /> },
-];
-
-function ActionButton({
-  icon,
-  label,
-  title,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  title?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border/80 bg-surface-card px-2.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:border-brand hover:bg-brand-tint hover:text-brand active:scale-95"
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="whitespace-nowrap">{label}</span>
-    </button>
   );
 }
 
@@ -1145,17 +1107,22 @@ function LayerInspector({
 function Panel({
   title,
   caption,
+  action,
   children,
 }: {
   title: string;
   caption?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface-card p-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="truncate text-label font-semibold text-ink">{title}</h2>
-        {caption && <p className="text-caption text-ink-muted">{caption}</p>}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <h2 className="truncate text-label font-semibold text-ink">{title}</h2>
+          {caption && <p className="text-caption text-ink-muted">{caption}</p>}
+        </div>
+        {action}
       </div>
       {children}
     </section>
