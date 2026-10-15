@@ -41,11 +41,16 @@ export async function extractEntitiesFromStory(story: string): Promise<Extracted
       user: `사연:\n${story}`,
     });
 
-    if (res.ok && res.data.entities.length > 0) {
-      return res.data.entities;
+    if (res.ok && res.data) {
+      const rawEntities = Array.isArray(res.data)
+        ? res.data
+        : (Array.isArray((res.data as any).entities) ? (res.data as any).entities : []);
+      if (rawEntities.length > 0) {
+        return rawEntities as ExtractedEntity[];
+      }
     }
   } catch (e) {
-    console.error("[extractEntitiesFromStory] LLM extraction error:", e);
+    console.warn("[extractEntitiesFromStory] LLM extraction error:", e);
   }
 
   // 폴백: 휴리스틱 분석으로 안전하게 생성

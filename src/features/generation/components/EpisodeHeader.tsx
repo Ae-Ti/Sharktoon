@@ -10,7 +10,7 @@ export type GenerationStep = "storyboard" | "generate" | "editor" | "publish";
 
 const STEPS: Array<{ key: GenerationStep; label: string; path: string }> = [
   { key: "storyboard", label: "콘티", path: "storyboard" },
-  { key: "editor", label: "제작·편집", path: "editor" },
+  { key: "editor", label: "편집", path: "editor" },
   { key: "publish", label: "게시", path: "publish" },
 ];
 
@@ -27,7 +27,7 @@ export interface EpisodeHeaderProps {
 }
 
 /**
- * 콘티 → 제작·편집 → 게시를 한 회차 안의 이동으로 보이게 하는 헤더.
+ * 콘티 → 편집 → 게시를 한 회차 안의 이동으로 보이게 하는 헤더.
  * 모바일에서는 2열 구조(상단: 제목/크레딧, 하단: 3단계 세그먼트 탭)로 자동 전환되어 잘림을 방지한다.
  */
 export function EpisodeHeader({
@@ -44,9 +44,9 @@ export function EpisodeHeader({
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-card/95 backdrop-blur-md">
-      {/* 1. 상단 메인 바 (모바일 & 데스크톱 공통) */}
-      <div className="flex min-h-13 items-center justify-between gap-3 px-3.5 py-2 md:px-6">
-        <div className="flex min-w-0 items-center gap-1.5 md:gap-2">
+      {/* 1. 상단 메인 바 (모바일 & 데스크톱 공통) - 탭을 좌측 타이틀 바로 옆으로 정렬 */}
+      <div className="flex min-h-13 items-center gap-3 px-3.5 py-2 md:px-6">
+        <div className="flex min-w-0 items-center gap-1.5 md:gap-2 shrink-0">
           <Link
             href="/home"
             title="홈으로"
@@ -74,8 +74,8 @@ export function EpisodeHeader({
           </span>
         </div>
 
-        {/* 데스크톱 전용 인라인 스텝 내비게이션 (md 이상) */}
-        <nav aria-label="제작 단계 (데스크톱)" className="hidden md:flex items-center gap-1 ml-4">
+        {/* 데스크톱 전용 인라인 스텝 내비게이션 (md 이상) - 왼쪽 타이틀 옆에 붙임 */}
+        <nav aria-label="제작 단계 (데스크톱)" className="hidden md:flex items-center gap-1 ml-2">
           {STEPS.map((step) => {
             const active = isCurrentStep(step.key);
             return (
@@ -96,8 +96,8 @@ export function EpisodeHeader({
           })}
         </nav>
 
-        {/* 우측 영역: 크레딧 + 데스크톱 주 동작 */}
-        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        {/* 우측 영역: 크레딧 + 데스크톱 주 동작 (ml-auto로 우측 끝에 배치) */}
+        <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
           <CreditPill balance={credits} />
           {action && (
             <div className={cn("items-center gap-2", hideActionOnMobile ? "hidden lg:flex" : "hidden md:flex")}>
