@@ -37,23 +37,36 @@ export async function parseStructured<S extends z.ZodType>(input: {
   /** 요청마다 바뀌는 부분. */
   user: string;
 }): Promise<StructuredResult<z.infer<S>>> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    const res = await parseStructuredAnthropic(input);
-    if (res.ok || res.reason === "refusal") return res;
-  }
-
+  // 1순위: Google Gemini (gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.5-flash)
   const googleKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
   if (googleKey) {
-    const res = await parseStructuredGemini(input, googleKey);
-    if (res.ok || res.reason === "refusal") return res;
+    try {
+      const res = await parseStructuredGemini(input, googleKey);
+      if (res.ok || res.reason === "refusal") return res;
+      console.warn("[parseStructured] 1순위 Gemini 실패, 2순위 OpenAI 듀얼 폴백 진행:", res.message);
+    } catch (e) {
+      console.warn("[parseStructured] 1순위 Gemini 예외, 2순위 OpenAI 폴백 진행:", e);
+    }
   }
 
+  // 2순위: OpenAI (gpt-4o-mini) 듀얼 폴백
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey) {
-    return parseStructuredOpenAI(input, openaiKey);
+    try {
+      const res = await parseStructuredOpenAI(input, openaiKey);
+      if (res.ok || res.reason === "refusal") return res;
+      console.warn("[parseStructured] 2순위 OpenAI 호출 실패:", res.message);
+    } catch (e) {
+      console.warn("[parseStructured] 2순위 OpenAI 예외 발생:", e);
+    }
   }
 
-  return { ok: false, reason: "error", message: "사용 가능한 LLM API 키가 없습니다." };
+  // 3순위 (보조): Anthropic Claude (키가 있는 경우)
+  if (process.env.ANTHROPIC_API_KEY) {
+    return parseStructuredAnthropic(input);
+  }
+
+  return { ok: false, reason: "error", message: "사용 가능한 LLM API 키(Gemini / OpenAI)가 없거나 모두 실패했습니다." };
 }
 
 async function parseStructuredAnthropic<S extends z.ZodType>(input: {
