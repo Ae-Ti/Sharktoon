@@ -436,60 +436,6 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         episodeTitle={props.episodeTitle}
         current="storyboard"
         credits={props.credits}
-        hideActionOnMobile
-        action={
-          sb && sb.cuts.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <div
-                role="radiogroup"
-                aria-label="생성 품질"
-                className="flex items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={tier === "standard"}
-                  onClick={() => setTier("standard")}
-                  className={cn(
-                    "cursor-pointer rounded-md px-2.5 py-1 transition-all",
-                    tier === "standard"
-                      ? "bg-surface-card text-ink shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                  title="⚡ 일반 모드: 빠른 생성 (컷당 1 크레딧)"
-                >
-                  ⚡ 일반 (1C)
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={tier === "pro"}
-                  onClick={() => setTier("pro")}
-                  className={cn(
-                    "cursor-pointer rounded-md px-2.5 py-1 transition-all",
-                    tier === "pro"
-                      ? "bg-brand text-on-brand shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                  title="💎 Pro 모드: 고화질 및 캐릭터 디테일 유지 (컷당 2 크레딧)"
-                >
-                  💎 Pro (2C)
-                </button>
-              </div>
-
-              <Button
-                size="sm"
-                cost={cost}
-                disabled={!ready}
-                title={ready ? undefined : "모든 컷의 장면 묘사를 먼저 입력하세요"}
-                loading={pending}
-                onClick={startGeneration}
-              >
-                {tier === "pro" ? "💎 Pro 이미지 생성" : "⚡ 일반 이미지 생성"}
-              </Button>
-            </div>
-          ) : undefined
-        }
       />
 
       <main className="mx-auto max-w-[880px] p-4 pb-28 lg:pb-16 flex flex-col gap-5">
