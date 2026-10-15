@@ -635,12 +635,13 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
 
               {/* 이미지 생성 버튼 */}
               <Button
+                variant="cta"
                 size="sm"
                 cost={cost}
                 disabled={!ready}
                 loading={pending}
                 onClick={startGeneration}
-                className="font-bold shadow-xs px-3"
+                className="font-bold shadow-md shadow-cyan-600/20 px-3.5 hover:shadow-cyan-500/35 transition-all"
               >
                 {tier === "pro" ? "Pro 이미지 생성" : "일반 이미지 생성"}
               </Button>
@@ -649,7 +650,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         </div>
       </div>
 
-      <main className="mx-auto max-w-[880px] p-4 pb-28 lg:pb-16 flex flex-col gap-5">
+      <main className="mx-auto max-w-[880px] p-4 pb-36 lg:pb-16 flex flex-col gap-5">
         {notice && (
           <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">
             {notice}
@@ -1050,12 +1051,15 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
 
       {/* 모바일 하단 플로팅 바 (2단계 컷 콘티 편집 시 모바일 전용 노출) */}
       {step === "cuts" && sb && sb.cuts.length > 0 && (
-        <div className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 p-3 backdrop-blur-md sm:hidden shadow-lg pb-[env(safe-area-inset-bottom,14px)]">
-          <div className="flex items-center gap-2">
+        <div
+          className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 pt-3 px-3.5 shadow-2xl backdrop-blur-md sm:hidden"
+          style={{ paddingBottom: "max(calc(env(safe-area-inset-bottom, 0px) + 16px), 24px)" }}
+        >
+          <div className="flex items-center gap-2.5">
             <div
               role="radiogroup"
               aria-label="생성 품질"
-              className="flex shrink-0 items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+              className="flex shrink-0 items-center rounded-xl border border-border/80 bg-surface-sunken/80 p-0.5 text-xs font-semibold shadow-2xs"
             >
               <button
                 type="button"
@@ -1063,7 +1067,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 aria-checked={tier === "standard"}
                 onClick={() => setTier("standard")}
                 className={cn(
-                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  "cursor-pointer rounded-lg px-2.5 py-2 transition-all text-xs",
                   tier === "standard"
                     ? "bg-surface-card text-ink shadow-2xs font-bold"
                     : "text-ink-muted hover:text-ink",
@@ -1077,7 +1081,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 aria-checked={tier === "pro"}
                 onClick={() => setTier("pro")}
                 className={cn(
-                  "cursor-pointer rounded-md px-2 py-1.5 transition-all text-xs",
+                  "cursor-pointer rounded-lg px-2.5 py-2 transition-all text-xs",
                   tier === "pro"
                     ? "bg-brand text-on-brand shadow-2xs font-bold"
                     : "text-ink-muted hover:text-ink",
@@ -1087,13 +1091,14 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               </button>
             </div>
             <Button
+              variant="cta"
               size="md"
               block
               cost={cost}
               disabled={!ready}
               loading={pending}
               onClick={startGeneration}
-              className="flex-1 font-bold shadow-xs"
+              className="flex-1 font-extrabold shadow-md shadow-cyan-600/25 py-2.5 text-sm tracking-tight"
             >
               {tier === "pro" ? "Pro 생성" : "일반 생성"}
             </Button>
