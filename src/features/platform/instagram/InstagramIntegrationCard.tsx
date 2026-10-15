@@ -215,3 +215,6 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
     </>
   );
 }
+
+export default InstagramIntegrationCard;
+
