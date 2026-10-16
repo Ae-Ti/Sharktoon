@@ -16,7 +16,6 @@ export interface PlanFeatureCategory {
 export interface PlanCardDetail {
   id: "free" | "pro" | "max";
   name: string;
-  nameKo: string;
   tagline: string;
   badge?: string;
   badgeTone?: "brand" | "neutral" | "warning";

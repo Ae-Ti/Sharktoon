@@ -24,6 +24,7 @@ import { logoutAction } from "@/features/platform/auth/actions";
 import { SnsAnalyticsDashboard } from "../analytics/components/SnsAnalyticsDashboard";
 import { MediaKitSection } from "../analytics/components/MediaKitSection";
 import { SnsConnectionSection } from "./SnsConnectionSection";
+import { SnsComingSoon, SnsDemoBadge } from "../analytics/components/SnsComingSoon";
 import { PricingPlanSection } from "../pricing/PricingPlanSection";
 import { CreditPurchaseModal } from "../pricing/CreditPurchaseModal";
 import { INITIAL_MOCK_SNS_DATA } from "../analytics/mockData";
@@ -40,7 +41,7 @@ import type {
   UserActivityItem,
 } from "@/features/platform/data/types";
 
-const PLAN_LABEL: Record<PlanTier, string> = { free: "무료", basic: "베이직", pro: "프로", max: "맥스" };
+const PLAN_LABEL: Record<PlanTier, string> = { free: "Free Plan", basic: "Basic Plan", pro: "Pro Plan", max: "Max Plan" };
 const REFUND_LABEL: Record<RefundRequest["status"], string> = {
   requested: "처리 중",
   approved: "환불 승인",
@@ -51,10 +52,10 @@ const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 
 const TABS: TabItem[] = [
-  { label: "내 계정 & 크레딧", icon: User },
-  { label: "SNS 성과 분석", icon: BarChart2 },
-  { label: "협찬 미디어킷", icon: Briefcase },
-  { label: "멤버십 & 요금제", icon: Crown },
+  { label: "계정·크레딧", icon: User },
+  { label: "SNS 성과", icon: BarChart2 },
+  { label: "미디어킷", icon: Briefcase },
+  { label: "요금제", icon: Crown },
 ];
 
 export interface AccountSettingsProps {
@@ -70,6 +71,10 @@ export interface AccountSettingsProps {
   activityLogs?: UserActivityItem[];
   defaultTab?: number;
   initialSnsData?: SnsAnalyticsData;
+  /** 실제 인스타 연동(INSTAGRAM_PUBLISH_ENABLED). 꺼져 있으면 undefined, 켜졌는데 미연결이면 null. */
+  liveInstagram?: { username: string } | null;
+  /** 목 모드인가. 인증 없는 SNS 데모·예시 수치는 목 모드에서만 보여준다. */
+  snsDemo?: boolean;
 }
 
 /**
@@ -88,6 +93,8 @@ export function AccountSettings({
   activityLogs = [],
   defaultTab = 0,
   initialSnsData,
+  liveInstagram,
+  snsDemo = false,
 }: AccountSettingsProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [userPlan, setUserPlan] = useState<PlanTier>(plan);
@@ -184,9 +191,9 @@ export function AccountSettings({
           </div>
           <Button
             size="sm"
-            variant="cta"
+            variant="primary"
             onClick={() => setOpenCreditPurchase(true)}
-            className="h-8 px-3.5 text-caption font-bold shadow-2xs gap-1.5"
+            className="h-8 px-3 text-caption font-semibold gap-1.5"
           >
             <Plus className="size-3.5 stroke-[2.8]" />
             <span>크레딧 충전</span>
@@ -206,7 +213,7 @@ export function AccountSettings({
               ` ${day(userCredit.nextExpiry.at)}에 ${userCredit.nextExpiry.amount}크레딧이 만료돼요.`}
           </p>
           <p className="text-ink-subtle">
-            출석하면 하루 {policy.attendanceDaily}크레딧, {policy.attendanceStreakDays}일 연속 출석 시 +{policy.attendanceStreakBonus}크레딧 보너스를 드려요 (월간 출석 적립 상한 없음).
+            출석하면 하루 {policy.attendanceDaily}크레딧, {policy.attendanceStreakDays}일 연속 출석 시 +{policy.attendanceStreakBonus}크레딧 보너스를 드려요.
           </p>
         </div>
       </section>
@@ -216,6 +223,8 @@ export function AccountSettings({
         account={snsData.account}
         userPlan={userPlan}
         onDataUpdate={setSnsData}
+        liveInstagram={liveInstagram}
+        snsDemo={snsDemo}
         onNavigateToAnalytics={() => setActiveTab(1)}
         onNavigateToPricing={() => setActiveTab(3)}
       />
@@ -288,15 +297,36 @@ export function AccountSettings({
     </div>
   )}
 
-  {activeTab === 1 && (
-    <SnsAnalyticsDashboard
-      data={snsData}
-      onDataChange={setSnsData}
-      onGoToSettings={() => setActiveTab(0)}
-    />
-  )}
+  {/* 성과·미디어킷은 목 모드에서만 예시로 보여준다. 배포에서는 실제 연동 출시 전까지 "출시 예정" */}
+  {activeTab === 1 &&
+    (snsDemo ? (
+      <div className="flex flex-col gap-3">
+        <DemoNotice />
+        <SnsAnalyticsDashboard
+          data={snsData}
+          onGoToSettings={() => setActiveTab(0)}
+          canUseAiFeedback={userPlan === "pro" || userPlan === "max"}
+        />
+      </div>
+    ) : (
+      <SnsComingSoon
+        title="SNS 성과 분석"
+        description="인스타그램을 연결하면 회차별 도달·저장·공유 반응과 AI 독자 반응 피드백을 이곳에서 볼 수 있어요. 준비하고 있어요."
+      />
+    ))}
 
-  {activeTab === 2 && <MediaKitSection mediaKit={snsData.mediaKit} />}
+  {activeTab === 2 &&
+    (snsDemo ? (
+      <div className="flex flex-col gap-3">
+        <DemoNotice />
+        <MediaKitSection mediaKit={snsData.mediaKit} />
+      </div>
+    ) : (
+      <SnsComingSoon
+        title="협찬 미디어킷"
+        description="실제 인스타그램 성과로 광고주에게 보낼 미디어킷(PDF)을 만드는 기능을 준비하고 있어요."
+      />
+    ))}
 
   {activeTab === 3 && (
     <PricingPlanSection
@@ -380,3 +410,14 @@ function Stat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+/** 목 모드 성과·미디어킷 위에 붙인다. 예시 수치를 실제처럼 읽지 않게. */
+function DemoNotice() {
+  return (
+    <p className="flex items-center gap-2 rounded-lg bg-warning-tint px-3 py-2 text-caption text-warning">
+      <SnsDemoBadge className="bg-surface-card" />
+      목 모드 예시 데이터예요. 실제 인스타그램 계정의 수치가 아니에요.
+    </p>
+  );
+}
+

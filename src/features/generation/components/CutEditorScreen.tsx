@@ -578,6 +578,11 @@ export function CutEditorScreen({
                       : l,
                   )
                 }
+                onChangeBold={(bold) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, style: { ...l.style, bold } } : l,
+                  )
+                }
                 onChangePosition={(pos) => {
                   editor.update(selected.id, (l) => {
                     if (!isVectorTextLayer(l)) return l;
@@ -1002,6 +1007,7 @@ function LayerInspector({
   onChangeText,
   onChangeFontSize,
   onChangeFont,
+  onChangeBold,
   onChangePosition,
   onChangeBorderColor,
   onChangeBorderWidth,
@@ -1020,6 +1026,7 @@ function LayerInspector({
   onChangeText: (text: string) => void;
   onChangeFont: (family: string) => void;
   onChangeFontSize: (size: number) => void;
+  onChangeBold: (bold: boolean) => void;
   onChangePosition: (pos: "top_left" | "top_center" | "top_right" | "center" | "bottom") => void;
   onChangeBorderColor: (color: string) => void;
   onChangeBorderWidth: (width: number) => void;
@@ -1135,6 +1142,27 @@ function LayerInspector({
                 {vector.style.fontSize}
               </span>
             </label>
+
+            <div className="flex items-center gap-3 text-label">
+              <span className="shrink-0 text-ink-muted">굵기</span>
+              <div className="grid flex-1 grid-cols-2 gap-1.5">
+                {([false, true] as const).map((bold) => (
+                  <button
+                    key={String(bold)}
+                    type="button"
+                    onClick={() => onChangeBold(bold)}
+                    className={cn(
+                      "rounded-lg py-1.5 px-2 text-xs transition-all cursor-pointer",
+                      !!vector.style.bold === bold
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60 font-semibold",
+                    )}
+                  >
+                    {bold ? "굵게" : "보통"}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* 말풍선 및 나레이션 박스 테두리 스타일 (색상 & 굵기) */}
             {(vector.kind === "balloon" || vector.kind === "narration") && (

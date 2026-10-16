@@ -16,6 +16,7 @@ import type {
   StoryboardCharacter,
   StoryboardCut,
 } from "../types/storyboard";
+import { EPISODE_CUTS_MAX, EPISODE_CUTS_MIN } from "@/contracts/instagram";
 
 export interface MockStoryboardInput {
   episodeId: string;
@@ -67,7 +68,7 @@ function parseChatLines(story: string): ChatLine[] {
 export function mockStoryboard(input: MockStoryboardInput): Storyboard {
   const now = new Date().toISOString();
   const id = idMaker();
-  const count = Math.max(1, Math.min(20, input.cutCount));
+  const count = Math.max(EPISODE_CUTS_MIN, Math.min(EPISODE_CUTS_MAX, input.cutCount));
 
   const chatLines = parseChatLines(input.story);
   const isChat = chatLines.length >= 2;

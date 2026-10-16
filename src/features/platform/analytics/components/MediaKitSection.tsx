@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import {
   FileText,
   Mail,
-  Copy,
   Check,
   Download,
   Users,
@@ -25,16 +24,7 @@ export function MediaKitSection({ mediaKit: initialMediaKit }: MediaKitSectionPr
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<MediaKitSummary>(initialMediaKit);
   const [pending, startTransition] = useTransition();
-  const [copied, setCopied] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
-
-  const handleCopyLink = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(`${window.location.origin}/mediakit/${kitData.channelName}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const handleOpenEdit = () => {
     setEditForm(kitData);
@@ -91,20 +81,11 @@ export function MediaKitSection({ mediaKit: initialMediaKit }: MediaKitSectionPr
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleCopyLink}
+              disabled
               className="gap-1.5 font-semibold text-caption"
             >
-              {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-              {copied ? "링크 복사됨!" : "제안 링크 복사"}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => alert("미디어킷 PDF 내보내기 기능은 정식 출시(v1.0)에 지원될 예정입니다.")}
-              className="gap-1.5 font-bold text-caption shadow-2xs"
-            >
               <Download className="size-3.5" />
-              PDF 다운로드
+              PDF 다운로드 (출시 예정)
             </Button>
           </div>
         </div>

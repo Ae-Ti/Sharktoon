@@ -84,7 +84,6 @@ export default function DesignPage() {
       <Section title="ChoiceCard">
         <div className="grid gap-3 sm:grid-cols-3">
           {[
-            { t: "셀카로 만들기", d: "사진 1장이면 돼요. 원본은 시트를 만든 뒤 지워요." },
             { t: "특징 태그로 만들기", d: "안경, 곱슬머리처럼 5개까지." },
             { t: "기본 캐릭터 쓰기", d: "지금 정하지 않고 첫 화부터 볼래요." },
           ].map((it, i) => (

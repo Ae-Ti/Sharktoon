@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button, ChoiceCard, Field } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { createCharacterAction } from "@/features/platform/actions";
@@ -12,15 +12,9 @@ import {
   type StylePreset,
 } from "@/features/platform/onboarding/OnboardingContext";
 
-import { Camera, Tags, Sparkles, UploadCloud } from "lucide-react";
+import { Tags, Sparkles } from "lucide-react";
 
 const METHODS: { id: CharacterMethod; title: string; description: string; icon: React.ReactNode }[] = [
-  {
-    id: "selfie",
-    title: "셀카로 만들기",
-    description: "사진 1장이면 돼요. 얼굴 특징을 자동 분석해 2D 캐릭터를 만들어요.",
-    icon: <Camera className="size-4.5" />,
-  },
   {
     id: "tags",
     title: "특징 태그로 만들기",
@@ -43,11 +37,10 @@ const STYLES = (Object.keys(STYLE_LABEL) as StylePreset[]).map((id) => ({
 }));
 
 export default function Page() {
-  const { method, style, tags, selfie, characterAssetId, set, skip } = useOnboarding();
+  const { method, style, tags, characterAssetId, set, skip } = useOnboarding();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const preview = useObjectUrl(selfie);
 
   const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
   const tagCount = tagList.length;
@@ -59,23 +52,21 @@ export default function Page() {
     set("characterAssetId", null);
   }
 
-  /** 셀카나 태그로 캐릭터 시트를 만들고 사연 단계로 간다. 시트 생성은 크레딧을 쓰지 않는다. */
+  /** 특징 태그로 캐릭터 시트를 만들고 사연 단계로 간다. 시트 생성은 크레딧을 쓰지 않는다. */
   function next() {
     setError(null);
     if (method === "default" || characterAssetId) {
       router.push("/onboarding/story");
       return;
     }
-    if (method === "selfie" && !selfie) {
-      setError("사진을 골라 주세요. 지금 정하기 어렵다면 아래 건너뛰기를 눌러도 돼요.");
+    if (tagCount === 0) {
+      setError("특징을 하나 이상 적어 주세요. 지금 정하기 어렵다면 아래 건너뛰기를 눌러도 돼요.");
       return;
     }
     start(async () => {
       const form = new FormData();
-      form.set("method", method);
       form.set("style", STYLE_LABEL[style]);
       form.set("tags", tags);
-      if (selfie) form.set("selfie", selfie);
       const r = await createCharacterAction(form);
       if (!r.ok) {
         setError(r.message);
@@ -156,32 +147,6 @@ export default function Page() {
         </div>
       </div>
 
-      {method === "selfie" && (
-        <label className="group flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-border/80 bg-surface-card p-6 text-center hover:border-brand/70 hover:bg-brand-tint/10 transition-all shadow-2xs">
-          {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="고른 사진" className="size-24 rounded-full object-cover ring-4 ring-brand/30 shadow-sm" />
-          ) : (
-            <div className="grid size-12 place-items-center rounded-full bg-surface-sunken text-ink-muted group-hover:bg-brand-tint group-hover:text-brand transition-colors">
-              <UploadCloud className="size-6" />
-            </div>
-          )}
-          <span className="text-body font-bold text-ink">{selfie ? "다른 사진으로 변경하기" : "사진 업로드하기"}</span>
-          <span className="text-caption text-ink-muted leading-relaxed">
-            얼굴이 잘 보이는 셀카 1장으로 <strong className="text-brand font-medium">'{STYLE_LABEL[style]}'</strong> 화풍 캐릭터를 추출해요.
-          </span>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            onChange={(e) => {
-              set("selfie", e.target.files?.[0] ?? null);
-              set("characterAssetId", null);
-            }}
-          />
-        </label>
-      )}
-
       {method === "tags" && (
         <div className="flex flex-col gap-2">
           <Field
@@ -235,14 +200,4 @@ export default function Page() {
       </div>
     </>
   );
-}
-
-/** 고른 사진 미리보기 URL. 바뀌거나 떠날 때 해제한다. */
-function useObjectUrl(file: File | null): string | null {
-  const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
-  useEffect(() => {
-    if (!url) return;
-    return () => URL.revokeObjectURL(url);
-  }, [url]);
-  return url;
 }

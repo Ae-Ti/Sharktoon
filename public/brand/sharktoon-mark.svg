@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 뒤집힌 말풍선: 꼬리가 위로 솟아 상어 지느러미가 된다(오른쪽으로 달린다: 앞은 볼록, 끝은 뒤로, 뒤는 오목) -->
+  <defs>
+    <path id="bubble" d="M170 217 A200 130 0 1 0 385 224 C372 142 296 74 206 44 C238 102 228 170 170 217 Z"/>
+    <clipPath id="body"><use href="#bubble"/></clipPath>
+  </defs>
+  <g stroke="#121820" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 속도선 세 줄 -->
+    <line x1="54" y1="258" x2="110" y2="258" stroke-width="18"/>
+    <line x1="26" y1="316" x2="110" y2="316" stroke-width="18"/>
+    <line x1="54" y1="374" x2="110" y2="374" stroke-width="18"/>
+
+    <g transform="translate(78 30) scale(0.86)">
+      <use href="#bubble" fill="#ffffff" stroke="none"/>
+      <g clip-path="url(#body)">
+        <!-- 등(청록)과 배(흰색). 상어처럼 위는 진하고 아래는 밝다. 경계는 머리 쪽으로 살짝 내려간다 -->
+        <path d="M40 298 C150 246 320 242 500 284 L500 0 L40 0 Z" fill="#0a7d8d" stroke="none"/>
+      </g>
+      <path d="M236 92 C292 120 334 160 356 206" fill="none" stroke="#5cc4d0" stroke-width="10"/>
+      <!-- 상어 얼굴: 오른쪽(머리) 쪽에 눈, 그 뒤로 아가미 세 줄 -->
+      <circle cx="404" cy="300" r="17" fill="#121820" stroke="none"/>
+      <circle cx="409" cy="294" r="5.5" fill="#ffffff" stroke="none"/>
+      <path d="M318 300 Q332 330 318 362" fill="none" stroke-width="13"/>
+      <path d="M342 296 Q357 330 342 366" fill="none" stroke-width="13"/>
+      <path d="M366 304 Q379 330 366 358" fill="none" stroke-width="13"/>
+      <use href="#bubble" fill="none" stroke-width="20"/>
+    </g>
+  </g>
+</svg>

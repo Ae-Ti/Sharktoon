@@ -3,11 +3,12 @@ import "server-only";
 import { createServiceClient } from "./service";
 
 /**
- * 비공개 버킷 두 개. 업로드와 서명 URL 발급은 전부 서버가 한다.
- *   cuts   — {owner}/{episode}/{cut}.{ext}
- *   assets — {owner}/{asset}/{name}.{ext}
+ * 비공개 버킷 세 개. 업로드와 서명 URL 발급은 전부 서버가 한다.
+ *   cuts    — {owner}/{episode}/{cut}.{ext}
+ *   assets  — {owner}/{asset}/{name}.{ext}
+ *   publish — {owner}/{batch}/{n}.jpg   인스타 발행용 JPEG. 발행이 끝나면 지운다.
  */
-export type Bucket = "cuts" | "assets";
+export type Bucket = "cuts" | "assets" | "publish";
 
 /** 서명 URL 수명. 편집기를 한 시간 넘게 열어 두면 새로고침으로 다시 받는다. */
 const SIGNED_URL_TTL = 60 * 60;

@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createCreditLedger } from "@/features/platform/credit/ledger";
 import { resolveImages } from "./images";
-import { generateAssetsFromFirstEpisodeStory } from "../assets/assetVisuals";
 import type { AssetKind } from "@/lib/supabase/database.types";
 import type {
   AccountStatus,
@@ -112,7 +111,7 @@ export const supabaseRepository: PlatformRepository = {
 
     const { data } = await db
       .from("profiles")
-      .select("id, display_name, avatar_url, plan, keep_selfie_original, is_admin")
+      .select("id, display_name, avatar_url, plan, is_admin")
       .eq("id", auth.user.id)
       .single();
     if (!data) return null;
@@ -122,7 +121,6 @@ export const supabaseRepository: PlatformRepository = {
       displayName: data.display_name,
       avatarUrl: data.avatar_url,
       plan: data.plan,
-      keepSelfieOriginal: data.keep_selfie_original,
       isAdmin: Boolean(data.is_admin),
     };
   },
@@ -651,48 +649,6 @@ export const supabaseRepository: PlatformRepository = {
       .select("id")
       .single();
     if (error) throw error;
-
-    // 첫 화 사연 입력 시점에 시리즈에 등록된 소재가 없다면, 사연에 실제로 등장하는 인물·배경·소품 자동 생성
-    const { count: assetCount } = await db
-      .from("series_assets")
-      .select("*", { count: "exact", head: true })
-      .eq("series_id", sid);
-
-    if ((assetCount ?? 0) === 0 && story.trim()) {
-      const { data: sRow } = await db
-        .from("series")
-        .select("title, series_rules(style_preset)")
-        .eq("id", sid)
-        .single();
-      const style = oneRule(sRow?.series_rules)?.style_preset ?? "심플 라인";
-      const storyAssets = generateAssetsFromFirstEpisodeStory({
-        story,
-        seriesTitle: sRow?.title ?? "작품",
-        stylePreset: style,
-      });
-
-      for (const sa of storyAssets) {
-        const { data: createdAsset } = await db
-          .from("assets")
-          .insert({
-            owner_id: auth.user.id,
-            kind: sa.kind,
-            name: sa.name,
-            description: sa.description,
-            tags: sa.tags,
-            reference_paths: sa.thumbUrl ? [sa.thumbUrl] : [],
-          })
-          .select("id")
-          .single();
-
-        if (createdAsset) {
-          await db.from("series_assets").insert({
-            series_id: sid,
-            asset_id: createdAsset.id,
-          });
-        }
-      }
-    }
 
     return { episodeId: data.id, seriesId: sid as string };
   },

@@ -135,6 +135,7 @@ export const mockGenerationStore: GenerationStore = {
         job.cuts = job.cuts.filter((c) => c.cutId !== cutId);
       }
     }
+    await syncEpisodeThumb(episodeId);
   },
 
   async getPostPackage(episodeId) {
@@ -158,6 +159,7 @@ export const mockGenerationStore: GenerationStore = {
       imageUrl,
       layerTree: prev?.layerTree ?? null,
     });
+    await syncEpisodeThumb(episodeId);
     return { imageRef: imageUrl, imageUrl };
   },
   async workerSetEpisodeStatus(episodeId, status) {
@@ -178,6 +180,20 @@ async function setEpisodeStatus(episodeId: string, status: GenerationJob["status
     if (!ep) continue;
     ep.status = status as typeof ep.status;
     if (status === "published") ep.publishedAt = new Date().toISOString();
+    return;
+  }
+}
+
+/** 회차 썸네일은 맨 앞 컷 이미지다. 컷이 저장·삭제될 때마다 다시 맞춘다. */
+async function syncEpisodeThumb(episodeId: string) {
+  const first = [...cutsOf(episodeId).values()]
+    .filter((c) => c.imageUrl)
+    .sort((a, b) => a.index - b.index)[0];
+  for (const s of await mockRepository.listSeries()) {
+    const detail = await mockRepository.getSeries(s.id);
+    const ep = detail?.episodes.find((e) => e.id === episodeId);
+    if (!ep) continue;
+    ep.thumbUrl = first?.imageUrl ?? null;
     return;
   }
 }

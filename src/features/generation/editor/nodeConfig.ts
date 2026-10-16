@@ -15,8 +15,18 @@ import {
 const PAPER = "#ffffff";
 const INK = "#121820";
 
-export function bodyConfig(layer: VectorTextLayer) {
+/**
+ * 말풍선 레이어인데 모르는 종류(예전 콘티에 모델이 지어낸 이름이 저장된 경우)면 기본 말풍선으로 그린다.
+ * 몸통이 빠지고 글자만 남는 일이 없게.
+ */
+function shapeOf(layer: VectorTextLayer) {
   const shape = BALLOON_SHAPE[layer.balloon];
+  if (shape !== undefined) return shape;
+  return layer.kind === "balloon" ? BALLOON_SHAPE.normal : null;
+}
+
+export function bodyConfig(layer: VectorTextLayer) {
+  const shape = shapeOf(layer);
   if (!shape) return null;
   return {
     x: layer.box.x,
@@ -38,7 +48,7 @@ export function bodyConfig(layer: VectorTextLayer) {
  * 테두리는 두 옆변에만 긋는다. 그래야 꼬리와 몸통이 한 덩어리로 보인다.
  */
 export function tailConfigs(layer: VectorTextLayer) {
-  const shape = BALLOON_SHAPE[layer.balloon];
+  const shape = shapeOf(layer);
   if (!shape?.tail || !layer.tail) return null;
 
   const strokeColor = layer.borderColor ?? INK;

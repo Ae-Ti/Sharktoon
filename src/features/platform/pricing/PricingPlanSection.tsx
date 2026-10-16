@@ -66,7 +66,7 @@ export function PricingPlanSection({
         onPlanChange?.(targetPlan);
         setSelectedPlanModal(null);
         setNotice(
-          `🎉 ${selectedPlanModal.name} (${selectedPlanModal.nameKo}) 플랜 구독이 시작되었습니다! 매월 크레딧과 모든 프로 혜택이 적용됩니다.`
+          `🎉 ${selectedPlanModal.name} 플랜 구독이 시작되었습니다!`
         );
         setTimeout(() => setNotice(null), 5000);
       } else {
@@ -153,7 +153,7 @@ export function PricingPlanSection({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-body-sm font-bold text-ink">
-                현재 플랜: {activePlan === "max" ? "Max (맥스 전업)" : activePlan === "pro" ? "Pro (프로 작가)" : "Free (무료 플랜)"}
+                현재 플랜: {activePlan === "max" ? "Max" : activePlan === "pro" ? "Pro" : "Free"}
               </span>
               <Badge tone={activePlan === "free" ? "neutral" : "brand"} className="text-[10px] font-bold">
                 이용 중
@@ -163,7 +163,7 @@ export function PricingPlanSection({
               보유 잔여 크레딧: <strong className="font-bold text-brand">{creditBalance} C</strong>
               {activePlan === "free" && " · Pro 업그레이드 시 매월 120C와 워터마크 제거가 즉시 적용됩니다."}
               {activePlan === "pro" && " · 매월 120C 정기 충전 및 모든 프로 혜택이 적용 중입니다."}
-              {activePlan === "max" && " · 매월 350C 정기 충전 및 커스텀 화풍 LoRA가 적용 중입니다."}
+              {activePlan === "max" && " · 매월 350C 정기 충전 및 모든 맥스 혜택이 적용 중입니다."}
             </p>
           </div>
         </div>
@@ -211,15 +211,10 @@ export function PricingPlanSection({
               <div className="flex flex-col gap-4">
                 {/* 플랜 헤더 */}
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-title font-extrabold text-ink sm:text-title-lg">
-                      {card.name}
-                    </h3>
-                    <span className="text-caption font-semibold text-ink-muted">
-                      {card.nameKo}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-caption text-ink-muted min-h-[36px] leading-tight">
+                  <h3 className="text-title font-extrabold text-ink sm:text-title-lg">
+                    {card.name}
+                  </h3>
+                  <p className="mt-1 text-caption text-ink-muted leading-tight">
                     {card.tagline}
                   </p>
                 </div>
@@ -476,20 +471,17 @@ export function PricingPlanSection({
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] text-ink-subtle">컷당 {won(unitPrice)}</span>
-                  <p className="mt-2 text-[11px] text-ink-muted border-t border-border/50 pt-2 line-clamp-1">
-                    {pack.tagline}
-                  </p>
+                  <span className="text-[11px] text-ink-subtle">1C당 {won(unitPrice)}</span>
                 </div>
 
                 <Button
                   size="sm"
-                  variant={pack.popular ? "cta" : "secondary"}
+                  variant="primary"
                   onClick={() => {
                     setSelectedCreditPackId(pack.id);
                     setOpenCreditModal(true);
                   }}
-                  className="mt-4 w-full h-8 text-caption font-bold shadow-2xs"
+                  className="mt-4 w-full h-8 text-caption font-semibold"
                 >
                   충전하기
                 </Button>
@@ -540,7 +532,7 @@ export function PricingPlanSection({
       <Modal
         open={Boolean(selectedPlanModal)}
         onClose={() => setSelectedPlanModal(null)}
-        title={`${selectedPlanModal?.name} (${selectedPlanModal?.nameKo}) 플랜 시작`}
+        title={`${selectedPlanModal?.name} 플랜 시작`}
         description={
           selectedPlanModal?.id === "free"
             ? "무료 플랜으로 다운그레이드하시겠어요? 다음 결제 주기부터 무료 크레딧이 적용됩니다."
@@ -604,14 +596,16 @@ export function PricingPlanSection({
                 <Check className="size-4 text-brand" />
                 <span>
                   {selectedPlanModal.id === "free"
-                    ? "가입 시 8 크레딧 1회 지급 (월간 무료 리필 없음)"
+                    ? "가입 시 8 크레딧 1회 지급"
                     : `매월 ${selectedPlanModal.creditsMonthly} 크레딧 즉시 지급`}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-ink-muted">
-                <Check className="size-4 text-brand" />
-                <span>워터마크 완전 제거 & 상업적 이용/협찬툰 권리 보장</span>
-              </div>
+              {selectedPlanModal.id !== "free" && (
+                <div className="flex items-center gap-1.5 text-ink-muted">
+                  <Check className="size-4 text-brand" />
+                  <span>워터마크 완전 제거</span>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-ink-muted">
                 <Check className="size-4 text-brand" />
                 <span>언제든 마이페이지에서 자유롭게 해지 및 환불 정책 적용</span>

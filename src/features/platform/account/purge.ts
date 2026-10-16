@@ -25,7 +25,7 @@ export async function purgeDeletedAccounts(): Promise<number> {
 
   let purged = 0;
   for (const { id } of users ?? []) {
-    for (const bucket of ["cuts", "assets"] as Bucket[]) {
+    for (const bucket of ["cuts", "assets", "publish"] as Bucket[]) {
       await removeObjects(bucket, await listAll(bucket, id));
     }
     const { error: deleteError } = await db.auth.admin.deleteUser(id);

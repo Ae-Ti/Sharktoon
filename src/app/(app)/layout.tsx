@@ -43,14 +43,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 flex-col md:flex-row">
         {/* 데스크톱 전용 좌측 사이드바 (md 이상) */}
-        <aside className="hidden md:flex md:w-56 md:flex-col md:items-stretch md:gap-5 md:border-r md:border-border/80 md:bg-surface-card md:px-3 md:py-5">
+        {/* 화면 높이에 붙여 둔다. 본문이 길어도 아래 계정 카드가 늘 보이도록 */}
+        <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-56 md:shrink-0 md:flex-col md:items-stretch md:gap-5 md:self-start md:overflow-y-auto md:border-r md:border-border/80 md:bg-surface-card md:px-3 md:py-5">
           <Link href="/home" className="px-2.5 text-title-lg font-extrabold tracking-[-0.03em] text-ink">
             샥<span className="text-brand">툰</span>
           </Link>
           <SideNav seriesHref={seriesHref} isAdmin={isAdmin} streak={attendance.streak} />
 
-          {/* 현재 로그인 세션 사용자 정보 & 크레딧 */}
-          <div className="flex flex-col gap-2.5 border-t border-border/80 pt-3 md:mt-auto md:px-1.5">
+          {/* 계정·출석·크레딧. 사이드바가 화면 높이에 붙어 있어 맨 아래여도 늘 보인다 */}
+          <div className="mt-auto flex flex-col gap-2.5 border-t border-border/80 px-1.5 pt-3">
             <div className="flex items-center justify-between gap-1">
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-label font-bold text-ink">
@@ -60,9 +61,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
                   {session.email}
                 </span>
               </div>
-              <Badge tone={isAdmin ? "brand" : "neutral"}>
-                {isAdmin ? "관리자" : "일반"}
-              </Badge>
+              {isAdmin && <Badge tone="brand">관리자</Badge>}
             </div>
 
             <div className="flex items-center gap-1.5">

@@ -15,6 +15,9 @@ CLI 를 쓰면 `supabase link` 후 `supabase db push` 한다.
 | `20261002000006_generation.sql` | 콘티·생성 잡·컷(이미지·레이어)·게시물 패키지, Storage 버킷 `cuts`·`assets` |
 | `20261003000007_generation_queue.sql` | 생성 큐 `generation_tasks` 와 `claim_generation_tasks()` |
 | `20261003000008_credit_lots.sql` | 크레딧 묶음(무상·구독·구매), 차감 순서, 만료·이월, 환불 견적·신청, 탈퇴 요청, 정책 테이블 |
+| `20261016000009_instagram.sql` | 인스타 연결 계정(암호화 토큰)·발행 큐 `instagram_publish_jobs`·`claim_instagram_publish_jobs()`·버킷 `publish` |
+| `20261016000010_profile_column_guard.sql` | 프로필은 이름·사진 열만 사용자가 고친다. 운영자 플래그·요금제를 스스로 바꾸지 못하게 |
+| `20261016000011_safety_events.sql` | 콘텐츠 안전 판정 기록(텍스트 차단·이미지 검사). 본인·운영자만 읽고 1년 보관 |
 
 로컬에서 스키마를 고쳤으면 `npm run db:reset` 으로 다시 적용하고 `npm run db:types` 로
 `src/lib/supabase/database.generated.ts` 를 다시 뽑는다. 손으로 고치지 않는다.
@@ -198,3 +201,25 @@ update profiles set is_admin = true where id = '<운영자 uuid>';
 ```
 
 첫 운영자는 대시보드에서 직접 넣는다. 화면에서 올릴 수 있게 만들면 그게 곧 권한 상승 경로가 된다.
+
+## 인스타그램 연동 (0009)
+
+Instagram API with Instagram Login(graph.instagram.com, 페이스북 페이지 불필요). 규격 숫자는
+`src/contracts/instagram.ts` 한 곳에 있다(캐러셀 2~10장, JPEG 8MB, 캡션 2,200자·해시태그 30개).
+
+| 장치 | 하는 일 |
+|---|---|
+| `instagram_accounts` | 사용자당 계정 1개. 장기 토큰(60일)은 AES-256-GCM(`INSTAGRAM_TOKEN_KEY`)으로 암호화해 둔다. 사용자는 토큰 열을 읽지 못한다(열 권한) |
+| `instagram_publish_jobs` | 발행 할 일. 즉시 발행도 예약도 같은 행이다 — **Instagram API 에는 예약 기능이 없어** 예약 시각에 우리가 직접 발행한다 |
+| `claim_instagram_publish_jobs()` | 예약 시각이 지난 행을 꺼낸다. 계정당 동시에 하나만(게시 한도·컨테이너 상태가 계정 단위) |
+| 버킷 `publish` | 브라우저가 합성한 JPEG. Meta 는 공개 URL 에서만 이미지를 가져가므로 발행할 때 서명 URL 을 넘기고, 게시가 끝나면 지운다 |
+
+작업자는 기존 크론에 얹었다. `/api/queue/run`(1분마다)이 생성 큐와 함께 발행 큐를 비우고,
+`/api/cron/daily` 가 만료 10일 안쪽 토큰을 갱신한다. 따로 크론을 만들 필요가 없다.
+
+연결을 끊으면 토큰·대기 중인 발행·발행용 이미지를 지운다(Meta 플랫폼 약관 §3.d).
+
+**켜는 법(시험).** 사업자 등록·앱 심사(Advanced Access)·비즈니스 인증 전에는 Meta 앱 대시보드에서
+역할(테스터)로 등록한 인스타 계정만 로그인된다. `.env.example` 의 `INSTAGRAM_*` 를 채우고
+`INSTAGRAM_PUBLISH_ENABLED=true` 일 때만 화면에 연결·발행 버튼이 나온다. 비워 두면 "출시 예정"이다.
+

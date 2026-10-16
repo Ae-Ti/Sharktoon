@@ -5,6 +5,7 @@ import { buildLayerTree, hydrateLayerTree } from "@/features/generation/editor/b
 import { titlesOf } from "@/features/generation/episodeTitle";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext } from "@/features/platform/episode";
+import { instagramPublishEnabled } from "@/features/platform/instagram/config";
 
 /** 이 화면의 서버 액션이 응답 뒤 생성 큐를 돌린다(`after`). 그 시간 상한. */
 export const maxDuration = 300;
@@ -63,7 +64,8 @@ export default async function Page({ params }: { params: Promise<{ episodeId: st
       defaultRatio={context.rule.aspectRatio}
       // 무료 요금제는 워터마크(요금제 정책). 프로필을 못 읽으면 무료로 본다.
       watermark={(profile?.plan ?? "free") === "free"}
-      userPlan={profile?.plan ?? "free"}
+      instagramPublish={instagramPublishEnabled()}
+      canPublish={profile?.plan === "pro" || profile?.plan === "max"}
       published={true}
       credits={credit.balance}
       {...titlesOf(context)}

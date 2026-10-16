@@ -13,7 +13,8 @@ export interface SnsAccountInfo {
 export interface SnsOverviewMetrics {
   totalReach: number;
   totalReachDelta: number;
-  totalImpressions: number;
+  /** 조회수(views). impressions 는 2025-04 에 폐지됐다. */
+  totalViews: number;
   avgSaves: number;
   avgSavesDelta: number;
   avgShares: number;

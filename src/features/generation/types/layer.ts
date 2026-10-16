@@ -69,6 +69,49 @@ export const BALLOON_LABEL: Record<BalloonKind, string> = {
   none: "꼬리 없음",
 };
 
+const BALLOON_ALIASES: Record<string, BalloonKind> = {
+  speech: "normal",
+  talk: "normal",
+  dialogue: "normal",
+  default: "normal",
+  oval: "normal",
+  round: "normal",
+  think: "thought",
+  thinking: "thought",
+  inner: "thought",
+  monologue: "thought",
+  scream: "shout",
+  yell: "shout",
+  exclaim: "shout",
+  exclamation: "shout",
+  surprise: "shout",
+  surprised: "shout",
+  angry: "shout",
+  burst: "spike",
+  jagged: "spike",
+  quiet: "whisper",
+  soft: "whisper",
+  narration: "narration_box",
+  caption: "narration_box",
+  box: "narration_box",
+  sfx: "none",
+  effect: "none",
+  sound: "none",
+};
+
+/**
+ * 모델이 준 말풍선 이름을 아는 종류로 맞춘다. 모르는 이름은 기본 말풍선으로 둔다 —
+ * 그대로 두면 모양(BALLOON_SHAPE)이 없어 몸통 없이 글자만 그려진다.
+ */
+export function normalizeBalloonKind(value: unknown): BalloonKind {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  for (const key of [raw, raw.replace(/_?(balloon|bubble)$/, "")]) {
+    if (key in BALLOON_LABEL) return key as BalloonKind;
+    if (BALLOON_ALIASES[key]) return BALLOON_ALIASES[key];
+  }
+  return "normal";
+}
+
 /** 캔버스 좌표. 컷 이미지 원본 픽셀 기준이고 화면 배율과 무관하다. */
 export interface LayerBox {
   x: number;

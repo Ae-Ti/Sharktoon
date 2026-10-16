@@ -12,13 +12,13 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { InsufficientCreditError } from "@/contracts/credit";
 import type { CutEditIntent, GenerationJob, GenerationTier } from "@/contracts/generation";
+import { EPISODE_CUTS_MAX, EPISODE_CUTS_MIN } from "@/contracts/instagram";
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext, type EpisodeContext } from "@/features/platform/episode";
 import { getGenerationStore, type PostPackage } from "./data";
 import { generateFirstComment, generatePostPackage } from "./post/generate";
 import { drainQueue, regenerateCut, retryFailedCuts, startGeneration } from "./pipeline";
 import { generateStoryboard, isAnthropicConfigured } from "./storyboard/generate";
-import { extractEntitiesFromStory } from "./storyboard/extractEntities";
 import type { CutLayerTree } from "./types/layer";
 import type { Storyboard } from "./types/storyboard";
 
@@ -74,6 +74,10 @@ export async function generateStoryboardAction(input: {
       return { ok: false, kind: "error", message: "사연을 조금 더 적어주세요. 한 문장이면 충분해요." };
     }
 
+    if (input.cutCount !== undefined && (input.cutCount < EPISODE_CUTS_MIN || input.cutCount > EPISODE_CUTS_MAX)) {
+      return { ok: false, kind: "error", message: `컷 수는 ${EPISODE_CUTS_MIN}~${EPISODE_CUTS_MAX}컷 사이로 골라 주세요.` };
+    }
+
     const repo = await getRepository();
 
     // 0. 사연이나 컷 수, 시리즈 변경사항이 있으면 DB에 반영
@@ -89,33 +93,7 @@ export async function generateStoryboardAction(input: {
       });
     }
 
-    // 1. 사연 기반 '사전 에셋 자동 생성(Pre-Asset Generation)'
-    try {
-      const extractedEntities = await extractEntitiesFromStory(story);
-      const currentAssets = await repo.listAssets();
-      const targetSeriesId = input.seriesId ?? context.seriesId;
-      const seriesAssetIds = [...context.assets.map((a) => a.id)];
-
-      for (const ent of extractedEntities) {
-        if (ent.role === "protagonist") continue;
-        const existing = currentAssets.find((a) => a.name === ent.name && a.kind === ent.kind);
-        if (existing) {
-          if (!seriesAssetIds.includes(existing.id)) seriesAssetIds.push(existing.id);
-        } else {
-          const created = await repo.createAsset({
-            kind: ent.kind,
-            name: ent.name,
-            description: ent.visualDna,
-            tags: ent.tags,
-          });
-          seriesAssetIds.push(created.id);
-        }
-      }
-      await repo.setSeriesAssets(targetSeriesId, seriesAssetIds);
-    } catch (e) {
-      console.error("[generateStoryboardAction] Pre-Asset generation error:", e);
-    }
-
+    // 소재는 사용자가 직접 등록한다(일관성 유지용). 사연에서 AI 가 소재를 만들거나 작품에 붙이지 않는다.
     const { context: freshContext } = await ownedEpisode(input.episodeId);
 
     const charDescs = freshContext.assets
@@ -172,41 +150,6 @@ export async function saveStoryboardAction(storyboard: Storyboard): Promise<Acti
       if (!activeCutIds.has(c.cutId)) {
         await store.deleteCut(context.episodeId, c.cutId);
       }
-    }
-
-    // 새로 등록된 등장인물이 있으면 전체 에셋 라이브러리 및 시리즈 에셋에 자동 동기화
-    try {
-      const repo = await getRepository();
-      const currentAssets = await repo.listAssets();
-      const seriesAssetIds = [...context.assets.map((a) => a.id)];
-      let updatedSeries = false;
-
-      for (const ch of checked.characters) {
-        if (ch.key === "ch_me") continue;
-        const name = ch.name.trim();
-        if (!name) continue;
-        const existing = currentAssets.find((a) => a.name === name && a.kind === "character");
-        if (existing) {
-          if (!seriesAssetIds.includes(existing.id)) {
-            seriesAssetIds.push(existing.id);
-            updatedSeries = true;
-          }
-        } else {
-          const created = await repo.createAsset({
-            kind: "character",
-            name,
-            description: `${name} (콘티에서 등록된 인물)`,
-            tags: ["등장인물", "조연"],
-          });
-          seriesAssetIds.push(created.id);
-          updatedSeries = true;
-        }
-      }
-      if (updatedSeries) {
-        await repo.setSeriesAssets(context.seriesId, seriesAssetIds);
-      }
-    } catch (e) {
-      console.error("[saveStoryboardAction] Auto asset sync error:", e);
     }
 
     return { ok: true, data: null };
@@ -538,8 +481,8 @@ function characterNames(context: EpisodeContext): string[] {
  * 컷 수와 글자 수는 상한을 건다(캐러셀 10장, 장면 500자).
  */
 function checkStoryboard(sb: Storyboard, context: EpisodeContext): Storyboard {
-  if (!Array.isArray(sb.cuts) || sb.cuts.length < 1 || sb.cuts.length > 10) {
-    throw new ActionError("컷은 1개에서 10개까지예요.");
+  if (!Array.isArray(sb.cuts) || sb.cuts.length < 1 || sb.cuts.length > EPISODE_CUTS_MAX) {
+    throw new ActionError(`컷은 표지를 포함해 ${EPISODE_CUTS_MAX}개까지예요.`);
   }
   const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
   const ids = new Set<string>();

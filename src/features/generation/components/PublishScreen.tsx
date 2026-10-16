@@ -6,16 +6,12 @@ import {
   Copy,
   Download,
   Plus,
-  Lock,
-  Sparkles,
-  CalendarClock,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
 } from "lucide-react";
-import { Badge, Button, ButtonLink, Field, Modal } from "@/components/ui";
+import { Badge, Button, ButtonLink, Field } from "@/components/ui";
 import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
+import { IG_CAPTION_MAX_CHARS, IG_CAPTION_MAX_HASHTAGS, composeInstagramCaption } from "@/contracts/instagram";
 import { cn } from "@/lib/cn";
+import { InstagramPublishPanel } from "./InstagramPublishPanel";
 import {
   generateFirstCommentAction,
   generatePostPackageAction,
@@ -58,7 +54,10 @@ export interface PublishScreenProps {
   initialPackage: PostPackage | null;
   defaultRatio: ExportRatio;
   watermark: boolean;
-  userPlan?: "free" | "basic" | "pro" | "max";
+  /** 원클릭 발행·자동 예약을 보여줄지(INSTAGRAM_PUBLISH_ENABLED). 꺼져 있으면 "출시 예정". */
+  instagramPublish: boolean;
+  /** Pro·Max 인가. */
+  canPublish: boolean;
   published: boolean;
   credits: number;
   seriesTitle: string;
@@ -93,31 +92,6 @@ export function PublishScreen(props: PublishScreenProps) {
   const [pending, start] = useTransition();
   const [commentPending, startComment] = useTransition();
   const started = useRef(false);
-
-  // 방안 B: 플랜별 인스타그램 연동 및 발행 권한 차등
-  const userPlan = props.userPlan ?? "free";
-  const isProOrAbove = userPlan === "pro" || userPlan === "max";
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-  const [upgradeReason, setUpgradeReason] = useState<"instant_publish" | "schedule_publish">("instant_publish");
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [instantPublishPending, setInstantPublishPending] = useState(false);
-  const [publishSuccessNotice, setPublishSuccessNotice] = useState<string | null>(null);
-  const [scheduledTime, setScheduledTime] = useState("2026-10-18T19:00");
-
-  const handleInstantPublish = () => {
-    setInstantPublishPending(true);
-    setTimeout(() => {
-      setInstantPublishPending(false);
-      setPublishSuccessNotice("인스타그램 피드에 1-Click 즉시 게시되었습니다! (첫 댓글/해시태그 자동 등록)");
-      setTimeout(() => setPublishSuccessNotice(null), 5000);
-    }, 1200);
-  };
-
-  const handleSchedulePublish = () => {
-    setScheduleModalOpen(false);
-    setPublishSuccessNotice(`인스타그램 자동 예약 발행이 등록되었습니다. (${scheduledTime.replace("T", " ")})`);
-    setTimeout(() => setPublishSuccessNotice(null), 5000);
-  };
 
   const missing = props.slides.filter((s) => !s.tree);
 
@@ -244,6 +218,9 @@ export function PublishScreen(props: PublishScreenProps) {
   }
 
   const tags = pkg ? [...pkg.hashtags.fixed, ...pkg.hashtags.dynamic].map((t) => `#${t}`) : [];
+  // 인스타 캡션 한도는 본문 + 해시태그 합계로 센다(2,200자, 해시태그 30개).
+  const captionCheck = pkg ? composeInstagramCaption(pkg.captions[caption], tags) : null;
+  const tagsFull = tags.length >= IG_CAPTION_MAX_HASHTAGS;
 
   return (
     <div className="min-h-dvh bg-surface-page">
@@ -278,7 +255,8 @@ export function PublishScreen(props: PublishScreenProps) {
         }
       />
 
-      <main className="mx-auto grid max-w-[1080px] grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+      {/* 위: 다운로드·게시(전체 폭). 아래: 본문·해시태그 | 첫 댓글 2열. 같은 너비로 맞춘다 */}
+      <main className="mx-auto flex max-w-[1080px] flex-col gap-4 p-4">
         <section className="flex flex-col gap-4">
           {notice && (
             <p className="rounded-lg bg-danger-tint px-3 py-2 text-body-sm text-danger">{notice}</p>
@@ -344,99 +322,48 @@ export function PublishScreen(props: PublishScreenProps) {
                 </p>
               )}
 
-              <div className="flex flex-col gap-3.5 rounded-xl border border-brand/30 bg-surface-card p-4 shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="grid size-6 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">
-                      ✓
-                    </span>
-                    <h3 className="text-label font-semibold text-ink">회차 저장 완료</h3>
-                  </div>
-                  <Badge tone={isProOrAbove ? "brand" : "neutral"} className="text-[11px] font-semibold">
-                    {isProOrAbove ? (userPlan === "max" ? "Max 작가" : "Pro 작가") : "Free 무료 플랜"}
-                  </Badge>
-                </div>
-
-                <p className="text-body-sm text-ink-muted">
-                  시리즈 타임라인에 완성된 화로 저장되었어요.
+              {/* 박스를 겹치지 않는다: 저장 안내 한 줄 + 구분선 아래 인스타 게시 */}
+              <div className="flex flex-col gap-3">
+                <p className="flex items-center gap-2 text-body-sm text-ink-muted">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-[11px] font-bold text-on-brand">
+                    ✓
+                  </span>
+                  <span>
+                    <strong className="font-semibold text-ink">회차 저장 완료</strong> · 작품 타임라인에 완성된 화로 저장됐어요.
+                  </span>
                 </p>
 
-                {publishSuccessNotice && (
-                  <div className="flex items-center gap-2 rounded-lg bg-brand-tint px-3 py-2 text-caption font-semibold text-brand animate-in fade-in">
-                    <CheckCircle2 className="size-4 shrink-0" />
-                    <span>{publishSuccessNotice}</span>
-                  </div>
-                )}
-
-                {/* 인스타그램 발행 액션 카드 (방안 B 정책 적용) */}
-                <div className="flex flex-col gap-2.5 rounded-lg border border-pink-500/20 bg-gradient-to-b from-pink-500/5 to-transparent p-3.5">
+                {/* 인스타그램 발행. 원클릭 발행·자동 예약은 Graph API 연동 전까지 출시 예정으로 둔다 */}
+                <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="grid size-6 place-items-center rounded-md bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white shadow-2xs">
                         <InstagramIcon className="size-3.5" />
                       </div>
-                      <span className="text-caption font-bold text-ink">인스타그램 연동 발행</span>
+                      <span className="text-caption font-bold text-ink">인스타그램에 올리기</span>
                     </div>
-                    {!isProOrAbove && (
+                    {!props.instagramPublish && (
                       <span className="text-[10px] text-pink-600 font-semibold bg-pink-500/10 px-1.5 py-0.5 rounded">
-                        방안 B: Pro 전용 연동 기능
+                        원클릭 발행 · 자동 예약 출시 예정
                       </span>
                     )}
                   </div>
-
-                  {/* 1-Click 피드 즉시 발행 & 자동 예약 발행 버튼 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    <Button
-                      variant={isProOrAbove ? "primary" : "secondary"}
-                      size="sm"
-                      disabled={missing.length > 0 || instantPublishPending}
-                      loading={instantPublishPending}
-                      onClick={() => {
-                        if (!isProOrAbove) {
-                          setUpgradeReason("instant_publish");
-                          setUpgradeModalOpen(true);
-                          return;
-                        }
-                        handleInstantPublish();
-                      }}
-                      className={cn(
-                        "justify-center font-bold text-caption",
-                        isProOrAbove
-                          ? "bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white hover:opacity-95"
-                          : "text-ink-muted border-border/80 hover:border-pink-500"
-                      )}
-                    >
-                      {!isProOrAbove ? <Lock className="mr-1.5 size-3.5 text-pink-500" /> : <Sparkles className="mr-1.5 size-3.5" />}
-                      <span>1-Click 피드 즉시 발행</span>
-                      {!isProOrAbove && <span className="ml-1 text-[10px] text-pink-500 font-bold">[Pro]</span>}
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={missing.length > 0}
-                      onClick={() => {
-                        if (!isProOrAbove) {
-                          setUpgradeReason("schedule_publish");
-                          setUpgradeModalOpen(true);
-                          return;
-                        }
-                        setScheduleModalOpen(true);
-                      }}
-                      className="justify-center font-bold text-caption text-ink-muted hover:border-border-control"
-                    >
-                      {!isProOrAbove ? <Lock className="mr-1.5 size-3.5 text-amber-500" /> : <CalendarClock className="mr-1.5 size-3.5 text-brand" />}
-                      <span>자동 예약 발행</span>
-                      {!isProOrAbove && <span className="ml-1 text-[10px] text-amber-600 font-bold">[Pro]</span>}
-                    </Button>
-                  </div>
-
-                  {/* 수동 외부 게시 안내 (무료 이용자 기본 방식) */}
-                  <div className="flex items-center justify-between border-t border-border/60 pt-2 text-caption">
+                  {props.instagramPublish && props.canPublish && (
+                    <InstagramPublishPanel
+                      episodeId={props.episodeId}
+                      trees={props.slides.map((s) => s.tree).filter((t): t is CutLayerTree => Boolean(t))}
+                      ratio={ratio}
+                      captionCheck={captionCheck}
+                      firstComment={pkg?.firstComment ?? ""}
+                      missingCuts={missing.length}
+                    />
+                  )}
+                  {props.instagramPublish && !props.canPublish && (
+                    <p className="text-[11px] text-ink-muted">원클릭 발행 · 자동 예약은 Pro 플랜부터 쓸 수 있어요.</p>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-caption">
                     <span className="text-ink-muted text-[11px]">
-                      {isProOrAbove
-                        ? "원클릭 발행 시 피드 및 첫 댓글이 즉시 게재됩니다."
-                        : "무료 플랜은 캐러셀을 다운로드하여 인스타그램 앱에서 수동 업로드합니다."}
+                      캐러셀을 다운로드해 인스타그램 앱에서 올려 주세요.
                     </span>
                     <ButtonLink
                       href="https://www.instagram.com/"
@@ -444,7 +371,7 @@ export function PublishScreen(props: PublishScreenProps) {
                       rel="noreferrer"
                       variant="ghost"
                       size="sm"
-                      className="text-[11px] font-semibold text-brand hover:underline p-0 h-auto"
+                      className="text-[11px] font-semibold text-brand hover:underline p-0 h-auto shrink-0"
                     >
                       인스타그램 열기 ↗
                     </ButtonLink>
@@ -460,9 +387,9 @@ export function PublishScreen(props: PublishScreenProps) {
           </div>
         </section>
 
-        <aside className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
           {!pkg ? (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-card p-8 text-center">
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-card p-8 text-center md:col-span-2">
               {notice ? (
                 <Button
                   onClick={() => {
@@ -486,7 +413,7 @@ export function PublishScreen(props: PublishScreenProps) {
           ) : (
             <>
               {pkg.usedMock && (
-                <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
+                <p className="rounded-lg bg-surface-sunken px-3 py-2 text-caption text-ink-muted md:col-span-2">
                   모델 키가 없어 콘티 문장으로 채운 초안이에요. 고쳐서 쓰세요.
                 </p>
               )}
@@ -532,14 +459,16 @@ export function PublishScreen(props: PublishScreenProps) {
                   rows={5}
                   value={pkg.captions[caption]}
                   onChange={(v) => edit({ ...pkg, captions: { ...pkg.captions, [caption]: v } })}
-                  maxLength={2200}
+                  maxLength={IG_CAPTION_MAX_CHARS}
                 />
 
                 {/* 해시태그 영역 */}
                 <div className="flex flex-col gap-2.5 pt-3 border-t border-border/70">
                   <div className="flex items-center justify-between">
                     <span className="text-caption font-semibold text-ink-muted">해시태그</span>
-                    <span className="text-caption tabular-nums text-ink-muted">{tags.length}개</span>
+                    <span className={cn("text-caption tabular-nums", tags.length > IG_CAPTION_MAX_HASHTAGS ? "font-semibold text-danger" : "text-ink-muted")}>
+                      {tags.length} / {IG_CAPTION_MAX_HASHTAGS}개
+                    </span>
                   </div>
 
                   {/* 새 해시태그 직접 추가 */}
@@ -547,7 +476,7 @@ export function PublishScreen(props: PublishScreenProps) {
                     onSubmit={(e) => {
                       e.preventDefault();
                       const trimmed = newTag.trim().replace(/^#+/, "");
-                      if (!trimmed) return;
+                      if (!trimmed || tagsFull) return;
                       if (
                         !pkg.hashtags.dynamic.includes(trimmed) &&
                         !pkg.hashtags.fixed.includes(trimmed)
@@ -568,7 +497,8 @@ export function PublishScreen(props: PublishScreenProps) {
                       type="text"
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
-                      placeholder="새 해시태그 추가 (예: 일상툰)"
+                      placeholder={tagsFull ? `해시태그는 ${IG_CAPTION_MAX_HASHTAGS}개까지예요` : "새 해시태그 추가 (예: 일상툰)"}
+                      disabled={tagsFull}
                       maxLength={30}
                       className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-surface-card px-2.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand focus:outline-none"
                     />
@@ -576,7 +506,7 @@ export function PublishScreen(props: PublishScreenProps) {
                       type="submit"
                       size="sm"
                       variant="secondary"
-                      disabled={!newTag.trim()}
+                      disabled={!newTag.trim() || tagsFull}
                     >
                       추가
                     </Button>
@@ -600,13 +530,31 @@ export function PublishScreen(props: PublishScreenProps) {
                   />
                 </div>
 
+                {/* 인스타 캡션 한도: 본문 + 해시태그 합계 */}
+                {captionCheck && (
+                  <div className="flex flex-col gap-1 text-caption">
+                    <span
+                      className={cn(
+                        "self-end tabular-nums",
+                        captionCheck.chars > IG_CAPTION_MAX_CHARS ? "font-semibold text-danger" : "text-ink-muted",
+                      )}
+                    >
+                      해시태그 포함 {captionCheck.chars.toLocaleString()} / {IG_CAPTION_MAX_CHARS.toLocaleString()}자
+                    </span>
+                    {captionCheck.problems.map((p) => (
+                      <p key={p} className="font-medium text-danger">
+                        {p}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {/* 복사 버튼 그룹 */}
                 <div className="flex items-center gap-2 pt-2 border-t border-border/70">
                   <Button
                     variant="primary"
                     block
                     className="flex-1 font-bold"
-                    onClick={() => copy("caption", `${pkg.captions[caption]}\n\n${tags.join(" ")}`)}
+                    onClick={() => copy("caption", captionCheck?.text ?? "")}
                   >
                     <Copy className="mr-1.5 size-3.5" />
                     {copied === "caption" ? "복사했어요!" : "본문 + 해시태그 복사"}
@@ -641,8 +589,9 @@ export function PublishScreen(props: PublishScreenProps) {
                 </div>
                 <Field
                   label="첫 댓글"
+                  hideLabel
                   multiline
-                  rows={2}
+                  rows={4}
                   value={pkg.firstComment}
                   onChange={(v) => edit({ ...pkg, firstComment: v })}
                   maxLength={2200}
@@ -653,7 +602,7 @@ export function PublishScreen(props: PublishScreenProps) {
               </section>
             </>
           )}
-        </aside>
+        </div>
       </main>
 
       {/* 모바일 하단 플로팅 액션 바 (다운로드 & 다음 화 만들기) */}
@@ -701,90 +650,6 @@ export function PublishScreen(props: PublishScreenProps) {
         }))}
       />
 
-      {/* 방안 B: Pro 플랜 업그레이드 안내 모달 (Free 이용자 유도) */}
-      <Modal
-        open={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
-        title={
-          upgradeReason === "instant_publish"
-            ? "1-Click 피드 즉시 발행 (Pro 플랜 전용)"
-            : "인스타그램 자동 예약 발행 (Pro 플랜 전용)"
-        }
-        description="무료 플랜은 캐러셀을 다운로드하여 인스타그램 앱에서 수동으로 게시합니다. Pro 플랜으로 업그레이드하시면 원클릭 즉시 게재 및 예약 발행을 이용하실 수 있습니다."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setUpgradeModalOpen(false)}>
-              다음에 하기
-            </Button>
-            <ButtonLink
-              href="/settings?tab=3"
-              variant="primary"
-              className="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 font-bold text-white shadow-xs"
-            >
-              Pro 플랜 혜택 보기 ↗
-            </ButtonLink>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-3.5">
-          <div className="rounded-xl border border-pink-500/20 bg-pink-500/5 p-4 space-y-2">
-            <span className="text-body-sm font-bold text-ink flex items-center gap-1.5">
-              <Sparkles className="size-4 text-pink-500" />
-              Pro 플랜으로 업그레이드하면:
-            </span>
-            <ul className="text-caption text-ink-muted space-y-1.5 list-disc list-inside">
-              <li><strong className="text-ink">1-Click 인스타그램 피드 즉시 발행</strong>: 복사/붙여넣기 없이 바로 게시</li>
-              <li><strong className="text-ink">인스타그램 자동 예약 발행 스케줄러</strong>: 원하는 시간에 맞춰 자동 업로드</li>
-              <li><strong className="text-ink">실시간 독자 반응 AI 피드백</strong>: 저장률·도달수 기반 다음 화 소재 추천</li>
-              <li><strong className="text-ink">협찬 미디어킷 웹 링크 & PDF 다운로드</strong>: 광고주용 제안서 자동 생성</li>
-              <li><strong className="text-ink">Sharktoon 워터마크 완전 제거</strong> 및 상업적 협찬 게재 가능</li>
-              <li><strong className="text-ink">매월 120 크레딧</strong> 정기 충전 (고품질 flare/sunburst 모델)</li>
-            </ul>
-          </div>
-          <p className="text-[11px] text-ink-subtle text-center">
-            월 19,900원(연간 결제 시 월 15,900원)으로 정기 연재 작가의 모든 기능을 누려보세요.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Pro/Max 회원을 위한 인스타그램 자동 예약 발행 모달 */}
-      <Modal
-        open={scheduleModalOpen}
-        onClose={() => setScheduleModalOpen(false)}
-        title="인스타그램 자동 예약 발행"
-        description="지정한 일시에 맞춰 인스타그램 피드에 자동으로 게시됩니다."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setScheduleModalOpen(false)}>
-              취소
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSchedulePublish}
-              className="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 font-bold text-white"
-            >
-              예약 등록하기
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-ink">발행 예정 일시</label>
-            <input
-              type="datetime-local"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              className="w-full h-10 rounded-lg border border-border bg-surface-card px-3 text-body-sm text-ink focus:border-brand focus:outline-none"
-            />
-          </div>
-          <div className="rounded-lg bg-surface-sunken/60 p-3 text-caption text-ink-muted space-y-1">
-            <p className="font-semibold text-ink">예약 안내:</p>
-            <p>• Pro 및 Max 회원 모두 인스타그램 자동 예약 발행을 자유롭게 이용하실 수 있습니다.</p>
-            <p>• 지정된 시간에 본문, 해시태그, 첫 댓글이 함께 게시됩니다.</p>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

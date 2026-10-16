@@ -9,13 +9,14 @@ export const INITIAL_MOCK_SNS_DATA: SnsAnalyticsData = {
     followersCount: 14200,
     mediaCount: 36,
     accountType: "CREATOR",
-    connected: true,
+    // 실제 연동 전이다. 기본은 미연동으로 두고, 설정에서 (목) 연결을 해야 예시 성과가 보인다.
+    connected: false,
     lastSyncedAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(), // 12분 전
   },
   overview: {
     totalReach: 128500,
     totalReachDelta: 18.4,
-    totalImpressions: 342000,
+    totalViews: 342000,
     avgSaves: 486,
     avgSavesDelta: 14.2,
     avgShares: 192,

@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { CHARACTER_SHEET_VIEWS } from "@/contracts/generation";
+import { CREDIT_COST, InsufficientCreditError } from "@/contracts/credit";
+import { CHARACTER_SHEET_VIEWS, isSafetyBlocked } from "@/contracts/generation";
+import { recordSafetyEvent, safetyLockMessage } from "@/features/generation/safety/strikes";
+import { EPISODE_CUTS_MAX, EPISODE_CUTS_MIN } from "@/contracts/instagram";
 import { getImageGenerator } from "@/features/generation/image";
-import { dataSource } from "@/lib/supabase/env";
-import { removeObjects } from "@/lib/supabase/storage";
 import { getRepository } from "./data";
-import { checkUpload, resolveImages, storeImage, storeUpload } from "./data/images";
+import { checkUpload, storeImage } from "./data/images";
 import type { AssetInput, SeriesInput, SeriesRule, PlanTier } from "./data/types";
-import { extractCharacterFeaturesFromSelfie, extractStoryFromImage } from "./vision";
+import { extractStoryFromImage } from "./vision";
 import { generateAssetIllustrationSvg } from "./assets/assetVisuals";
 import { resolveStyleAnchor } from "@/features/generation/image/promptBuilder";
 
@@ -41,6 +42,25 @@ function fail(e: unknown): Fail {
   };
 }
 
+/** 사진 업로드로 만드는 커스텀 화풍은 Pro 부터다. 이미 쓰고 있던 이미지는 그대로 둔다(다운그레이드 후 수정). */
+async function assertCustomStyleAllowed(
+  repo: Awaited<ReturnType<typeof getRepository>>,
+  rule: SeriesRule,
+  prev?: SeriesRule | null,
+) {
+  if (!rule.customStyleImageUrl || rule.customStyleImageUrl === prev?.customStyleImageUrl) return;
+  const plan = (await repo.getProfile())?.plan ?? "free";
+  if (plan !== "pro" && plan !== "max") {
+    throw new Error("사진 업로드로 만드는 나만의 화풍은 Pro 플랜부터 쓸 수 있어요.");
+  }
+}
+
+/** 화면이 요금제별 기능을 미리 잠글 때 쓴다. 실제 차단은 각 액션이 서버에서 한다. */
+export async function getMyPlanAction(): Promise<PlanTier> {
+  const repo = await getRepository();
+  return (await repo.getProfile())?.plan ?? "free";
+}
+
 /**
  * 소재의 레퍼런스/썸네일 비주얼 생성 (OpenAI 생성기 또는 화풍 맞춤 일러스트)
  */
@@ -57,9 +77,30 @@ export async function generateAssetVisualAction(input: {
     const style = input.stylePreset || "심플 라인";
     const tagList = input.tags ?? [];
     const desc = input.description || "";
+    if (!input.name?.trim()) throw new Error("소재 이름을 먼저 적어 주세요.");
+    if (!input.description?.trim()) throw new Error("설명을 먼저 적어 주세요.");
 
-    // 1. OpenAI 또는 이미지 생성기 가용 시 실제 AI 생성 시도
+    // 1. OpenAI 또는 이미지 생성기 가용 시 실제 AI 생성 시도. 컷과 같이 1크레딧, 실패하면 환불한다.
     if (process.env.OPENAI_API_KEY) {
+      const repo = await getRepository();
+      const userId = await repo.currentUserId();
+      if (!userId) throw new Error("로그인이 필요해요");
+      const lock = await safetyLockMessage(userId);
+      if (lock) throw new Error(lock);
+      let holdId: string;
+      try {
+        holdId = await repo.holdCredit({
+          userId,
+          amount: CREDIT_COST.cutImage,
+          reason: "cut_image",
+          jobId: `asset_${crypto.randomUUID()}`,
+        });
+      } catch (e) {
+        if (e instanceof InsufficientCreditError) {
+          throw new Error(`크레딧이 부족해요. 소재 이미지 생성에 ${CREDIT_COST.cutImage}크레딧이 필요해요.`);
+        }
+        throw e;
+      }
       try {
         const generator = getImageGenerator();
         const styleAnchor = resolveStyleAnchor(style);
@@ -95,10 +136,17 @@ export async function generateAssetVisualAction(input: {
           },
         });
 
-        if (result.imageUrl) {
-          return { ok: true, imageUrl: result.imageUrl };
-        }
+        if (!result.imageUrl) throw new Error("이미지가 비어 있어요");
+        await repo.commitCredit(holdId);
+        revalidatePath("/settings");
+        return { ok: true, imageUrl: result.imageUrl };
       } catch (genErr) {
+        await repo.refundCredit(holdId, genErr instanceof Error ? genErr.message : "소재 이미지 생성 실패");
+        // 안전 검사에 걸린 건 기본 일러스트로 덮지 않고 알린다(크레딧은 돌려준다).
+        if (isSafetyBlocked(genErr)) {
+          await recordSafetyEvent({ ownerId: userId, kind: "image_flagged", source: genErr.provider });
+          throw new Error(`${genErr.message.replace("이 컷을", "이 소재 이미지를").replace("장면을", "설명을")} 크레딧은 돌려드렸어요.`);
+        }
         console.warn("AI asset visual generation fallback to SVG:", genErr);
       }
     }
@@ -125,8 +173,20 @@ export async function saveAssetAction(
   seriesIds?: string[],
 ): Promise<ResultWithId> {
   try {
+    if (!input.name?.trim()) throw new Error("소재 이름을 적어 주세요.");
+    // 설명은 소재 이미지와 모든 컷 생성 지시문에 그대로 들어간다. 비면 일관성이 무너진다.
+    if (!input.description?.trim()) throw new Error("설명을 적어 주세요.");
     const repo = await getRepository();
-    const saved = id ? await repo.updateAsset(id, input) : await repo.createAsset(input);
+    // AI 로 만든(또는 사진을 화풍 변환한) 이미지는 생성기 URL 이 만료될 수 있어 우리 버킷에 옮겨 둔다.
+    // 이 이미지가 소재 레퍼런스가 되어 모든 컷 생성에 실린다. 기본 일러스트(SVG)는 그대로 둔다.
+    let thumbUrl = input.thumbUrl;
+    if (thumbUrl && /^(https?:|data:image\/(png|jpeg|webp))/.test(thumbUrl)) {
+      const ownerId = await repo.currentUserId();
+      if (!ownerId) throw new Error("로그인이 필요해요");
+      thumbUrl = await storeImage({ bucket: "assets", ownerId, path: `visuals/${crypto.randomUUID()}`, imageUrl: thumbUrl });
+    }
+    const assetInput = { ...input, thumbUrl };
+    const saved = id ? await repo.updateAsset(id, assetInput) : await repo.createAsset(assetInput);
 
     if (seriesIds !== undefined) {
       const allSeries = await repo.listSeries();
@@ -187,38 +247,9 @@ export async function toggleSeriesAssetAction(
 
 
 /**
- * 에셋 레퍼런스 이미지 올리기(PRD 2.1 "각 에셋은 레퍼런스 이미지를 보유한다").
- * 파일은 서버가 받아 비공개 버킷에 넣는다. 에셋 소유는 RLS 가 확인한다.
- */
-export async function uploadAssetReferenceAction(form: FormData): Promise<Result> {
-  try {
-    const repo = await getRepository();
-    const ownerId = await repo.currentUserId();
-    if (!ownerId) throw new Error("로그인이 필요해요");
-    const assetId = String(form.get("assetId") ?? "");
-    // 남의 에셋이면 목록에 없다(RLS). 경로에 쓰기 전에 먼저 확인한다.
-    if (!(await repo.listAssets()).some((a) => a.id === assetId)) {
-      throw new Error("없는 에셋이에요");
-    }
-    const file = checkUpload(form.get("file"));
-    const ref = await storeUpload({
-      bucket: "assets",
-      ownerId,
-      path: `${assetId}/ref_${crypto.randomUUID().slice(0, 8)}`,
-      file,
-    });
-    await repo.addAssetReference(assetId, ref);
-    revalidatePath("/assets");
-    return { ok: true };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-/**
- * 온보딩 1단계 — 셀카·특징 태그·설명으로 캐릭터 시트를 만든다(PRD 1.1).
+ * 온보딩 1단계 — 특징 태그로 캐릭터 시트를 만든다(PRD 1.1).
  * 시트는 정면·측면·표정 4종·전신 7장이고, 모든 생성 호출에 고정 레퍼런스로 실린다.
- * 셀카 원본은 시트를 만든 뒤 지운다. 사용자가 보관을 켠 경우에만 남긴다.
+ * 셀카로 만들기는 2026-10-16 에 뺐다.
  */
 export async function createCharacterAction(
   form: FormData,
@@ -228,79 +259,38 @@ export async function createCharacterAction(
     const ownerId = await repo.currentUserId();
     if (!ownerId) throw new Error("로그인이 필요해요");
 
-    const method = String(form.get("method") ?? "");
     const style = String(form.get("style") ?? "심플 라인").slice(0, 20);
     const tags = String(form.get("tags") ?? "")
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
     if (tags.length > 5) throw new Error("특징 태그는 5개까지예요.");
-    if (method === "tags" && tags.length === 0) throw new Error("특징을 하나 이상 적어 주세요.");
-    if (method !== "tags" && method !== "selfie") throw new Error("캐릭터 만드는 방법을 골라 주세요.");
+    if (tags.length === 0) throw new Error("특징을 하나 이상 적어 주세요.");
 
+    const description = tags.join(", ");
     const asset = await repo.createAsset({
       kind: "character",
       name: "나",
-      description: tags.length ? tags.join(", ") : null,
+      description,
       tags,
     });
 
-    let selfieRef: string | null = null;
-    let selfieUrl: string | undefined;
-    let effectiveTags = tags;
-    let effectiveDesc = tags.length ? tags.join(", ") : null;
-
-    if (method === "selfie") {
-      const uploadFile = checkUpload(form.get("selfie"));
-      selfieRef = await storeUpload({
-        bucket: "assets",
-        ownerId,
-        path: `${asset.id}/selfie`,
-        file: uploadFile,
-      });
-      selfieUrl = (await resolveImages("assets", ownerId, [selfieRef])).get(selfieRef);
-
-      // Gemini Vision으로 셀카 분석하여 2D 캐릭터 외모 특징 추출
-      const bytes = await uploadFile.arrayBuffer();
-      const visionFeatures = await extractCharacterFeaturesFromSelfie({
-        buffer: bytes,
-        mimeType: uploadFile.type || "image/jpeg",
-      });
-
-      if (visionFeatures) {
-        effectiveTags = visionFeatures.tags;
-        effectiveDesc = visionFeatures.description;
-        await repo.updateAsset(asset.id, {
-          kind: asset.kind,
-          name: asset.name,
-          tags: effectiveTags,
-          description: effectiveDesc,
-        });
-      }
+    const lock = await safetyLockMessage(ownerId);
+    if (lock) throw new Error(lock);
+    let sheet;
+    try {
+      sheet = await getImageGenerator().generateCharacterSheet({ name: asset.name, tags, description, style });
+    } catch (e) {
+      if (isSafetyBlocked(e)) await recordSafetyEvent({ ownerId, kind: "image_flagged", source: e.provider });
+      throw e;
     }
-
-    const sheet = await getImageGenerator().generateCharacterSheet({
-      name: asset.name,
-      selfieUrl,
-      tags: effectiveTags,
-      description: effectiveDesc ?? undefined,
-      style,
-    });
     const refs: string[] = [];
     for (const view of CHARACTER_SHEET_VIEWS) {
       const imageUrl = sheet.views.find((v) => v.view === view)?.imageUrl;
       if (!imageUrl) continue;
       refs.push(await storeImage({ bucket: "assets", ownerId, path: `${asset.id}/sheet_${view}`, imageUrl }));
     }
-
-    const profile = await repo.getProfile();
-    if (selfieRef && profile?.keepSelfieOriginal) refs.push(selfieRef);
     await repo.setAssetReferences(asset.id, refs);
-
-    // 셀카 원본 기본 삭제(개인정보 처리방침). 목에는 파일이 없으니 지울 것도 없다.
-    if (selfieRef && !profile?.keepSelfieOriginal && dataSource() !== "mock") {
-      await removeObjects("assets", [selfieRef]);
-    }
 
     revalidatePath("/assets");
     return { ok: true, assetId: asset.id };
@@ -325,6 +315,7 @@ export async function createSeriesAction(
 ): Promise<ResultWithId> {
   try {
     const repo = await getRepository();
+    await assertCustomStyleAllowed(repo, input.rule);
     const s = await repo.createSeries(input);
     revalidatePath("/home");
     return { ok: true, id: s.id };
@@ -339,6 +330,8 @@ export async function updateSeriesRuleAction(
 ): Promise<Result> {
   try {
     const repo = await getRepository();
+    const prev = (await repo.getSeries(seriesId))?.rule ?? null;
+    await assertCustomStyleAllowed(repo, rule, prev);
     await repo.updateSeriesRule(seriesId, rule);
     revalidatePath(`/series/${seriesId}`);
     return { ok: true };
@@ -377,7 +370,9 @@ export async function startEpisodeAction(input: {
     const repo = await getRepository();
     const story = input.story.trim().slice(0, 500);
     if (!story) throw new Error("사연을 적어 주세요.");
-    if (input.cutCount < 1 || input.cutCount > 20) throw new Error("컷 수는 1컷에서 최대 20컷 사이로 선택해 주세요.");
+    if (input.cutCount < EPISODE_CUTS_MIN || input.cutCount > EPISODE_CUTS_MAX) {
+      throw new Error(`컷 수는 ${EPISODE_CUTS_MIN}~${EPISODE_CUTS_MAX}컷 사이로 골라 주세요.`);
+    }
     const r = await repo.startEpisode({ ...input, story });
     revalidatePath("/home");
     return { ok: true, ...r };

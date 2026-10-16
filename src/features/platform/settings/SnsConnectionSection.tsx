@@ -9,7 +9,6 @@ import {
   Sparkles,
   Link as LinkIcon,
   Lock,
-  Crown,
 } from "lucide-react";
 import { Badge, Button, Modal, Field } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -20,6 +19,8 @@ import {
 } from "../analytics/actions";
 import type { SnsAccountInfo, SnsAnalyticsData } from "../analytics/types";
 import type { PlanTier } from "../data/types";
+import { disconnectInstagramAccountAction } from "../instagram/actions";
+import { SnsComingSoon, SnsDemoBadge } from "../analytics/components/SnsComingSoon";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -66,6 +67,10 @@ export interface SnsConnectionSectionProps {
   onDataUpdate: (data: SnsAnalyticsData) => void;
   onNavigateToAnalytics?: () => void;
   onNavigateToPricing?: () => void;
+  /** 실제 인스타 연동(시험용). 꺼져 있으면 undefined, 켜졌는데 미연결이면 null. */
+  liveInstagram?: { username: string } | null;
+  /** 목 모드 데모(아이디 입력·예시 수치)를 보여줄지. 배포에서는 false — "출시 예정". */
+  snsDemo?: boolean;
 }
 
 export function SnsConnectionSection({
@@ -74,6 +79,8 @@ export function SnsConnectionSection({
   onDataUpdate,
   onNavigateToAnalytics,
   onNavigateToPricing,
+  liveInstagram,
+  snsDemo = false,
 }: SnsConnectionSectionProps) {
   const [pending, start] = useTransition();
   const [openModal, setOpenModal] = useState(false);
@@ -104,7 +111,7 @@ export function SnsConnectionSection({
           overview: {
             totalReach: 0,
             totalReachDelta: 0,
-            totalImpressions: 0,
+            totalViews: 0,
             avgSaves: 0,
             avgSavesDelta: 0,
             avgShares: 0,
@@ -153,8 +160,57 @@ export function SnsConnectionSection({
     });
   };
 
+  const handleLiveDisconnect = () => {
+    if (!confirm("인스타그램 연결을 해제할까요? 예약해 둔 발행은 취소돼요.")) return;
+    start(async () => {
+      const res = await disconnectInstagramAccountAction();
+      setNotice(res.ok ? "인스타그램 연결을 해제했어요." : res.message);
+      if (res.ok) window.location.reload();
+    });
+  };
+
+  const liveBlock = (
+    <>
+      {/* 실제 연동(Instagram Login). 앱 심사 전에는 Meta 앱에 역할로 등록된 계정만 연결된다 */}
+      {liveInstagram !== undefined && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand-tint/40 px-3.5 py-2.5 text-caption">
+          <span className="font-semibold text-ink">
+            {liveInstagram ? `실제 연동: @${liveInstagram.username}` : "실제 인스타그램 연동(시험)"}
+          </span>
+          {liveInstagram ? (
+            <Button size="sm" variant="ghost" disabled={pending} onClick={handleLiveDisconnect} className="text-ink-muted hover:text-danger">
+              연결 해제
+            </Button>
+          ) : (
+            <a href="/api/instagram/connect" className="font-bold text-brand hover:underline">
+              인스타그램으로 로그인 ↗
+            </a>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  // 배포(실 저장소): 아이디만 받는 데모 연동은 인증이 없어 쓰지 않는다. 기능 출시 전까지 "출시 예정".
+  if (!snsDemo) {
+    return (
+      <section className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        {notice && <p className="text-caption font-semibold text-brand">{notice}</p>}
+        {liveBlock}
+        {liveInstagram === undefined && (
+          <SnsComingSoon
+            title="인스타그램 연동"
+            description="인스타그램 로그인으로 본인 계정을 연결해 회차별 도달·저장 반응을 모아 보고, 원클릭 발행·자동 예약까지 쓰는 기능을 준비하고 있어요."
+            className="border-0 bg-transparent p-0"
+          />
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+      {liveBlock}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white shadow-2xs">
@@ -164,9 +220,12 @@ export function SnsConnectionSection({
             <div className="flex items-center gap-2">
               <h2 className="text-title font-semibold">SNS 연재 계정 연동</h2>
               {account.connected ? (
-                <Badge tone="brand" className="text-[11px] font-bold">
-                  연동됨
-                </Badge>
+                <>
+                  <Badge tone="brand" className="text-[11px] font-bold">
+                    연동됨
+                  </Badge>
+                  <SnsDemoBadge />
+                </>
               ) : (
                 <Badge tone="neutral" className="text-[11px]">
                   미연동
@@ -179,17 +238,6 @@ export function SnsConnectionSection({
           </div>
         </div>
 
-        {!account.connected && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setOpenModal(true)}
-            className="shrink-0 gap-1.5 bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 font-bold text-white shadow-xs"
-          >
-            <InstagramIcon className="size-3.5" />
-            <span>연동하기</span>
-          </Button>
-        )}
       </div>
 
       {notice && (
@@ -274,129 +322,31 @@ export function SnsConnectionSection({
               </span>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setOpenModal(true)}
-            className="shrink-0 gap-1.5 font-semibold text-ink"
-          >
-            <InstagramIcon className="size-3.5 text-pink-600" />
-            <span>계정 등록</span>
+          {/* 연결 버튼은 여기 하나만 둔다 */}
+          <Button variant="primary" size="sm" onClick={() => setOpenModal(true)} className="shrink-0 gap-1.5 font-semibold">
+            <InstagramIcon className="size-3.5" />
+            <span>계정 연동하기</span>
           </Button>
         </div>
       )}
 
-      {/* 방안 B 정책: 플랜별 인스타그램 연동 혜택 & Free 업그레이드 유도 */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-surface-sunken/30 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="size-4 text-brand" />
-            <span className="text-caption font-bold text-ink">플랜별 인스타그램 연동 기능 안내</span>
-          </div>
-          <Badge tone={userPlan === "free" ? "neutral" : "brand"} className="text-[10px]">
-            현재: {userPlan === "free" ? "Free 무료 플랜" : userPlan === "pro" ? "Pro 플랜" : "Max 플랜"}
-          </Badge>
+      {/* 요금제 비교는 요금제 탭에만 둔다. 여기서는 무료에게 한 줄 안내만 */}
+      {userPlan === "free" && onNavigateToPricing && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-pink-500/10 border border-pink-500/20 px-3.5 py-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-pink-900">
+            <Lock className="size-3 shrink-0 text-pink-500" />
+            AI 독자 반응 피드백은 Pro 플랜부터 쓸 수 있어요. 원클릭 발행 · 자동 예약은 출시 예정이에요.
+          </span>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={onNavigateToPricing}
+            className="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-bold text-xs h-7 px-3 shrink-0"
+          >
+            Pro 플랜 알아보기 ↗
+          </Button>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-caption">
-          {/* Free 플랜 */}
-          <div className={cn(
-            "flex flex-col gap-1.5 rounded-lg border p-3 bg-surface-card",
-            userPlan === "free" ? "border-brand/40 ring-1 ring-brand/30" : "border-border/60 opacity-80"
-          )}>
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-ink">Free (무료 체험)</span>
-              {userPlan === "free" && <Badge tone="brand" className="text-[9px]">내 플랜</Badge>}
-            </div>
-            <ul className="text-[11px] text-ink-muted space-y-1">
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-brand">✓</span> 기본 성과(도달/저장) 요약 조회
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-brand">✓</span> 컷 완성본 수동 다운로드 후 외부 게시
-              </li>
-              <li className="flex items-center gap-1.5 text-ink-subtle">
-                <Lock className="size-2.5 text-ink-subtle shrink-0" /> 1-Click 피드 즉시 발행 (미지원)
-              </li>
-              <li className="flex items-center gap-1.5 text-ink-subtle">
-                <Lock className="size-2.5 text-ink-subtle shrink-0" /> 자동 예약 스케줄러 (미지원)
-              </li>
-            </ul>
-          </div>
-
-          {/* Pro 플랜 */}
-          <div className={cn(
-            "flex flex-col gap-1.5 rounded-lg border p-3 bg-surface-card",
-            userPlan === "pro" ? "border-brand/40 ring-1 ring-brand/30" : "border-pink-500/30 bg-pink-500/[0.02]"
-          )}>
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-ink flex items-center gap-1">
-                Pro (프로 작가)
-                <span className="text-[10px] text-pink-600 font-semibold">추천 ✨</span>
-              </span>
-              {userPlan === "pro" && <Badge tone="brand" className="text-[9px]">내 플랜</Badge>}
-            </div>
-            <ul className="text-[11px] text-ink-muted space-y-1">
-              <li className="flex items-center gap-1.5 text-ink font-medium">
-                <span className="text-pink-600">✓</span> <strong>1-Click 피드 즉시 발행</strong>
-              </li>
-              <li className="flex items-center gap-1.5 text-ink font-medium">
-                <span className="text-pink-600">✓</span> <strong>인스타그램 자동 예약 발행</strong>
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-pink-600">✓</span> 실시간 독자 반응 AI 피드백
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-pink-600">✓</span> 협찬 미디어킷 (웹 링크 & PDF)
-              </li>
-            </ul>
-          </div>
-
-          {/* Max 플랜 */}
-          <div className={cn(
-            "flex flex-col gap-1.5 rounded-lg border p-3 bg-surface-card",
-            userPlan === "max" ? "border-brand/40 ring-1 ring-brand/30" : "border-border/60 opacity-80"
-          )}>
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-ink flex items-center gap-1">
-                Max (맥스 전업)
-                <Crown className="size-3 text-amber-500" />
-              </span>
-              {userPlan === "max" && <Badge tone="brand" className="text-[9px]">내 플랜</Badge>}
-            </div>
-            <ul className="text-[11px] text-ink-muted space-y-1">
-              <li className="flex items-center gap-1.5 text-ink font-medium">
-                <span className="text-amber-600">✓</span> <strong>Pro 모든 혜택 포함 (즉시/예약/미디어킷)</strong>
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-amber-600">✓</span> 나만의 그림체 학습 (Custom LoRA)
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-amber-600">✓</span> 4K Ultra HD & Turbo 전용 GPU 큐
-              </li>
-              <li className="flex items-center gap-1.5 text-ink">
-                <span className="text-amber-600">✓</span> 광고주 협찬 매칭 풀 우선 노출
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        {userPlan === "free" && onNavigateToPricing && (
-          <div className="flex items-center justify-between rounded-lg bg-pink-500/10 border border-pink-500/20 px-3.5 py-2">
-            <span className="text-[11px] font-semibold text-pink-900">
-              ⚡ 1-Click 즉시 발행과 자동 예약 발행으로 연재를 자동화하고 싶으신가요?
-            </span>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onNavigateToPricing}
-              className="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-bold text-xs h-7 px-3 shrink-0"
-            >
-              Pro 플랜 업그레이드 ↗
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* 인스타그램 연동 모달 */}
       <Modal

@@ -37,6 +37,18 @@ export async function renderCutPng(tree: CutLayerTree, options: ExportOptions): 
   return withAiMetadata(new Uint8Array(await blob.arrayBuffer()));
 }
 
+/**
+ * 인스타 발행용 JPEG. Instagram API 는 JPEG 만 받는다(8MB, 폭 320~1440, sRGB).
+ * PNG 의 AI 메타데이터는 JPEG 로 옮겨지지 않는다 — 대신 발행할 때 is_ai_generated 라벨을 붙인다.
+ * 배경은 frame() 이 흰색으로 채우므로 투명 영역이 검게 바뀌지 않는다.
+ */
+export async function renderCutJpeg(tree: CutLayerTree, options: ExportOptions, quality = 0.92): Promise<Blob> {
+  const framed = frame(await renderTree(tree), options);
+  return new Promise<Blob>((resolve, reject) =>
+    framed.toBlob((b) => (b ? resolve(b) : reject(new Error("JPEG 를 만들지 못했어요"))), "image/jpeg", quality),
+  );
+}
+
 /** 컷 하나를 PNG Data URL 로 변환 (대사·말풍선이 합성된 완성본). 웹툰/인스타 뷰어 미리보기용. */
 export async function renderCutDataUrl(tree: CutLayerTree, options?: Partial<ExportOptions>): Promise<string> {
   const native = await renderTree(tree);

@@ -209,7 +209,7 @@ export function CreditPurchaseModal({
 
                     <div className="mt-1 flex items-center justify-between text-caption">
                       <span className="font-extrabold text-ink tabular-nums">{won(packPrice)}</span>
-                      <span className="text-ink-subtle">컷당 {won(unitPrice)}</span>
+                      <span className="text-ink-subtle">1C당 {won(unitPrice)}</span>
                     </div>
 
                     <p className="mt-2 text-[11px] text-ink-muted border-t border-border/50 pt-1.5">

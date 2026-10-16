@@ -17,6 +17,7 @@ import "server-only";
 import { CREDIT_COST, CREDIT_SQLSTATE, InsufficientCreditError } from "@/contracts/credit";
 import {
   CREDIT_REASON_BY_INTENT,
+  isSafetyBlocked,
   type CutEditIntent,
   type GenerationJob,
   type GenerationMode,
@@ -28,6 +29,7 @@ import { processSingleton } from "@/lib/singleton";
 import { getGenerationStore } from "./data";
 import { saveMockJob } from "./data/mock";
 import { getImageGenerator } from "./image";
+import { recordSafetyEvent, safetyLockMessage } from "./safety/strikes";
 import { createMemoryQueue } from "./queue/memory";
 import {
   MAX_ACTIVE_JOBS_PER_USER,
@@ -126,9 +128,21 @@ const runCut: CutRunner = async (work: CutWork) => {
     await repo.commitCredit(holdId);
     return saved;
   } catch (e) {
-    // 실패한 요청의 크레딧은 자동 환불한다(PRD 3.1.1 예외).
+    // 실패한 요청의 크레딧은 자동 환불한다(PRD 3.1.1 예외). 이미지 안전 검사에 걸린 것도 같다 —
+    // 오탐이 섞여 있어 사용자 잘못으로 보지 않는다. 대신 판정을 남겨 반복되면 생성을 잠시 막는다.
     const message = e instanceof Error ? e.message : "생성 실패";
     await repo.refundCredit(holdId, message);
+    if (isSafetyBlocked(e)) {
+      await recordSafetyEvent({
+        ownerId: work.job.userId,
+        kind: "image_flagged",
+        source: e.provider,
+        episodeId: work.job.episodeId,
+        cutId: work.cut.cutId,
+        jobId: work.job.id,
+      });
+      throw new CutFailure(`${message} 크레딧은 돌려드렸어요.`, true);
+    }
     throw new CutFailure(message, true);
   }
 };
@@ -204,12 +218,23 @@ export async function startGeneration(
 ): Promise<StartGenerationResult> {
   const { storyboard } = input;
 
+  const lock = await safetyLockMessage(input.userId);
+  if (lock) return { ok: false, reason: "safety", message: lock };
+
   // 컷 장면은 그대로 프롬프트가 되므로 여기서도 필터를 건다.
   // 콘티 단계를 통과했어도 사용자가 장면을 직접 고쳤을 수 있다.
   for (const cut of storyboard.cuts) {
     const dialogueText = cut.dialogue.map((d) => d.text).join(" ");
     const verdict = screenText(`${cut.scene} ${cut.narration ?? ""} ${dialogueText}`);
     if (!verdict.allowed) {
+      await recordSafetyEvent({
+        ownerId: input.userId,
+        kind: "text_blocked",
+        source: "text_filter",
+        category: verdict.category ?? null,
+        episodeId: storyboard.episodeId,
+        cutId: cut.id,
+      });
       return { ok: false, reason: "safety", message: verdict.message! };
     }
   }
@@ -285,9 +310,22 @@ export async function regenerateCut(input: {
   skipFaceLock?: boolean;
   maskUrl?: string;
 }): Promise<{ ok: boolean; message?: string }> {
+  const lock = await safetyLockMessage(input.userId);
+  if (lock) return { ok: false, message: lock };
+
   if (input.prompt) {
     const verdict = screenText(input.prompt);
-    if (!verdict.allowed) return { ok: false, message: verdict.message };
+    if (!verdict.allowed) {
+      await recordSafetyEvent({
+        ownerId: input.userId,
+        kind: "text_blocked",
+        source: "text_filter",
+        category: verdict.category ?? null,
+        cutId: input.cutId,
+        jobId: input.jobId,
+      });
+      return { ok: false, message: verdict.message };
+    }
   }
 
   const job = await ownedJob(input.jobId, input.userId);
@@ -319,6 +357,9 @@ export async function retryFailedCuts(input: {
   userId: string;
   skipFaceLock?: boolean;
 }): Promise<{ ok: boolean; message?: string }> {
+  const lock = await safetyLockMessage(input.userId);
+  if (lock) return { ok: false, message: lock };
+
   const job = await ownedJob(input.jobId, input.userId);
   if (!job) return { ok: false, message: "이 생성 기록을 찾지 못했어요" };
 

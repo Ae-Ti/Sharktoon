@@ -51,31 +51,19 @@ async function run() {
     }
     await new Promise((r) => setTimeout(r, 500));
 
-    // "셀카로 만들기" 선택 (기본 선택되어 있지만 확실히 클릭)
-    console.log("👉 '셀카로 만들기' 선택 및 셀카 사진 업로드");
-    const choiceCards = await page.$$("div[role='group'] button, button");
-    for (const btn of choiceCards) {
-      const text = await btn.evaluate((el) => el.innerText);
-      if (text.includes("셀카로 만들기")) {
-        await btn.click();
-        break;
-      }
+    // "특징 태그로 만들기"(기본 선택)에 태그 입력
+    console.log("👉 '특징 태그로 만들기' 태그 입력");
+    const tagInput = await page.$("input[placeholder*='안경']");
+    if (tagInput) {
+      await tagInput.type("안경, 단발, 후드티", { delay: 15 });
+      console.log("🏷️ 특징 태그 입력 완료");
     }
     await new Promise((r) => setTimeout(r, 500));
 
-    // 셀카 파일 업로드
-    const selfieInput = await page.$("input[type='file']");
-    if (selfieInput) {
-      const selfiePath = path.resolve("test_selfie.jpg");
-      await selfieInput.uploadFile(selfiePath);
-      console.log("📸 셀카 사진(test_selfie.jpg) 업로드 완료");
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-
     await snap("02_tags_entered.png");
 
-    // 다음 버튼 클릭 (셀카 비전 분석 및 캐릭터 시트 생성 시작)
-    console.log("👉 '다음' 버튼 클릭 -> 셀카 분석 및 캐릭터 시트 생성 대기");
+    // 다음 버튼 클릭 (캐릭터 시트 생성 시작)
+    console.log("👉 '다음' 버튼 클릭 -> 캐릭터 시트 생성 대기");
     const nextBtn = await page.evaluateHandle(() => {
       const buttons = Array.from(document.querySelectorAll("button"));
       return buttons.find((b) => b.innerText.trim() === "다음");
@@ -84,7 +72,7 @@ async function run() {
       await nextBtn.asElement().click();
     }
 
-    // 2. 사연 페이지 대기 (Gemini Vision + FLUX 캐릭터 시트 생성 대기: 최대 300초)
+    // 2. 사연 페이지 대기 (FLUX 캐릭터 시트 생성 대기: 최대 300초)
     await page.waitForFunction(() => window.location.pathname.includes("/onboarding/story"), { timeout: 300000 });
     console.log("📍 [Step 2] 온보딩 사연 페이지 도착:", page.url());
     await snap("03_onboarding_story.png");

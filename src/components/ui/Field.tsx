@@ -5,6 +5,8 @@ import { cn } from "@/lib/cn";
 
 export interface FieldProps {
   label: string;
+  /** 위에 같은 제목이 이미 있을 때. 화면에서는 숨기고 스크린리더에는 남긴다. */
+  hideLabel?: boolean;
   id?: string;
   /** 지시문이 아니라 실제로 쓸 법한 예시 문장 한 토막을 넣는다. */
   placeholder?: string;
@@ -23,6 +25,7 @@ export interface FieldProps {
 
 export function Field({
   label,
+  hideLabel,
   id,
   placeholder,
   value,
@@ -63,7 +66,7 @@ export function Field({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={fieldId} className="text-label font-semibold text-ink">
+        <label htmlFor={fieldId} className={cn("text-label font-semibold text-ink", hideLabel && "sr-only")}>
           {label}
         </label>
         {optional && (

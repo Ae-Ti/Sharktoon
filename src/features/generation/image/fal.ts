@@ -9,6 +9,7 @@
 import {
   CHARACTER_SHEET_LABEL,
   CHARACTER_SHEET_VIEWS,
+  SafetyBlockedError,
   type CharacterSheetRequest,
   type CharacterSheetResult,
   type CutGenerationRequest,
@@ -305,6 +306,8 @@ export class FalFluxGenerator implements ImageGenerator {
     }
 
     const data = await res.json();
+    // 안전 검사에 걸리면 fal 은 오류 대신 검은 이미지를 준다. 저장하지 않고 실패로 돌린다.
+    if (flaggedUnsafe(data)) throw new SafetyBlockedError("fal");
     const img = data.images?.[0];
     if (!img?.url) {
       throw new Error("Fal.ai 응답에 이미지 URL이 없습니다.");
@@ -358,20 +361,6 @@ export class FalFluxGenerator implements ImageGenerator {
             break;
         }
 
-        const negative_prompt = [
-          "semi-realistic, 3d render, photorealistic, realistic photo, hyperrealistic, oil painting",
-          "chibi, SD, super deformed, oversized head, dwarf, tiny body, toddler proportions, baby body, distorted anatomy, short stubby limbs",
-          "giant eyes, huge bug eyes covering half of face, oversized anime doll eyes, baby face, toddler face, infant cheeks, compressed jaw",
-          "soft shading, painterly, uneven linework, sketchy, messy lines, scratchy lineart, varying line weight",
-          "smooth airbrush, gradients, volumetric lighting, watercolor, colored pencil, blurry lines, soft focus",
-          "high bun, topknot, hair bun, messy bun, hair scrunchie, hair updo, chignon, wearing hood over head, hood pulled up, hood covering head, altered hairstyle",
-          "realistic skin pores, realistic eyes, photographic lighting, dark shadows",
-          "room, interior, bedroom, furniture, wall, colored background, complex background, shadow on wall",
-          "cat ears on human, animal ears on human, animal headband, tail on human",
-          "doctor coat, lab coat, medical scrubs, stethoscope",
-          "text, words, letters, typography, alphabet, speech bubble, thought bubble, talk bubble, dialogue box, captions, watermark, signature",
-        ].join(", ");
-
         const prompt = [
           `A character design sheet for a 2D Korean webcomic manhwa character '${req.name}', soft line art style.`,
           `Art Style: soft line art, ${stylePrompt}, clean ink lineart, flat solid cel shading with crisp hard shadow boundaries, zero gradients, clean digital webcomic aesthetic.`,
@@ -389,11 +378,6 @@ export class FalFluxGenerator implements ImageGenerator {
 
         console.log(`\n🎨 [FLUX Sheet View: ${view}] Prompt:\n${prompt}\n`);
 
-        const usePuLID = Boolean(req.selfieUrl && this.variant === "dev");
-        const sheetEndpoint = usePuLID
-          ? "https://fal.run/fal-ai/flux-pulid"
-          : endpoint;
-
         const seed = (getEpisodeSeed(req.name, idx + 1) + idx * 101) % 2147483647;
 
         const sheetLoras = [
@@ -403,32 +387,17 @@ export class FalFluxGenerator implements ImageGenerator {
           },
         ];
 
-        const body: Record<string, unknown> = usePuLID
-          ? {
-              prompt,
-              negative_prompt,
-              reference_image_url: req.selfieUrl,
-              id_weight: 1.0,
-              guidance_scale: 3.8,
-              true_cfg: 1.0,
-              max_sequence_length: "512",
-              num_inference_steps: 28,
-              seed,
-              width: 1024,
-              height: 1024,
-              loras: sheetLoras,
-            }
-          : {
-              prompt,
-              image_size: { width: 1024, height: 1024 },
-              num_inference_steps: this.variant === "schnell" ? 4 : 28,
-              num_images: 1,
-              seed,
-              enable_safety_checker: true,
-              loras: sheetLoras,
-            };
+        const body: Record<string, unknown> = {
+          prompt,
+          image_size: { width: 1024, height: 1024 },
+          num_inference_steps: this.variant === "schnell" ? 4 : 28,
+          num_images: 1,
+          seed,
+          enable_safety_checker: true,
+          loras: sheetLoras,
+        };
 
-        const res = await fetch(sheetEndpoint, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: {
             Authorization: `Key ${apiKey}`,
@@ -443,6 +412,7 @@ export class FalFluxGenerator implements ImageGenerator {
         }
 
         const data = await res.json();
+        if (flaggedUnsafe(data)) throw new SafetyBlockedError("fal", "캐릭터 시트가 이미지 안전 검사에 걸렸어요. 특징 태그를 바꿔 다시 만들어 주세요.");
         const img = data.images?.[0];
         return {
           view,
@@ -473,3 +443,9 @@ export class FalFluxGenerator implements ImageGenerator {
     return false;
   }
 }
+
+/** fal 응답의 안전 검사 결과. 이미지마다 true/false 배열이다(엔드포인트에 따라 없을 수 있다). */
+function flaggedUnsafe(data: { has_nsfw_concepts?: unknown }): boolean {
+  return Array.isArray(data.has_nsfw_concepts) && data.has_nsfw_concepts.some(Boolean);
+}
+

@@ -2,12 +2,12 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { Sparkles, Image as ImageIcon, Wand2, Check } from "lucide-react";
+import { CREDIT_COST } from "@/contracts/credit";
 import { cn } from "@/lib/cn";
 import { Button, ChoiceCard, Field, Modal } from "@/components/ui";
 import {
   generateAssetVisualAction,
   saveAssetAction,
-  uploadAssetReferenceAction,
 } from "@/features/platform/actions";
 import type { Asset, AssetKind } from "@/features/platform/data/types";
 import { generateAssetIllustrationSvg } from "./assetVisuals";
@@ -128,20 +128,26 @@ export function AssetFormModal({
 
   // AI 소재 이미지 생성 핸들러 (실제 AI 모델 또는 작품 스타일 맞춤 일러스트)
   function handleGenerateAiVisual(refImageOverride?: string | null) {
+    // 크레딧이 드는 생성이다. 이름·설명·태그가 비어 있으면 아무 그림이나 나오니 먼저 받는다.
+    const hasRef = Boolean(refImageOverride ?? filePreview);
+    if (!name.trim()) {
+      setError("소재 이름을 먼저 적어 주세요. 이름·설명·태그가 그대로 생성에 들어가요.");
+      return;
+    }
+    if (!description.trim()) {
+      setError(hasRef ? "설명을 적어 주세요. 올린 사진과 설명을 함께 보고 그려요." : "설명을 적어 주세요. 적은 내용대로 그려요.");
+      return;
+    }
+    if (tooManyTags) {
+      setError("특징 태그는 5개까지만 넣을 수 있어요.");
+      return;
+    }
     const effectiveTags = [...tagList];
     if (kind === "animal" && !effectiveTags.includes("동물")) {
       effectiveTags.push("동물");
     }
 
-    const assetName =
-      name.trim() ||
-      (kind === "animal"
-        ? "반려동물"
-        : kind === "character"
-        ? "주인공"
-        : kind === "location"
-        ? "배경 장소"
-        : "소품");
+    const assetName = name.trim();
 
     startGeneratingAi(async () => {
       try {
@@ -161,6 +167,9 @@ export function AssetFormModal({
           setError(null);
           return;
         }
+        // 크레딧 부족처럼 사용자가 알아야 하는 실패는 일러스트로 덮지 않는다.
+        setError(res.message);
+        return;
       } catch (err) {
         console.warn("AI generation failed, fallback to local visual:", err);
       }
@@ -204,8 +213,19 @@ export function AssetFormModal({
       setError("소재 이름을 적어 주세요.");
       return;
     }
+    if (!description.trim()) {
+      setError("설명을 적어 주세요. 컷을 그릴 때 이 문장이 그대로 들어가요.");
+      return;
+    }
     if (tooManyTags) {
       setError("특징 태그는 5개까지만 넣을 수 있어요.");
+      return;
+    }
+
+    // 올린 사진은 작품 화풍으로 변환해서만 쓴다(1크레딧). 원본 실사 사진을 레퍼런스로 두면
+    // 화풍이 흔들리고, 실제 인물 사진이 그대로 생성에 들어간다.
+    if (file && !isConvertedToStyle) {
+      setError(`올린 사진을 작품 화풍으로 변환해 주세요 (${CREDIT_COST.cutImage}크레딧). 원본 사진은 그대로 쓰지 않아요.`);
       return;
     }
 
@@ -219,27 +239,7 @@ export function AssetFormModal({
     start(async () => {
       let effectiveThumb = generatedPreview;
 
-      // 이미지를 직접 올리지도 않았고 AI 비주얼도 아직 수동 생성하지 않은 경우, 저장 시점에 화풍 맞춤 AI 비주얼 자동 생성
-      if (!effectiveThumb && !file) {
-        try {
-          const res = await generateAssetVisualAction({
-            name: name.trim(),
-            kind: effectiveKind,
-            description: description.trim() || null,
-            tags: finalTags,
-            stylePreset: activeStylePreset,
-            customStyleImageUrl: targetSeries?.customStyleImageUrl ?? null,
-            referenceImageUrl: filePreview,
-          });
-          if (res.ok) {
-            effectiveThumb = res.imageUrl;
-          }
-        } catch (err) {
-          console.warn("Auto AI visual generation during submit failed:", err);
-        }
-      }
-
-      // 오프라인이거나 모델 실패 시의 최종 안전망 일러스트
+      // 저장할 때 AI 생성을 몰래 돌리지 않는다(크레딧이 든다). 직접 생성하지 않았으면 일러스트로 둔다.
       if (!effectiveThumb) {
         effectiveThumb = generateAssetIllustrationSvg({
           name: name.trim(),
@@ -265,16 +265,6 @@ export function AssetFormModal({
       if (!r.ok) {
         setError(r.message);
         return;
-      }
-      if (file) {
-        const form = new FormData();
-        form.set("assetId", r.id);
-        form.set("file", file);
-        const up = await uploadAssetReferenceAction(form);
-        if (!up.ok) {
-          setError(`저장은 됐지만 이미지를 못 올렸어요. ${up.message}`);
-          return;
-        }
       }
       onClose();
     });
@@ -334,12 +324,9 @@ export function AssetFormModal({
 
       {/* 2. 소속 작품 안내 (드롭다운에서 선택된 작품에 바로 저장) */}
       {targetSeries ? (
-        <div className="flex items-center justify-between rounded-xl border border-brand/30 bg-brand-tint/60 px-3.5 py-2.5 text-caption">
+        <div className="flex items-center rounded-xl border border-brand/30 bg-brand-tint/60 px-3.5 py-2.5 text-caption">
           <span className="font-semibold text-ink flex items-center gap-1.5">
             📁 등록 작품: <strong className="text-brand font-bold">&lsquo;{targetSeries.title}&rsquo;</strong>
-          </span>
-          <span className="text-[11px] font-semibold text-brand bg-white/90 px-2 py-0.5 rounded-md border border-brand/30 shadow-3xs">
-            자동 저장 및 화풍 일치
           </span>
         </div>
       ) : (
@@ -400,8 +387,7 @@ export function AssetFormModal({
         value={description}
         onChange={setDescription}
         placeholder={p.desc}
-        help="생성할 때 이 문장이 그대로 들어가요. 구체적일수록 일관성이 올라가요."
-        optional
+        help="소재 이미지와 모든 컷을 그릴 때 이 문장이 그대로 들어가요. 구체적일수록 일관성이 올라가요."
       />
 
       {/* 5. 특징 태그 입력 */}
@@ -469,7 +455,7 @@ export function AssetFormModal({
                     className="inline-flex items-center gap-1 rounded-lg bg-brand text-on-brand hover:opacity-90 disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold cursor-pointer transition-all shadow-3xs"
                   >
                     <Wand2 className="size-3" />
-                    {isGeneratingAi ? "화풍 변환 중..." : `작품 화풍(${activeStylePreset})으로 변환`}
+                    {isGeneratingAi ? "화풍 변환 중..." : `작품 화풍(${activeStylePreset})으로 변환 · ${CREDIT_COST.cutImage}크레딧`}
                   </button>
                   {isConvertedToStyle && !isGeneratingAi && (
                     <span className="text-[11px] font-semibold text-brand flex items-center gap-0.5">
@@ -480,7 +466,7 @@ export function AssetFormModal({
               </div>
             ) : (
               <p className="text-caption text-ink-muted leading-tight">
-                사진을 올리지 않아도 <strong>AI가 작품 화풍({activeStylePreset})</strong>에 맞춰 소재 일러스트를 직접 자동 생성합니다.
+                이름·설명대로 <strong>작품 화풍({activeStylePreset})</strong>에 맞춘 소재 이미지를 만들어요.
               </p>
             )}
 
@@ -492,11 +478,11 @@ export function AssetFormModal({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand-tint px-2.5 py-1 text-caption font-bold text-brand hover:bg-brand/15 disabled:opacity-50 cursor-pointer shadow-3xs"
               >
                 <Sparkles className="size-3.5" />
-                {isGeneratingAi ? "화풍 AI 생성 중..." : "AI 소재 이미지 미리 생성"}
+                {isGeneratingAi ? "화풍 AI 생성 중..." : `AI 소재 이미지 생성 · ${CREDIT_COST.cutImage}크레딧`}
               </button>
 
               <label className="inline-flex items-center gap-1 rounded-lg border border-border-control bg-surface-card px-2.5 py-1 text-caption font-medium text-ink hover:border-brand cursor-pointer">
-                <span>📁 사진·그림 올리기</span>
+                <span>📁 사진·그림 올려 변환</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"

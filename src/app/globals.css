@@ -103,3 +103,11 @@ dialog::backdrop {
   will-change: transform, box-shadow;
 }
 
+
+/* 가로로 밀어 보는 탭·칩 줄. 스크롤은 되고 막대는 숨긴다. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

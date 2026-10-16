@@ -53,7 +53,6 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
 
   const daysInCycle = policy.attendanceStreakDays || 7;
   const streakBonus = policy.attendanceStreakBonus ?? 2;
-  const monthBonus = policy.attendanceMonthStreakBonus ?? 5;
   const dailyCredit = policy.attendanceDaily ?? 1;
 
   // 7일 사이클 계산
@@ -196,15 +195,7 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
         })}
       </div>
 
-      {/* 하단 서브 정보: 4주 연속 보너스 마일스톤 안내 */}
-      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 text-caption text-ink-muted px-1">
-        <span className="flex items-center gap-1.5">
-          <span className="text-amber-500">🎁</span>
-          <span>
-            <strong className="font-semibold text-ink">4주(28일) 연속 출석</strong> 달성 시{" "}
-            <strong className="font-semibold text-amber-600">+{monthBonus}.0 크레딧</strong> 스페셜 보너스 지급!
-          </span>
-        </span>
+      <div className="mt-3.5 flex items-center justify-end text-caption px-1">
         <span className="font-medium text-ink-subtle">
           누적 출석 <strong className="font-bold text-ink">{currentStreak}</strong>일
         </span>

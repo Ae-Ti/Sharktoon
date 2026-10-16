@@ -8,6 +8,7 @@ import { startEpisodeAction, extractStoryFromImageAction } from "@/features/plat
 import { SeriesFormModal } from "@/features/platform/series/SeriesFormModal";
 import type { SeriesSummary } from "@/features/platform/data/types";
 import { cn } from "@/lib/cn";
+import { EPISODE_CUTS_MAX, EPISODE_CUTS_MIN } from "@/contracts/instagram";
 
 const EXAMPLES = [
   { chip: "회사 빌런", text: "어제 부장님이 회의 중에 내 아이디어를 자기 것처럼 말했다", emoji: "🏢" },
@@ -348,14 +349,14 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
         </div>
       </div>
 
-      {/* 3. 컷 수 선택 섹션 (1~20컷 자유 선택) */}
+      {/* 3. 컷 수 선택 섹션 (4~10컷) */}
       <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="flex size-7 items-center justify-center rounded-lg bg-surface-sunken text-ink-muted">
               <Layers className="size-4" />
             </span>
-            <h2 className="text-title font-semibold text-ink">컷 수 선택 (최대 20컷)</h2>
+            <h2 className="text-title font-semibold text-ink">컷 수 선택 (4~10컷)</h2>
           </div>
           <span className="text-caption font-bold text-brand">현재 {cutCount}컷</span>
         </div>
@@ -393,33 +394,33 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
           })}
         </div>
 
-        {/* 직접 컷 수 조절 스텝퍼 (1 ~ 20컷) */}
+        {/* 직접 컷 수 조절 스텝퍼 (4 ~ 10컷) */}
         <div className="flex items-center justify-between rounded-xl border border-border/80 bg-surface-sunken/40 p-3">
           <span className="text-caption font-medium text-ink-muted">직접 컷 수 조절</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={cutCount <= 1}
-              onClick={() => setCutCount(Math.max(1, cutCount - 1))}
+              disabled={cutCount <= EPISODE_CUTS_MIN}
+              onClick={() => setCutCount(Math.max(EPISODE_CUTS_MIN, cutCount - 1))}
               className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-card text-body font-bold text-ink hover:bg-surface-sunken disabled:opacity-30 cursor-pointer"
             >
               −
             </button>
             <input
               type="number"
-              min={1}
-              max={20}
+              min={EPISODE_CUTS_MIN}
+              max={EPISODE_CUTS_MAX}
               value={cutCount}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                if (val >= 1 && val <= 20) setCutCount(val);
+                if (val >= EPISODE_CUTS_MIN && val <= EPISODE_CUTS_MAX) setCutCount(val);
               }}
               className="w-14 text-center font-bold text-title text-ink rounded-md border border-border bg-surface-card py-1 focus:border-brand focus:outline-hidden"
             />
             <button
               type="button"
-              disabled={cutCount >= 20}
-              onClick={() => setCutCount(Math.min(20, cutCount + 1))}
+              disabled={cutCount >= EPISODE_CUTS_MAX}
+              onClick={() => setCutCount(Math.min(EPISODE_CUTS_MAX, cutCount + 1))}
               className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-card text-body font-bold text-ink hover:bg-surface-sunken disabled:opacity-30 cursor-pointer"
             >
               +

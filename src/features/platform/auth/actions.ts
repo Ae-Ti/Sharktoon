@@ -11,6 +11,8 @@ export async function setSessionAction(data: {
   role?: "user" | "admin";
   displayName?: string;
 }): Promise<SharktoonSession> {
+  // 데모 세션은 목 모드에서만. 실 저장소에서 이 쿠키로 로그인·운영자 행세를 하지 못하게 막는다.
+  if (isSupabaseConfigured()) throw new Error("데모 로그인은 목 모드에서만 쓸 수 있어요.");
   const cookieStore = await cookies();
   const isAdmin = data.role === "admin" || data.email === "admin@sharktoon.com";
   const session: SharktoonSession = {

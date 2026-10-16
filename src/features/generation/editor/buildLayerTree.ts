@@ -6,7 +6,7 @@
  * 저장하지 않으므로, 열 때마다 `hydrateLayerTree` 로 다시 붙인다.
  */
 
-import type { BalloonKind, CutLayerTree, ImageLayer, Layer, VectorTextLayer } from "../types/layer";
+import { normalizeBalloonKind, type BalloonKind, type CutLayerTree, type ImageLayer, type Layer, type VectorTextLayer } from "../types/layer";
 import { characterName, type DialoguePosition, type Storyboard, type StoryboardCut } from "../types/storyboard";
 import { DEFAULT_TOON_FONT } from "./fonts";
 
@@ -430,8 +430,14 @@ function textLayer(input: {
 export function hydrateLayerTree(tree: CutLayerTree, cutId: string, imageUrl: string): CutLayerTree {
   return {
     ...tree,
-    layers: tree.layers.map((l) =>
-      "imageUrl" in l && l.sourceCutId === cutId ? { ...l, imageUrl } : l,
-    ),
+    layers: tree.layers.map((l) => {
+      if ("imageUrl" in l) return l.sourceCutId === cutId ? { ...l, imageUrl } : l;
+      // 예전 콘티에 모델이 지어낸 말풍선 이름이 저장돼 있으면 몸통 없이 글자만 그려진다. 여기서 맞춘다.
+      if (l.kind === "balloon") {
+        const balloon = normalizeBalloonKind(l.balloon);
+        return balloon === l.balloon ? l : { ...l, balloon };
+      }
+      return l;
+    }),
   };
 }

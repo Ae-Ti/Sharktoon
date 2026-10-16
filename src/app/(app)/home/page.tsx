@@ -5,6 +5,7 @@ import { getRepository, type EpisodeStatus } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 import { BookOpen, Plus, Sparkles } from "lucide-react";
+import { episodeCoverUrl, seriesCoverUrl } from "@/features/generation/data/covers";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
 
@@ -25,6 +26,16 @@ export default async function Page() {
     repo.getResumable(),
     repo.getCreditPolicy(),
   ]);
+
+  // 대표 이미지는 컷에서 고른다(최근 회차의 첫 컷). 컷이 없을 때만 저장된 썸네일(화풍 이미지)을 쓴다.
+  const recent = series.slice(0, 3);
+  const covers = await Promise.all(
+    recent.map(async (s) => {
+      const detail = await repo.getSeries(s.id);
+      return (detail && (await seriesCoverUrl(detail.episodes))) ?? s.thumbUrl ?? null;
+    }),
+  );
+  const resumableCover = resumable ? ((await episodeCoverUrl(resumable.episodeId)) ?? resumable.thumbUrl ?? null) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,9 +68,9 @@ export default async function Page() {
         <section className="flex flex-col gap-3">
           <h2 className="text-title font-semibold">이어서 만들기</h2>
           <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface-card p-4 shadow-2xs">
-            {resumable.thumbUrl ? (
+            {resumableCover ? (
               <img
-                src={resumable.thumbUrl}
+                src={resumableCover}
                 alt={resumable.seriesTitle}
                 className="size-14 shrink-0 rounded-lg object-cover border border-border/60 shadow-2xs"
               />
@@ -108,16 +119,16 @@ export default async function Page() {
           />
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {series.slice(0, 3).map((s) => (
+            {recent.map((s, i) => (
               <li key={s.id} className="flex">
                 <Link
                   href={`/series/${s.id}`}
                   className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface-card text-ink transition-all hover:border-brand/70 hover:shadow-xs"
                 >
                   <div className="relative aspect-4/3 sm:aspect-square w-full overflow-hidden bg-surface-muted">
-                    {s.thumbUrl ? (
+                    {covers[i] ? (
                       <img
-                        src={s.thumbUrl}
+                        src={covers[i]!}
                         alt={s.title}
                         className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />

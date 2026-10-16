@@ -209,7 +209,8 @@ export function EmailAuthForm({ configured, initialMode = "signin" }: EmailAuthF
         </Button>
       </form>
 
-      {/* 데모/체험 빠른 접속 안내 */}
+      {/* 데모/체험 빠른 접속. 목 모드에서만(실 저장소에서는 데모 세션이 막혀 있다) */}
+      {!configured && (
       <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-3 text-caption text-ink-subtle">
         <span>빠른 체험:</span>
         <div className="flex items-center gap-2">
@@ -238,6 +239,7 @@ export function EmailAuthForm({ configured, initialMode = "signin" }: EmailAuthF
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

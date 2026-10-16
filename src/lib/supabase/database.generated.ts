@@ -644,6 +644,137 @@ export type Database = {
           },
         ]
       }
+      instagram_accounts: {
+        Row: {
+          access_token_enc: string
+          account_type: string | null
+          connected_at: string
+          ig_user_id: string
+          owner_id: string
+          scopes: string[]
+          token_expires_at: string
+          token_refreshed_at: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          access_token_enc: string
+          account_type?: string | null
+          connected_at?: string
+          ig_user_id: string
+          owner_id: string
+          scopes?: string[]
+          token_expires_at: string
+          token_refreshed_at?: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          access_token_enc?: string
+          account_type?: string | null
+          connected_at?: string
+          ig_user_id?: string
+          owner_id?: string
+          scopes?: string[]
+          token_expires_at?: string
+          token_refreshed_at?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_publish_jobs: {
+        Row: {
+          attempts: number
+          caption: string
+          comment_error: string | null
+          container_created_at: string | null
+          container_id: string | null
+          created_at: string
+          episode_id: string
+          error: string | null
+          first_comment: string | null
+          id: string
+          image_paths: string[]
+          is_ai_generated: boolean
+          lease_until: string | null
+          media_id: string | null
+          owner_id: string
+          permalink: string | null
+          published_at: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["instagram_publish_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          caption?: string
+          comment_error?: string | null
+          container_created_at?: string | null
+          container_id?: string | null
+          created_at?: string
+          episode_id: string
+          error?: string | null
+          first_comment?: string | null
+          id?: string
+          image_paths: string[]
+          is_ai_generated?: boolean
+          lease_until?: string | null
+          media_id?: string | null
+          owner_id: string
+          permalink?: string | null
+          published_at?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["instagram_publish_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          caption?: string
+          comment_error?: string | null
+          container_created_at?: string | null
+          container_id?: string | null
+          created_at?: string
+          episode_id?: string
+          error?: string | null
+          first_comment?: string | null
+          id?: string
+          image_paths?: string[]
+          is_ai_generated?: boolean
+          lease_until?: string | null
+          media_id?: string | null
+          owner_id?: string
+          permalink?: string | null
+          published_at?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["instagram_publish_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_publish_jobs_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_publish_jobs_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_krw: number
@@ -822,6 +953,57 @@ export type Database = {
           {
             foreignKeyName: "refund_requests_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_events: {
+        Row: {
+          category: string | null
+          created_at: string
+          cut_id: string | null
+          episode_id: string | null
+          id: number
+          job_id: string | null
+          kind: Database["public"]["Enums"]["safety_event_kind"]
+          owner_id: string
+          source: string
+        }
+        Insert: {
+          id?: never
+          category?: string | null
+          created_at?: string
+          cut_id?: string | null
+          episode_id?: string | null
+          job_id?: string | null
+          kind: Database["public"]["Enums"]["safety_event_kind"]
+          owner_id: string
+          source: string
+        }
+        Update: {
+          id?: never
+          category?: string | null
+          created_at?: string
+          cut_id?: string | null
+          episode_id?: string | null
+          job_id?: string | null
+          kind?: Database["public"]["Enums"]["safety_event_kind"]
+          owner_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_events_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_events_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1091,6 +1273,37 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_instagram_publish_jobs: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          attempts: number
+          caption: string
+          comment_error: string | null
+          container_created_at: string | null
+          container_id: string | null
+          created_at: string
+          episode_id: string
+          error: string | null
+          first_comment: string | null
+          id: string
+          image_paths: string[]
+          is_ai_generated: boolean
+          lease_until: string | null
+          media_id: string | null
+          owner_id: string
+          permalink: string | null
+          published_at: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["instagram_publish_status"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "instagram_publish_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       credit_commit: { Args: { p_hold_id: string }; Returns: undefined }
       credit_expire_all: { Args: never; Returns: number }
       credit_grant: {
@@ -1172,8 +1385,15 @@ export type Database = {
         | "partially_failed"
         | "failed"
       generation_task_status: "queued" | "running" | "done" | "failed"
+      instagram_publish_status:
+        | "queued"
+        | "running"
+        | "published"
+        | "failed"
+        | "canceled"
       payment_status: "paid" | "cancelled" | "refunded" | "partially_refunded"
       plan_tier: "free" | "basic" | "pro"
+      safety_event_kind: "text_blocked" | "image_flagged"
       refund_request_status: "requested" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -1339,8 +1559,16 @@ export const Constants = {
         "failed",
       ],
       generation_task_status: ["queued", "running", "done", "failed"],
+      instagram_publish_status: [
+        "queued",
+        "running",
+        "published",
+        "failed",
+        "canceled",
+      ],
       payment_status: ["paid", "cancelled", "refunded", "partially_refunded"],
       plan_tier: ["free", "basic", "pro"],
+      safety_event_kind: ["text_blocked", "image_flagged"],
       refund_request_status: ["requested", "approved", "rejected"],
     },
   },

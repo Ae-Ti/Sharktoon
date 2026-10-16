@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type CharacterMethod = "selfie" | "tags" | "default";
+export type CharacterMethod = "tags" | "default";
 
 export type StylePreset =
   | "simple_line"
@@ -34,8 +34,6 @@ export interface OnboardingState {
   tags: string;
   story: string;
   cutCount: number;
-  /** 고른 셀카. 서버에 올리기 전까지 브라우저에만 있다. */
-  selfie: File | null;
   /** 만들어진 캐릭터 에셋. 사연 단계에서 새 시리즈에 붙인다. */
   characterAssetId: string | null;
   /** 건너뛰기로 지나온 단계. 진행 바는 건너뛴 단계도 완료로 센다. */
@@ -56,12 +54,11 @@ const OnboardingCtx = createContext<Ctx | null>(null);
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<OnboardingState>({
     // 가장 부담이 적은 선택지를 미리 채워 둔다. 빈 화면으로 두지 않는다.
-    method: "selfie",
+    method: "tags",
     style: "simple_line",
     tags: "",
     story: "",
     cutCount: 6,
-    selfie: null,
     characterAssetId: null,
     skipped: new Set(),
   });

@@ -2,8 +2,6 @@ import { InsufficientCreditError } from "@/contracts/credit";
 import { processSingleton } from "@/lib/singleton";
 import {
   generateAssetIllustrationSvg,
-  generateAssetsFromFirstEpisodeStory,
-  generateStarterAssetsForSeries,
   STYLE_PRESETS_DATA,
 } from "../assets/assetVisuals";
 import type {
@@ -33,7 +31,6 @@ const PROFILE: Profile = {
   displayName: "태일",
   avatarUrl: null,
   plan: "free",
-  keepSelfieOriginal: false,
 };
 
 const SEED_ASSETS: Asset[] = [
@@ -339,7 +336,6 @@ const MOCK_POLICY: CreditPolicy = {
   attendanceStreakDays: 7,
   attendanceStreakBonus: 1, // 7일 연속 출석 시 +1크레딧 (당일 총 2크레딧, 인하)
   attendanceMonthlyCap: 9999, // 상한 제한 없음
-  attendanceMonthStreakBonus: 0, // 4주 추가 보너스 폐지
   refundFeeRate: 0.1,
 };
 
@@ -738,7 +734,8 @@ export const mockRepository: PlatformRepository = {
   },
 
   async createSeries(input: SeriesInput) {
-    const thumbUrl = input.rule.customStyleImageUrl || getSeriesFallbackThumb(input.rule);
+    // 화풍 이미지는 저장하지 않는다. 저장해 두면 회차 컷 썸네일보다 먼저 잡혀 계속 화풍 이미지가 보인다.
+    const thumbUrl = getSeriesFallbackThumb(input.rule);
     const series: SeriesDetail = {
       id: newId("sr"),
       title: input.title,
@@ -746,7 +743,7 @@ export const mockRepository: PlatformRepository = {
       isPublic: false,
       episodeCount: 0,
       updatedAt: new Date().toISOString(),
-      thumbUrl,
+      thumbUrl: null,
       rule: input.rule,
       episodes: [],
       assets: [],
@@ -790,24 +787,6 @@ export const mockRepository: PlatformRepository = {
     };
     s.episodes.push(ep);
     s.episodeCount = s.episodes.length;
-
-    // 첫 화 사연 입력 시점에 시리즈에 소재가 등록되어 있지 않다면, 사연에 실제로 등장하는 인물·배경·소품 자동 생성
-    if (s.assets.length === 0 && story.trim()) {
-      const storyAssets = generateAssetsFromFirstEpisodeStory({
-        story,
-        seriesTitle: s.title,
-        stylePreset: s.rule.stylePreset,
-        customStyleImageUrl: s.rule.customStyleImageUrl,
-      });
-      const createdAssets: Asset[] = storyAssets.map((sa) => ({
-        ...sa,
-        id: newId("as"),
-        usedIn: 0,
-        usedInEpisodes: [],
-      }));
-      S.assets.push(...createdAssets);
-      s.assets.push(...createdAssets);
-    }
 
     return ep;
   },
@@ -895,7 +874,7 @@ export const mockRepository: PlatformRepository = {
         isPublic: false,
         episodeCount: 0,
         updatedAt: new Date().toISOString(),
-        thumbUrl: getSeriesFallbackThumb(rule),
+        thumbUrl: null,
         rule,
         episodes: [],
         assets: S.assets.filter((a) => a.id === characterAssetId),
@@ -917,24 +896,6 @@ export const mockRepository: PlatformRepository = {
     series.episodes.push(ep);
     series.episodeCount = series.episodes.length;
     S.stories[ep.id] = story;
-
-    // 첫 화 사연 입력 시점에 시리즈에 소재가 등록되어 있지 않다면, 사연에 실제로 등장하는 인물·배경·소품 자동 생성
-    if (series.assets.length === 0 && story.trim()) {
-      const storyAssets = generateAssetsFromFirstEpisodeStory({
-        story,
-        seriesTitle: series.title,
-        stylePreset: series.rule.stylePreset,
-        customStyleImageUrl: series.rule.customStyleImageUrl,
-      });
-      const createdAssets: Asset[] = storyAssets.map((sa) => ({
-        ...sa,
-        id: newId("as"),
-        usedIn: 0,
-        usedInEpisodes: [],
-      }));
-      S.assets.push(...createdAssets);
-      series.assets.push(...createdAssets);
-    }
 
     return { episodeId: ep.id, seriesId: series.id };
   },

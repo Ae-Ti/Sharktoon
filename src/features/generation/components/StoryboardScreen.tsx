@@ -64,6 +64,7 @@ import { EpisodeHeader } from "./EpisodeHeader";
 import { extractStoryFromImageAction, updateEpisodeSeriesAction } from "@/features/platform/actions";
 import { SeriesFormModal } from "@/features/platform/series/SeriesFormModal";
 import type { SeriesSummary } from "@/features/platform/data/types";
+import { EPISODE_CUTS_MAX, EPISODE_CUTS_MIN } from "@/contracts/instagram";
 
 /** 콘티 편집은 이만큼 멈추면 저장한다. 생성 버튼을 누르면 그 자리에서 한 번 더 저장된다. */
 const AUTOSAVE_MS = 1500;
@@ -185,6 +186,9 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [shortfall, setShortfall] = useState<{ required: number; available: number } | null>(null);
   const [pending, startTransition] = useTransition();
+  // 콘티 생성은 transition 대신 직접 상태를 둔다. 서버 액션이 끝난 뒤에도 transition 이
+  // 라우터 갱신을 기다리며 pending 으로 남아 버튼이 계속 돌던 문제가 있었다.
+  const [generatingSb, setGeneratingSb] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     props.initial?.cuts[0]?.id ?? null
   );
@@ -280,13 +284,20 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
       return;
     }
     setNotice(null);
-    startTransition(async () => {
+    setGeneratingSb(true);
+    void (async () => {
       const res = await generateStoryboardAction({
         episodeId: props.episodeId,
         story: story.trim(),
         cutCount,
         seriesId: selectedSeriesId ?? undefined,
-      });
+      })
+        .catch((e: unknown) => ({
+          ok: false as const,
+          kind: "error" as const,
+          message: e instanceof Error ? e.message : "콘티를 만들지 못했어요. 다시 시도해 주세요.",
+        }))
+        .finally(() => setGeneratingSb(false));
       if (res.ok) {
         const normalized = normalizeStoryboardNarration(res.data.storyboard)!;
         lastSaved.current = JSON.stringify(normalized);
@@ -301,7 +312,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
           setNotice(res.message);
         }
       }
-    });
+    })();
   }
 
   /** 이미지 생성 실행 */
@@ -344,6 +355,10 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   }
 
   function addCutAfter(id: string) {
+    if ((sb?.cuts.length ?? 0) >= EPISODE_CUTS_MAX) {
+      setNotice(`한 화는 표지를 포함해 ${EPISODE_CUTS_MAX}컷까지예요. 인스타 캐러셀이 ${EPISODE_CUTS_MAX}장까지라서요.`);
+      return;
+    }
     setSb((s) => {
       if (!s) return s;
       const at = s.cuts.findIndex((c) => c.id === id);
@@ -365,6 +380,10 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   const hasCoverCut = sb?.cuts.some((c) => c.isCover) ?? false;
 
   function toggleCoverCut(enable: boolean) {
+    if (enable && (sb?.cuts.length ?? 0) >= EPISODE_CUTS_MAX) {
+      setNotice(`표지를 넣으려면 컷을 하나 줄여 주세요. 한 화는 표지를 포함해 ${EPISODE_CUTS_MAX}컷까지예요.`);
+      return;
+    }
     setSb((s) => {
       if (!s) return s;
       if (enable) {
@@ -889,8 +908,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 <div className="flex items-center gap-1 rounded-xl border border-border/80 bg-surface-card p-0.5 shadow-2xs">
                   <button
                     type="button"
-                    disabled={cutCount <= 1}
-                    onClick={() => setCutCount((c) => Math.max(1, c - 1))}
+                    disabled={cutCount <= EPISODE_CUTS_MIN}
+                    onClick={() => setCutCount((c) => Math.max(EPISODE_CUTS_MIN, c - 1))}
                     className="size-7 rounded-lg grid place-items-center text-ink-muted hover:text-ink hover:bg-surface-sunken disabled:opacity-30 cursor-pointer font-bold text-xs"
                   >
                     -
@@ -898,8 +917,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   <span className="w-7 text-center text-xs font-bold text-ink">{cutCount}</span>
                   <button
                     type="button"
-                    disabled={cutCount >= 20}
-                    onClick={() => setCutCount((c) => Math.min(20, c + 1))}
+                    disabled={cutCount >= EPISODE_CUTS_MAX}
+                    onClick={() => setCutCount((c) => Math.min(EPISODE_CUTS_MAX, c + 1))}
                     className="size-7 rounded-lg grid place-items-center text-ink-muted hover:text-ink hover:bg-surface-sunken disabled:opacity-30 cursor-pointer font-bold text-xs"
                   >
                     +
@@ -931,11 +950,13 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                 <Button
                   size="md"
-                  loading={pending}
+                  loading={generatingSb}
+                  disabled={pending}
                   onClick={handleGenerateStoryboard}
                   className="font-bold shrink-0 gap-1.5 shadow-xs"
                 >
-                  <RefreshCw className={cn("size-4", pending && "animate-spin")} />
+                  {/* 로딩 중에는 Button 자체 스피너만 보인다 */}
+                  {!generatingSb && <RefreshCw className="size-4" />}
                   <span>
                     {sb && sb.cuts.length > 0
                       ? `사연으로 콘티 다시 생성 (${cutCount}컷)`

@@ -9,7 +9,6 @@ export interface CreditPack {
   originalPriceKrw?: number;
   discountBadge?: string;
   popular?: boolean;
-  tagline: string;
   estimatedEpisodes: string;
 }
 
@@ -20,7 +19,6 @@ export const CREDIT_PACKS: CreditPack[] = [
     nameKo: "스타터 팩",
     credits: 20,
     priceKrw: 4900,
-    tagline: "급할 때 한두 화 더 연재하고 싶을 때",
     estimatedEpisodes: "약 2~3회차 제작 (6컷 기준)",
   },
   {
@@ -32,7 +30,6 @@ export const CREDIT_PACKS: CreditPack[] = [
     originalPriceKrw: 12250,
     discountBadge: "19% 할인",
     popular: true,
-    tagline: "가장 많은 작가들이 선택하는 실속형 팩",
     estimatedEpisodes: "약 6~8회차 제작 (6컷 기준)",
   },
   {
@@ -43,7 +40,6 @@ export const CREDIT_PACKS: CreditPack[] = [
     priceKrw: 19900,
     originalPriceKrw: 29400,
     discountBadge: "32% 할인",
-    tagline: "정기 연재 작가를 위한 대용량 가성비 팩",
     estimatedEpisodes: "약 15~20회차 제작",
   },
   {
@@ -54,7 +50,6 @@ export const CREDIT_PACKS: CreditPack[] = [
     priceKrw: 44900,
     originalPriceKrw: 73500,
     discountBadge: "39% 할인",
-    tagline: "다작 연재 및 브랜드 협찬 광고툰 전문 작가용",
     estimatedEpisodes: "약 40~50회차 제작",
   },
 ];

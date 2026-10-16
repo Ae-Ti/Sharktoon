@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus, BookOpen, Layers, Sparkles, ArrowRight, TrendingUp } from "lucide-react";
-import { Badge, ButtonLink, EmptyState } from "@/components/ui";
-import { getRepository } from "@/features/platform/data";
+import { BookOpen } from "lucide-react";
+import { Badge, EmptyState } from "@/components/ui";
+import { getRepository, usingMockData } from "@/features/platform/data";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 import { getSnsAnalyticsAction } from "@/features/platform/analytics/actions";
 import { INITIAL_MOCK_SNS_DATA } from "@/features/platform/analytics/mockData";
 import { formatCompactNumber } from "@/features/platform/analytics/seriesAnalytics";
+import { seriesCoverUrl } from "@/features/generation/data/covers";
 
 export const metadata: Metadata = { title: "내 작품 · 샥툰" };
 
@@ -36,6 +37,13 @@ export default async function Page() {
   ]);
   const snsData = snsRes.ok ? snsRes.data : INITIAL_MOCK_SNS_DATA;
   const isConnected = Boolean(snsData.account?.connected);
+  // 홈의 최근 작품과 같은 대표 이미지: 최근 회차의 첫 컷, 없으면 저장된 썸네일(화풍 이미지).
+  const covers = await Promise.all(
+    allSeries.map(async (s) => {
+      const detail = await repo.getSeries(s.id);
+      return (detail && (await seriesCoverUrl(detail.episodes))) ?? s.thumbUrl ?? null;
+    }),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,7 +65,8 @@ export default async function Page() {
         <NewSeriesButton label="새 작품 만들기" />
       </div>
 
-      {!isConnected && (
+      {/* 연동 안내는 목 모드 데모에서만. 배포에서는 실제 연동 출시 전이라 띄우지 않는다 */}
+      {!isConnected && usingMockData() && (
         <div className="flex items-center justify-between rounded-xl border border-dashed border-border/80 bg-surface-card/60 p-4 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <div className="grid size-8 place-items-center rounded-lg bg-pink-500/10 text-pink-600">
@@ -89,71 +98,63 @@ export default async function Page() {
           onAction={undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {allSeries.map((s) => {
-            // Find matched episodes for this series to show cumulative reach & saves
+        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {allSeries.map((s, i) => {
             const matchedEpisodes = isConnected
-              ? (snsData.topEpisodes || []).filter(
-                  (ep) => ep.seriesId === s.id || ep.seriesTitle === s.title
-                )
+              ? (snsData.topEpisodes || []).filter((ep) => ep.seriesId === s.id || ep.seriesTitle === s.title)
               : [];
             const seriesReach = matchedEpisodes.reduce((sum, ep) => sum + (ep.reach || 0), 0);
-            const seriesSaves = matchedEpisodes.reduce((sum, ep) => sum + (ep.saves || 0), 0);
-
             return (
-              <Link
-                key={s.id}
-                href={`/series/${s.id}`}
-                className="group flex flex-col justify-between rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs transition-all hover:border-brand/70 hover:shadow-xs cursor-pointer"
-              >
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-brand-tint text-brand">
-                      <BookOpen className="size-4" />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {seriesReach > 0 && (
-                        <span className="rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white tabular-nums">
-                          도달 {formatCompactNumber(seriesReach)}
-                        </span>
-                      )}
-                      <Badge tone="brand">{s.episodeCount}화 연재 중</Badge>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <h2 className="text-title font-semibold text-ink group-hover:text-brand transition-colors">
-                      {s.title}
-                    </h2>
-                    {s.description && (
-                      <p className="text-body-sm text-ink-muted line-clamp-2">
-                        {s.description}
-                      </p>
+              <li key={s.id} className="flex">
+                <Link
+                  href={`/series/${s.id}`}
+                  className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface-card text-ink transition-all hover:border-brand/70 hover:shadow-xs"
+                >
+                  <div className="relative aspect-square w-full overflow-hidden bg-surface-muted">
+                    {covers[i] ? (
+                      <img
+                        src={covers[i]!}
+                        alt={s.title}
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-brand-tint/20 text-brand">
+                        <BookOpen className="size-6 text-brand/70" />
+                        <span className="text-caption font-medium">연재 준비 중</span>
+                      </div>
                     )}
-                    <div className="flex items-center justify-between text-caption text-ink-subtle pt-1">
-                      <span>
-                        최근 업데이트:{" "}
-                        {new Date(s.updatedAt).toLocaleDateString("ko-KR", {
-                          month: "long",
-                          day: "numeric",
-                        })}
+                    {!s.isPublic && (
+                      <span className="absolute top-2 right-2">
+                        <Badge tone="neutral" className="text-[10px] px-1.5 py-0.5 bg-black/60 text-white backdrop-blur-xs border-0">
+                          비공개
+                        </Badge>
                       </span>
-                      {seriesSaves > 0 && (
-                        <span className="font-medium text-brand">
-                          저장 {seriesSaves.toLocaleString()}회
-                        </span>
-                      )}
+                    )}
+                    {seriesReach > 0 && (
+                      <span className="absolute top-2 left-2 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white tabular-nums">
+                        도달 {formatCompactNumber(seriesReach)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col justify-between p-3.5">
+                    <span className="text-body font-bold text-ink line-clamp-1 group-hover:text-brand transition-colors">
+                      {s.title}
+                    </span>
+                    <div className="mt-1 flex items-center justify-between text-caption text-ink-muted">
+                      <span>{s.episodeCount}화 연재 중</span>
+                      <span className="text-ink-subtle text-[11px]">
+                        {new Date(s.updatedAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}
+                      </span>
                     </div>
                   </div>
-                </div>
-
-                <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-3 text-caption font-semibold text-ink-muted group-hover:text-brand transition-colors">
-                  <span>시리즈 관리하기</span>
-                  <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
-                </div>
-              </Link>
+                </Link>
+              </li>
             );
           })}
-        </div>
+          <li className="flex">
+            <NewSeriesButton variant="card" />
+          </li>
+        </ul>
       )}
     </div>
   );

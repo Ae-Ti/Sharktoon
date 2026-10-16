@@ -2,14 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
-import { Check, Palette, Sparkles, Upload, X, Image as ImageIcon } from "lucide-react";
+import Link from "next/link";
+import { Check, Lock, Palette, Sparkles, Upload, X, Image as ImageIcon } from "lucide-react";
 import { Button, Field, Modal } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   createSeriesAction,
+  getMyPlanAction,
   updateSeriesRuleAction,
 } from "@/features/platform/actions";
-import type { SeriesRule } from "@/features/platform/data/types";
+import type { PlanTier, SeriesRule } from "@/features/platform/data/types";
 import { STYLE_PRESETS_DATA } from "@/features/platform/assets/assetVisuals";
 
 const CUTS = [4, 6, 8];
@@ -68,6 +70,21 @@ export function SeriesFormModal({
 
   const editing = Boolean(seriesId);
 
+  // 사진 업로드 커스텀 화풍은 Pro 부터. 이미 커스텀 화풍을 쓰던 작품은 그대로 둔다(서버도 같은 규칙).
+  const [plan, setPlan] = useState<PlanTier | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getMyPlanAction()
+      .then((p) => alive && setPlan(p))
+      .catch(() => alive && setPlan("free"));
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+  const customLocked =
+    plan !== null && plan !== "pro" && plan !== "max" && !initialRule.customStyleImageUrl;
+
   // 모달이 열릴 때 초기값 동기화
   useEffect(() => {
     if (open) {
@@ -118,6 +135,11 @@ export function SeriesFormModal({
   function submit() {
     if (!editing && !title.trim()) {
       setError("작품 이름을 적어 주세요.");
+      return;
+    }
+
+    if (isCustom && customLocked) {
+      setError("사진 업로드로 만드는 나만의 화풍은 Pro 플랜부터 쓸 수 있어요.");
       return;
     }
 
@@ -178,7 +200,7 @@ export function SeriesFormModal({
       description={
         editing
           ? "이 작품의 고정 화풍과 연재 규칙입니다. 모든 소재와 회차가 이 화풍을 따라가요."
-          : "작품의 고정 화풍을 정해두면, 어울리는 인물·배경·소품이 자동 등록되고 모든 회차에 일관되게 적용돼요."
+          : "작품의 화풍을 정해두면 모든 회차에 같은 화풍이 적용돼요. 인물·배경·소품은 소재로 직접 등록하면 회차마다 일관되게 그려져요."
       }
       footer={
         <>
@@ -240,8 +262,11 @@ export function SeriesFormModal({
                   : "text-ink-muted hover:text-ink",
               )}
             >
-              <Sparkles className="size-4 shrink-0" />
+              {customLocked ? <Lock className="size-4 shrink-0" /> : <Sparkles className="size-4 shrink-0" />}
               사진 업로드 (나만의 화풍)
+              {customLocked && (
+                <span className="rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-bold text-brand">Pro</span>
+              )}
             </button>
           </div>
         </div>
@@ -297,21 +322,27 @@ export function SeriesFormModal({
                 );
               })}
             </div>
-
-            {/* 나만의 화풍 만들기 유도 배너 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border-control bg-surface-sunken/50 px-3.5 py-2.5">
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4 shrink-0 text-brand" />
-                <span className="text-caption text-ink-muted">
-                  자신이 직접 그린 그림이나 원하는 사진 스타일로 연재하고 싶으신가요?
-                </span>
-              </div>
+          </div>
+        ) : customLocked ? (
+          /* 2-a. 무료 요금제: 커스텀 화풍 잠금 안내 */
+          <div className="flex flex-col items-start gap-2 rounded-xl border border-brand/30 bg-brand-tint/10 p-4 font-sans">
+            <div className="flex items-center gap-2">
+              <Lock className="size-4 text-brand" />
+              <span className="text-body-sm font-bold text-ink">나만의 화풍은 Pro 플랜부터 쓸 수 있어요</span>
+            </div>
+            <p className="text-caption text-ink-muted">
+              직접 그린 그림이나 원하는 사진 한 장을 올려 이 작품만의 화풍으로 연재할 수 있어요. 무료 플랜에서는 추천 화풍 6종을 쓸 수 있어요.
+            </p>
+            <div className="flex items-center gap-3">
+              <Link href="/settings?tab=3" className="text-caption font-bold text-brand hover:underline">
+                Pro 플랜 알아보기 ↗
+              </Link>
               <button
                 type="button"
-                onClick={() => setIsCustom(true)}
-                className="shrink-0 text-caption font-bold text-brand hover:underline cursor-pointer"
+                onClick={() => setIsCustom(false)}
+                className="text-caption font-medium text-ink-muted hover:text-ink underline cursor-pointer"
               >
-                사진 한 장 올려 나만의 화풍 만들기 →
+                추천 화풍 고르기
               </button>
             </div>
           </div>

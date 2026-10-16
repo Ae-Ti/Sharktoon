@@ -3,6 +3,7 @@ import { TrendingUp, AlertTriangle, Coins, Filter, Clock } from "lucide-react";
 import { Badge, EmptyState } from "@/components/ui";
 import { getRepository } from "@/features/platform/data";
 import { BillingAdmin } from "@/features/platform/admin/BillingAdmin";
+import { STRIKE_LIMIT, listRecentSafetyEvents } from "@/features/generation/safety/strikes";
 
 export const metadata: Metadata = { title: "운영 · 샥툰" };
 
@@ -24,7 +25,7 @@ export default async function Page() {
   }
 
   const { funnel, generation, credit, recentRefunds } = overview;
-  const refundRequests = await repo.listRefundRequests();
+  const [refundRequests, safetyEvents] = await Promise.all([repo.listRefundRequests(), listRecentSafetyEvents(30)]);
   const top = funnel[0]?.users ?? 0;
   const published = funnel[funnel.length - 1]?.users ?? 0;
   // 클로즈드 베타 출시 조건이 이 수치다.
@@ -158,6 +159,57 @@ export default async function Page() {
                     <td className="py-2.5 font-mono text-caption text-ink">{r.userId}</td>
                     <td className="py-2.5 text-right tabular-nums font-semibold text-brand">
                       +{r.amount}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 콘텐츠 안전 판정. 24시간에 STRIKE_LIMIT 번 이미지 검사에 걸리면 그 사용자의 생성이 잠시 막힌다 */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-surface-card p-5 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-ink-muted" />
+            <h2 className="text-title font-semibold">콘텐츠 안전 판정</h2>
+          </div>
+          <span className="text-caption text-ink-muted">24시간 {STRIKE_LIMIT}회 이미지 판정 시 생성 일시 중지</span>
+        </div>
+        {safetyEvents.length === 0 ? (
+          <p className="text-body-sm text-ink-muted">최근 판정이 없어요.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-md border-collapse text-body-sm">
+              <thead>
+                <tr className="border-b border-border/70 text-left text-caption text-ink-muted">
+                  <th className="py-2 font-medium">시각</th>
+                  <th className="py-2 font-medium">사용자</th>
+                  <th className="py-2 font-medium">판정</th>
+                  <th className="py-2 font-medium">출처·분류</th>
+                  <th className="py-2 font-medium">회차·컷</th>
+                </tr>
+              </thead>
+              <tbody>
+                {safetyEvents.map((e) => (
+                  <tr key={e.id} className="border-b border-border/40">
+                    <td className="py-2.5 text-caption text-ink-muted tabular-nums">
+                      {new Date(e.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-2.5 font-mono text-caption text-ink">{e.ownerId.slice(0, 8)}</td>
+                    <td className="py-2.5">
+                      <Badge tone={e.kind === "image_flagged" ? "warning" : "neutral"}>
+                        {e.kind === "image_flagged" ? "이미지 검사" : "텍스트 차단"}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 text-caption text-ink-muted">
+                      {e.source}
+                      {e.category ? ` · ${e.category}` : ""}
+                    </td>
+                    <td className="py-2.5 font-mono text-caption text-ink-muted">
+                      {e.episodeId ? e.episodeId.slice(0, 8) : "-"}
+                      {e.cutId ? ` / ${e.cutId.slice(0, 12)}` : ""}
                     </td>
                   </tr>
                 ))}

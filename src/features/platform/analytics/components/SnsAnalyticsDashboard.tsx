@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -8,19 +8,15 @@ import {
   Share2,
   Eye,
   Sparkles,
-  RefreshCw,
   ExternalLink,
-  CheckCircle2,
   ArrowUpRight,
   Flame,
   Award,
   ChevronRight,
-  Settings,
   BookOpen,
+  Lock,
 } from "lucide-react";
 import { Badge, Button } from "@/components/ui";
-import { cn } from "@/lib/cn";
-import { refreshSnsAnalyticsAction } from "../actions";
 import type { SnsAnalyticsData } from "../types";
 import { AlgorithmGuideModal } from "./AlgorithmGuideModal";
 
@@ -49,32 +45,19 @@ function formatNumber(num: number): string {
   return num.toLocaleString("ko-KR");
 }
 
-function timeAgo(isoString: string): string {
-  try {
-    const diffMs = Date.now() - new Date(isoString).getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    if (diffMins < 1) return "방금 전";
-    if (diffMins < 60) return `${diffMins}분 전`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    return new Date(isoString).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
-  } catch {
-    return "최근";
-  }
-}
-
 export interface SnsAnalyticsDashboardProps {
   initialData?: SnsAnalyticsData;
   data?: SnsAnalyticsData;
-  onDataChange?: (data: SnsAnalyticsData) => void;
   onGoToSettings?: (tabIndex: number) => void;
+  /** AI 독자 반응 피드백은 Pro 부터. 무료는 잠금 안내만 보인다. */
+  canUseAiFeedback?: boolean;
 }
 
 export function SnsAnalyticsDashboard({
   initialData,
   data: controlledData,
-  onDataChange,
   onGoToSettings,
+  canUseAiFeedback = false,
 }: SnsAnalyticsDashboardProps) {
   const [internalData, setInternalData] = useState<SnsAnalyticsData>(
     controlledData ?? initialData!
@@ -87,39 +70,16 @@ export function SnsAnalyticsDashboard({
   }, [controlledData]);
 
   const activeData = controlledData ?? internalData;
-  const [pending, start] = useTransition();
-  const [notice, setNotice] = useState<string | null>(null);
   const [openGuide, setOpenGuide] = useState(false);
 
   const account = activeData.account;
   const overview = activeData.overview;
 
-  const handleRefresh = () => {
-    start(async () => {
-      const res = await refreshSnsAnalyticsAction();
-      if (res.ok) {
-        setInternalData(res.data);
-        onDataChange?.(res.data);
-        setNotice("인스타그램 성과 데이터를 최신으로 갱신했어요.");
-        setTimeout(() => setNotice(null), 3000);
-      } else {
-        setNotice(res.message);
-      }
-    });
-  };
-
   const maxReach = Math.max(...(activeData.trends.map((t) => t.reach) || [1]), 1);
 
   return (
     <div className="flex flex-col gap-6">
-      {notice && (
-        <div className="flex items-center gap-2 rounded-xl border border-brand/30 bg-brand-tint px-4 py-3 text-body-sm font-semibold text-brand shadow-2xs">
-          <CheckCircle2 className="size-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-
-      {/* 계정 연동 상태 알림바 (미연동 또는 연동 상태 안내) */}
+      {/* 미연동 안내. 연동된 계정 정보·동기화는 SNS 연동 탭에 있다 */}
       {!account.connected ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-transparent p-4 text-body-sm shadow-2xs">
           <div className="flex items-center gap-3">
@@ -147,51 +107,28 @@ export function SnsAnalyticsDashboard({
             </Button>
           )}
         </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-surface-card px-4 py-3 shadow-2xs">
-          <div className="flex items-center gap-2.5">
-            <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white shadow-2xs">
-              <InstagramIcon className="size-3.5" />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-body-sm font-bold text-ink">@{account.username}</span>
-              <Badge tone="brand" className="text-[10px] font-bold">
-                연결됨
-              </Badge>
-              <span className="text-caption text-ink-muted">
-                · 팔로워 {formatNumber(account.followersCount)}명 · 최근 동기화: {timeAgo(account.lastSyncedAt)}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={pending}
-              onClick={handleRefresh}
-              className="gap-1.5 font-semibold text-caption"
-              title="최신 성과 데이터 가져오기"
-            >
-              <RefreshCw className={cn("size-3", pending && "animate-spin")} />
-              <span>동기화</span>
-            </Button>
-            {onGoToSettings && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onGoToSettings(0)}
-                className="gap-1 text-ink-muted hover:text-ink text-caption"
-                title="마이페이지에서 연동 관리하기"
-              >
-                <Settings className="size-3.5" />
-                <span>연동 관리</span>
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      ) : null}
 
-      {/* 1. AI 성과 분석 및 다음 화 추천 카드 (최상단 배치) */}
+      {/* 1. AI 성과 분석 및 다음 화 추천 카드 (최상단 배치). 무료는 잠금 안내 */}
+      {!canUseAiFeedback ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-card p-5 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-xl bg-surface-sunken text-ink-muted">
+              <Lock className="size-4" />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-body-sm font-bold text-ink">AI 독자 반응 피드백 & 다음 화 추천</span>
+              <span className="text-caption text-ink-muted">Pro 플랜부터 게시 성과를 분석해 다음 화 테마와 첫 컷 팁을 추천해 드려요.</span>
+            </div>
+          </div>
+          <Link
+            href="/settings?tab=3"
+            className="inline-flex items-center gap-1 text-caption font-bold text-brand hover:underline"
+          >
+            Pro 플랜 알아보기 ↗
+          </Link>
+        </section>
+      ) : (
       <section className="relative overflow-hidden rounded-2xl border border-brand/40 bg-gradient-to-br from-brand-subtle/50 via-surface-card to-pink-500/5 p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col gap-3.5">
           <div className="flex items-center gap-2">
@@ -237,6 +174,7 @@ export function SnsAnalyticsDashboard({
           </div>
         </div>
       </section>
+      )}
 
       {/* 인스타툰 알고리즘 & 반응률 가이드 배너 */}
       <div className="flex flex-wrap items-center justify-between gap-3.5 rounded-xl border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-pink-500/10 p-4 shadow-2xs">

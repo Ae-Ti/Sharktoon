@@ -24,6 +24,7 @@ import {
   type CutBackground,
 } from "../types/storyboard";
 import { mockStoryboard } from "./mock";
+import { normalizeBalloonKind } from "../types/layer";
 import { isAnthropicConfigured, parseStructured } from "../llm";
 
 
@@ -556,7 +557,10 @@ function toStoryboard(
           id: seq("ln"),
           speakerId: spId,
           text: line.text || "",
-          balloon: (!spId && (!line.balloon || line.balloon === "normal")) ? "narration_box" : (line.balloon || "normal"),
+          balloon: (() => {
+            const kind = normalizeBalloonKind(line.balloon);
+            return !spId && kind === "normal" ? "narration_box" : kind;
+          })(),
           position: line.position,
         };
       }),

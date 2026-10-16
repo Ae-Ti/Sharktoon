@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button, ButtonLink } from "@/components/ui";
-import { getRepository } from "@/features/platform/data";
+import { Badge } from "@/components/ui";
+import { getRepository, usingMockData } from "@/features/platform/data";
+import { SnsComingSoon } from "@/features/platform/analytics/components/SnsComingSoon";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
 import { InstagramIntegrationCard } from "@/features/platform/instagram/InstagramIntegrationCard";
 import { getSnsAnalyticsAction } from "@/features/platform/analytics/actions";
@@ -12,8 +13,8 @@ import {
   formatCompactNumber,
 } from "@/features/platform/analytics/seriesAnalytics";
 import type { EpisodeStatus } from "@/features/platform/data/types";
-import { cn } from "@/lib/cn";
-import { ImageIcon, Sparkles, Flame } from "lucide-react";
+import { ChevronLeft, ImageIcon, Flame, Plus } from "lucide-react";
+import { withEpisodeCovers } from "@/features/generation/data/covers";
 
 export const metadata: Metadata = { title: "작품 · 샥툰" };
 
@@ -41,9 +42,8 @@ export default async function Page({
 }) {
   const { seriesId } = await params;
   const repo = await getRepository();
-  const [series, allSeries, snsRes, profile] = await Promise.all([
+  const [series, snsRes, profile] = await Promise.all([
     repo.getSeries(seriesId),
-    repo.listSeries(),
     getSnsAnalyticsAction(),
     repo.getProfile(),
   ]);
@@ -53,41 +53,21 @@ export default async function Page({
   const snsSummary = getSeriesSnsMetrics(series, series.episodes, snsData);
 
   const next = Math.max(0, ...series.episodes.map((e) => e.number)) + 1;
+  // 회차 대표 이미지는 컷에서 고른다(실 저장소에는 썸네일 열이 없다).
+  const episodes = await withEpisodeCovers(series.episodes);
+  const isPaid = profile?.plan === "pro" || profile?.plan === "max";
+  const aiSuggestion = isPaid && snsSummary.connected ? snsSummary.topEpisode : null;
 
   return (
     <div className="flex flex-col gap-6">
-      {allSeries.length > 1 && (
-        <nav aria-label="작품 전환" className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            {allSeries.map((s) => {
-              const active = s.id === series.id;
-              return (
-                <Link
-                  key={s.id}
-                  href={`/series/${s.id}`}
-                  className={cn(
-                    "flex h-8 items-center gap-1.5 rounded-lg px-3 text-caption font-semibold transition-all shrink-0",
-                    active
-                      ? "bg-brand text-on-brand shadow-2xs font-bold"
-                      : "border border-border bg-surface-card text-ink-muted hover:border-brand/50 hover:text-ink",
-                  )}
-                >
-                  <span>{s.title}</span>
-                  <span className={cn("text-[11px]", active ? "text-white/80" : "text-ink-subtle")}>
-                    {s.episodeCount}화
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-          <Link
-            href="/series"
-            className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-caption font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors shrink-0"
-          >
-            전체 작품 ({allSeries.length}) ↗
-          </Link>
-        </nav>
-      )}
+      {/* 작품 목록으로 돌아가기. 다른 작품 탭은 두지 않는다 */}
+      <Link
+        href="/series"
+        className="inline-flex w-fit items-center gap-1 rounded-lg px-1 text-body-sm font-semibold text-ink-muted transition-colors hover:text-ink"
+      >
+        <ChevronLeft className="size-4" />
+        전체 작품
+      </Link>
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
@@ -105,36 +85,37 @@ export default async function Page({
             )}
           </div>
         </div>
-        <NewSeriesButton
-          seriesId={series.id}
-          initialTitle={series.title}
-          initialRule={series.rule}
-          label="작품 스타일 설정"
-        />
+        <div className="flex items-center gap-2">
+          <NewSeriesButton
+            seriesId={series.id}
+            initialTitle={series.title}
+            initialRule={series.rule}
+            label="작품 스타일 설정"
+          />
+        </div>
       </header>
 
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-title font-semibold">회차</h2>
-          {snsSummary.connected && (
-            <span className="text-caption text-ink-muted">
-              인스타그램 @{snsSummary.username} 성과 연동 중
-            </span>
-          )}
-        </div>
+        <h2 className="text-title font-semibold">회차</h2>
 
-        <ul className="flex gap-4 overflow-x-auto pb-1">
-          {series.episodes.map((e) => {
+        {aiSuggestion && (
+          <p className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-brand-tint px-3.5 py-2.5 text-body-sm text-ink">
+            <Badge tone="brand">✨ AI 성과 제안</Badge>
+            지난 {aiSuggestion.episodeNumber}화({aiSuggestion.title})의 저장율이 <strong>{aiSuggestion.saveRate}%</strong>로 가장 높았어요. 이 소재를 이어 {next}화를 만들어 보세요.
+          </p>
+        )}
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-6">
+          {episodes.map((e) => {
             const metric = snsSummary.connected ? snsSummary.episodeMetrics[e.id] : null;
             const isTop = snsSummary.connected && snsSummary.topEpisode?.episodeId === e.id;
 
             return (
-              <li key={e.id} className="w-45 shrink-0">
+              <li key={e.id}>
                 <Link
                   href={`/episodes/${e.id}/editor`}
                   className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface-card text-ink hover:border-border-control transition-all"
                 >
-                  <div className="relative h-40 w-full overflow-hidden bg-surface-muted">
+                  <div className="relative aspect-square w-full overflow-hidden bg-surface-muted">
                     {e.thumbUrl ? (
                       <img
                         src={e.thumbUrl}
@@ -144,9 +125,7 @@ export default async function Page({
                     ) : (
                       <div className="flex size-full flex-col items-center justify-center gap-1.5 text-ink-subtle">
                         <ImageIcon className="size-6 opacity-40" />
-                        <span className="text-caption">
-                          {e.status === "published" ? "대표 컷" : "작성 중"}
-                        </span>
+                        <span className="text-caption">{e.status === "published" ? "컷 없음" : "작성 중"}</span>
                       </div>
                     )}
 
@@ -168,7 +147,7 @@ export default async function Page({
                     )}
                   </div>
 
-                  <span className="flex flex-col gap-1.5 p-3">
+                  <span className="flex flex-col gap-1 p-3">
                     <span className="text-body font-semibold truncate">
                       {e.number}화{e.title ? ` · ${e.title}` : ""}
                     </span>
@@ -178,9 +157,7 @@ export default async function Page({
                         {formatDate(e.publishedAt) ? ` · ${formatDate(e.publishedAt)}` : ""}
                       </span>
                       {metric && (
-                        <span className="text-[11px] font-semibold text-brand tabular-nums">
-                          저장 {metric.saveRate}%
-                        </span>
+                        <span className="text-[11px] font-semibold text-brand tabular-nums">저장 {metric.saveRate}%</span>
                       )}
                     </span>
                   </span>
@@ -189,94 +166,70 @@ export default async function Page({
             );
           })}
 
-          {/* 다음 화 제안 카드 */}
-          <li className="flex w-64 shrink-0 flex-col gap-2.5 rounded-lg border border-brand bg-brand-tint p-4 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <Badge tone="brand">
-                {snsSummary.connected ? "✨ AI 성과 제안" : "다음 화 제안"}
-              </Badge>
-              {snsSummary.connected && (
-                <span className="text-[10px] font-medium text-brand">
-                  @{snsSummary.username}
-                </span>
-              )}
-            </div>
-
-            <p className="text-body-sm text-ink leading-relaxed">
-              {snsSummary.connected && snsSummary.topEpisode ? (
-                <>
-                  지난 {snsSummary.topEpisode.episodeNumber}화(
-                  {snsSummary.topEpisode.title})의 독자 저장율이{" "}
-                  <strong>{snsSummary.topEpisode.saveRate}%</strong>로 가장 높았어요!
-                  이 소재를 이어 <strong>{next}화</strong>를 시작해보세요.
-                </>
-              ) : (
-                <>지난 회차에서 이어지는 소재로 {next}화를 시작할 수 있어요.</>
-              )}
-            </p>
-
-            <div className="flex-1" />
-            <ButtonLink href="/onboarding/story" size="sm" block>
-              {next}화 시작하기
-            </ButtonLink>
-            <p className="text-[11px] leading-4 text-ink-muted">
-              {snsSummary.connected
-                ? "인스타그램 독자 반응 기반으로 최적화된 제안입니다."
-                : "성과 기반 제안은 인스타 연동 후 정확해져요."}
-            </p>
+          {/* 다음 화는 마지막 회차 옆 카드로. 열면 회차가 생기므로 미리 불러오지 않는다 */}
+          <li>
+            <Link
+              href={`/episodes/new?seriesId=${series.id}`}
+              prefetch={false}
+              className="group flex h-full min-h-48 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border-control/80 bg-surface-card/60 p-4 text-center transition-all hover:border-brand hover:bg-brand-tint/20"
+            >
+              <span className="grid size-10 place-items-center rounded-full bg-surface-muted text-ink-muted transition-colors group-hover:bg-brand group-hover:text-white">
+                <Plus className="size-5 stroke-[2.6]" />
+              </span>
+              <span className="text-body-sm font-bold text-ink-muted group-hover:text-brand">{next}화 만들기</span>
+              <span className="text-caption text-ink-subtle">화풍·소재가 그대로 이어져요</span>
+            </Link>
           </li>
         </ul>
       </section>
 
-      <section className="flex flex-col gap-4 lg:flex-row">
-        <div className="flex flex-1 flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
+      {/* 소재 | 인스타 연동 반반 */}
+      {/* 두 패널 높이를 맞춘다(그리드 기본 stretch) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface-card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-title font-semibold">에셋 참조</h2>
-            <Link
-              href={`/assets?series=${series.id}`}
-              className="text-caption text-brand hover:underline font-medium"
-            >
-              에셋 라이브러리에서 관리 ↗
+            <h2 className="text-title font-semibold">소재</h2>
+            <Link href={`/assets?series=${series.id}`} className="text-caption text-brand hover:underline font-medium">
+              소재 보관함에서 관리 ↗
             </Link>
           </div>
-          <p className="text-body-sm text-ink-muted">
-            이 시리즈의 모든 회차에 아래 에셋이 고정 레퍼런스로 들어가요.
-          </p>
-
-          <ul className="flex flex-wrap gap-2.5">
-            {series.assets.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-label"
-              >
-                {a.thumbUrl ? (
-                  <img
-                    src={a.thumbUrl}
-                    alt={a.name}
-                    className="size-5 rounded-full object-cover border border-border/60"
-                  />
-                ) : (
-                  <span className="size-5 rounded-full bg-surface-muted" />
-                )}
-                <span>{a.name}</span>
-                <span className="text-caption text-ink-muted">{a.usedIn}화</span>
-              </li>
-            ))}
-          </ul>
-          {series.assets.length === 0 && (
+          <p className="text-body-sm text-ink-muted">이 작품의 모든 회차에 아래 소재가 고정 레퍼런스로 들어가요.</p>
+          {series.assets.length > 0 ? (
+            <ul className="flex flex-wrap gap-2.5">
+              {series.assets.map((a) => (
+                <li key={a.id} className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-label">
+                  {a.thumbUrl ? (
+                    <img src={a.thumbUrl} alt={a.name} className="size-5 rounded-full object-cover border border-border/60" />
+                  ) : (
+                    <span className="size-5 rounded-full bg-surface-muted" />
+                  )}
+                  <span>{a.name}</span>
+                  <span className="text-caption text-ink-muted">{a.usedIn}화</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
             <p className="text-body-sm text-ink-muted">
-              아직 고정한 에셋이 없어요. 에셋을 붙이면 회차마다 같은 얼굴로 그려져요.
+              아직 고정한 소재가 없어요. 소재를 붙이면 회차마다 같은 얼굴로 그려져요.
             </p>
           )}
-        </div>
+        </section>
 
-        <InstagramIntegrationCard
-          series={series}
-          episodes={series.episodes}
-          initialSnsData={snsData}
-          userPlan={profile?.plan ?? "free"}
-        />
-      </section>
+        {/* 인증 없는 데모 연동은 목 모드에서만. 배포에서는 실제 연동 출시 전까지 "출시 예정" */}
+        {usingMockData() ? (
+          <InstagramIntegrationCard
+            series={series}
+            episodes={series.episodes}
+            initialSnsData={snsData}
+            userPlan={profile?.plan ?? "free"}
+          />
+        ) : (
+          <SnsComingSoon
+            title="인스타그램 성과"
+            description="인스타그램을 연결하면 이 작품의 회차별 도달·저장 반응을 모아 보여줄 거예요. 준비하고 있어요."
+          />
+        )}
+      </div>
     </div>
   );
 }

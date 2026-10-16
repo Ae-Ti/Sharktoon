@@ -24,10 +24,15 @@ export async function getSession(): Promise<SharktoonSession | null> {
         error,
       } = await supabase.auth.getUser();
       if (!error && user) {
-        const isAdmin =
-          user.app_metadata?.role === "admin" ||
-          user.user_metadata?.role === "admin" ||
-          user.email === "admin@sharktoon.com";
+        // 운영자 판정은 서버만 바꿀 수 있는 값으로만 한다. user_metadata 는 사용자가
+        // supabase.auth.updateUser 로 직접 고칠 수 있고, 이메일 주소는 권한이 아니다.
+        // 운영 집계 함수(SK004)도 같은 profiles.is_admin 을 본다.
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", user.id)
+          .maybeSingle();
+        const isAdmin = user.app_metadata?.role === "admin" || profile?.is_admin === true;
         return {
           userId: user.id,
           email: user.email || "",
@@ -40,11 +45,12 @@ export async function getSession(): Promise<SharktoonSession | null> {
         };
       }
     } catch {
-      // Supabase 연결 에러 시 쿠키 세션 확인으로 폴백
+      // 연결 오류. 아래 데모 쿠키로 넘어가지 않는다 — 실 저장소에서 데모 쿠키는 아무 권한이 없다.
     }
+    return null;
   }
 
-  // 2. Mock 모드 및 데모 세션 쿠키 확인
+  // 2. Mock 모드 전용 데모 세션 쿠키. 브라우저가 고칠 수 있으므로 실 저장소에서는 쓰지 않는다.
   const sessionCookie = cookieStore.get(SESSION_COOKIE)?.value;
   if (!sessionCookie) {
     return null;

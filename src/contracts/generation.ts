@@ -17,7 +17,7 @@
  * - `CutGenerationRequest.index` — 생성기가 컷 순서를 id 문자열에서 추측하지 않게.
  * - `GenerationJobCut.imageRef` — Storage 경로. `imageUrl` 은 그걸 서명한 보기용 URL 이다.
  * - `GenerationJobCut.refunded` — 실패한 컷 중 실제로 환불된 것. hold 전에 막힌 컷은 환불할 게 없다.
- * - `ImageGenerator.generateCharacterSheet()` — 셀카·태그 → 캐릭터 시트(PRD 1.1).
+ * - `ImageGenerator.generateCharacterSheet()` — 태그 → 캐릭터 시트(PRD 1.1).
  */
 
 import type { CreditSpendReason } from "./credit";
@@ -106,11 +106,9 @@ export interface CutGenerationResult {
   };
 }
 
-/** 캐릭터 시트 입력. 셀카 1장, 특징 태그 5개 이하, 텍스트 설명 중 하나(PRD 1.1). */
+/** 캐릭터 시트 입력. 특징 태그 5개 이하, 텍스트 설명 중 하나(PRD 1.1). 셀카 입력은 2026-10-16 에 뺐다. */
 export interface CharacterSheetRequest {
   name: string;
-  /** 셀카 이미지 URL. 시트를 만든 뒤 원본은 기본 삭제한다. */
-  selfieUrl?: string;
   tags?: string[];
   description?: string;
   /** 그림체 프리셋 이름. */
@@ -222,3 +220,21 @@ export function summarizeJob(job: GenerationJob): JobSummary {
     percent: total === 0 ? 0 : Math.round((earned / total) * 100),
   };
 }
+
+/**
+ * 이미지 모델의 안전 검사(fal `has_nsfw_concepts` 등)에 걸려 결과를 쓸 수 없다.
+ * 검은 이미지가 돌아오므로 저장하지 않고 실패로 닫는다. 오탐이 섞여 있어 사용자 잘못으로 보지 않는다 —
+ * 크레딧은 돌려주고(약관 제8조 제2항), 판정을 기록해 반복되면 생성을 잠시 막는다.
+ */
+export class SafetyBlockedError extends Error {
+  readonly kind = "safety" as const;
+  constructor(readonly provider: string, message = "이미지 안전 검사에 걸려 이 컷을 만들지 못했어요. 장면을 바꿔 다시 만들어 주세요.") {
+    super(message);
+    this.name = "SafetyBlockedError";
+  }
+}
+
+export function isSafetyBlocked(e: unknown): e is SafetyBlockedError {
+  return e instanceof SafetyBlockedError || (e as { name?: string } | null)?.name === "SafetyBlockedError";
+}
+
