@@ -15,7 +15,14 @@ import {
 } from "./prompt";
 import { screenText } from "../safety/rules";
 import { ALLOWED, blocked, type SafetyVerdict } from "../safety/types";
-import { EMOTION_LABEL, type CutEmotion, type Storyboard, type StoryboardCut } from "../types/storyboard";
+import {
+  EMOTION_LABEL,
+  type CutEmotion,
+  type Storyboard,
+  type StoryboardCut,
+  type BackgroundPreset,
+  type CutBackground,
+} from "../types/storyboard";
 import { mockStoryboard } from "./mock";
 import { isAnthropicConfigured, parseStructured } from "../llm";
 
@@ -120,10 +127,7 @@ function toCharacters(raw: unknown): { key: string; name: string }[] {
         : (typeof v === "string" ? v : k),
     }));
   }
-  return [
-    { key: "ch_me", name: "나" },
-    { key: "ch_vet", name: "수의사 선생님" },
-  ];
+  return [{ key: "ch_me", name: "나" }];
 }
 
 function extractSpeakerId(speaker: unknown): string | null {
@@ -145,7 +149,7 @@ function extractSpeakerId(speaker: unknown): string | null {
 function normalizeSpeakerId(
   rawSpeaker: unknown,
   characters: { key: string; name: string }[],
-  registerUnknown = true,
+  registerUnknown = false,
 ): string | null {
   const extracted = extractSpeakerId(rawSpeaker);
   if (
@@ -168,24 +172,21 @@ function normalizeSpeakerId(
     return "ch_me";
   }
 
-  // 3. 캐릭터 이름과 일치하거나 부분 포함되는 경우 (예: '수의사' ➡️ '수의사 선생님')
+  // 3. 캐릭터 이름과 일치하거나 부분 포함되는 경우
   const matchByName = characters.find(
     (c) => c.name === extracted || c.name.includes(extracted) || extracted.includes(c.name),
   );
   if (matchByName) return matchByName.key;
 
-  // 4. 새로운 인물일 경우 캐릭터 목록에 자동 등록
+  // 4. 새로운 인물일 경우: 사연에 없던 인물이면 날조를 방지하기 위해 '나' 또는 효과음으로 안전 귀속
   if (registerUnknown) {
-    const clean = extracted.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
-    const candidate = clean ? `ch_${clean}` : `ch_${characters.length + 1}`;
-    const newKey = characters.some((c) => c.key === candidate)
-      ? `ch_${characters.length + 1}`
-      : candidate;
-    characters.push({ key: newKey, name: extracted });
-    return newKey;
+    if (extracted.includes("효과음") || extracted.includes("독백") || extracted.includes("생각") || extracted.includes("소리")) {
+      return null;
+    }
+    return characters[0]?.key ?? "ch_me";
   }
 
-  return "ch_me";
+  return characters[0]?.key ?? "ch_me";
 }
 
 function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
@@ -216,7 +217,7 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
         : cut.dialogue.some((d) => d.text.includes("강아지") || d.text.includes("댕댕이"))
           ? "강아지"
           : "반려동물";
-      scene = `동물병원 진료실 안. 흰색 가운을 입은 40대 남성 수의사가 진료대 옆에서 ${petType}를 진찰하고 있는 모습. 그 옆에서 고정 그레이 후드티 차림의 20대 여성 주인공(나, 평범한 인간 귀)이 바라보고 있음. ${scene}`;
+      scene = `동물병원 진료실 안. 흰색 가운을 입은 40대 남성 수의사가 진료대 옆에서 ${petType}를 진찰하고 있는 모습. 그 옆에서 지켜보는 주인공. ${scene}`;
       if (!charIds.includes("ch_vet")) charIds.push("ch_vet");
     }
 
@@ -226,36 +227,107 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
       charIds = charIds.filter((id) => typeof id === "string" && !id.includes("vet") && !id.includes("doctor"));
     }
 
-    // 3. 주인공 서술 통일: 중복 수식어 제거 후 단일화 및 조연 '백발' 번짐 방지
+    // 3. 조연 '백발' 번짐 방지 및 중복 수식어 정리
     scene = scene
       .replace(/백발의\s*/g, "단정한 흑발의 ")
       .replace(/(사복 차림의\s*)+/g, "")
       .replace(/(고정 그레이 후드티 차림의\s*)+/g, "")
-      .replace(/(고정 다크 그레이 후드티 차림의\s*)+/g, "")
-      .replace(/20대 여성 주인공\(나[^)]*\)/g, "주인공(나)")
-      .replace(/주인공\(나[^)]*\)/g, "고정 다크 그레이 후드티 차림의 20대 여성 주인공(나, 평범한 인간 귀, 동물 귀 절대 없음)");
-
-    if (!scene.includes("인간 귀")) {
-      scene = scene.replace(/주인공\(나\)/g, "고정 다크 그레이 후드티 차림의 20대 여성 주인공(나, 평범한 인간 귀, 동물 귀 절대 없음)");
-    }
+      .replace(/(고정 다크 그레이 후드티 차림의\s*)+/g, "");
 
     // 4. 배경 프리셋 자동 감지 및 설정 (사용자 설정이 없을 때)
     let bg = cut.background;
     if (!bg || bg.preset === "auto") {
-      if (scene.includes("병원") || scene.includes("진료") || scene.includes("수의사")) {
-        bg = { preset: "vet_clinic" };
-      } else if (scene.includes("현관")) {
-        bg = { preset: "entrance" };
-      } else if (scene.includes("거실") || scene.includes("식기") || scene.includes("소파")) {
-        bg = { preset: "living_room" };
-      } else if (scene.includes("침실") || scene.includes("침대")) {
-        bg = { preset: "bedroom" };
-      } else if (scene.includes("카페")) {
-        bg = { preset: "cafe" };
-      } else if (scene.includes("회사") || scene.includes("사무실") || scene.includes("회의") || scene.includes("팀장") || scene.includes("출근") || scene.includes("퇴근") || scene.includes("부장")) {
-        bg = { preset: "office" };
+      const targetText = `${scene} ${bg?.customName ?? ""}`;
+      let detectedPreset: BackgroundPreset | null = null;
+      let defaultName = bg?.customName;
+
+      if (targetText.includes("병원") || targetText.includes("진료") || targetText.includes("수의사") || targetText.includes("클리닉")) {
+        detectedPreset = "vet_clinic";
+        defaultName = defaultName || "동물병원";
+      } else if (targetText.includes("편의점") || targetText.includes("마트") || targetText.includes("슈퍼")) {
+        detectedPreset = "convenience_store";
+        defaultName = defaultName || "편의점/마트";
+      } else if (targetText.includes("카페") || targetText.includes("커피") || targetText.includes("베이커리")) {
+        detectedPreset = "cafe";
+        defaultName = defaultName || "카페";
+      } else if (
+        targetText.includes("식당") ||
+        targetText.includes("술집") ||
+        targetText.includes("포차") ||
+        targetText.includes("포장마차") ||
+        targetText.includes("고깃집") ||
+        targetText.includes("밥집") ||
+        targetText.includes("주점") ||
+        targetText.includes("호프")
+      ) {
+        detectedPreset = "restaurant";
+        defaultName = defaultName || "식당/술집";
+      } else if (
+        targetText.includes("공원") ||
+        targetText.includes("산책") ||
+        targetText.includes("잔디") ||
+        targetText.includes("놀이터") ||
+        targetText.includes("벤치")
+      ) {
+        detectedPreset = "park";
+        defaultName = defaultName || "공원/산책로";
+      } else if (
+        targetText.includes("길거리") ||
+        targetText.includes("골목") ||
+        targetText.includes("도로") ||
+        targetText.includes("횡단보도") ||
+        targetText.includes("야외") ||
+        targetText.includes("거리") ||
+        targetText.includes("밤길") ||
+        targetText.includes("인도")
+      ) {
+        detectedPreset = "street";
+        defaultName = defaultName || "길거리/야외";
+      } else if (
+        targetText.includes("회사") ||
+        targetText.includes("사무실") ||
+        targetText.includes("회의") ||
+        targetText.includes("팀장") ||
+        targetText.includes("출근") ||
+        targetText.includes("퇴근") ||
+        targetText.includes("부장") ||
+        targetText.includes("오피스") ||
+        targetText.includes("엘리베이터")
+      ) {
+        detectedPreset = "office";
+        defaultName = defaultName || "사무실";
+      } else if (targetText.includes("현관") || targetText.includes("신발장") || targetText.includes("문 앞")) {
+        detectedPreset = "entrance";
+        defaultName = defaultName || "현관";
+      } else if (
+        targetText.includes("침실") ||
+        targetText.includes("침대") ||
+        targetText.includes("내 방") ||
+        targetText.includes("방 안") ||
+        targetText.includes("자취방") ||
+        targetText.includes("원룸")
+      ) {
+        detectedPreset = "bedroom";
+        defaultName = defaultName || "침실/방";
+      } else if (
+        targetText.includes("거실") ||
+        targetText.includes("식기") ||
+        targetText.includes("소파") ||
+        targetText.includes("부엌") ||
+        targetText.includes("주방") ||
+        targetText.includes("식탁")
+      ) {
+        detectedPreset = "living_room";
+        defaultName = defaultName || "거실";
+      }
+
+      if (detectedPreset) {
+        bg = { preset: detectedPreset, customName: defaultName };
+      } else if (bg?.customName && bg.customName.trim()) {
+        bg = { preset: "auto", customName: bg.customName.trim() };
       } else {
-        bg = { preset: "solid_color", customName: "심플 실내" };
+        // Fallback: 풍부한 일상 실내 배경 (절대 단색 solid_color 로 강등하지 않음)
+        bg = { preset: "living_room", customName: "일상 실내 공간" };
       }
     }
 
@@ -293,12 +365,11 @@ function refineStoryboardCuts(cuts: StoryboardCut[]): StoryboardCut[] {
     // 7. 연속 포즈 중복 방지 (Strict Pose Diversity Enforcement)
     // 2컷, 3컷, 4컷이 연속으로 '양반다리'나 '주저앉음'을 복제하지 못하도록 컷 번호에 맞춘 신체 동작 강제 변환
     if (cutIdx === 2 && (scene.includes("양반다리") || scene.includes("주저앉"))) {
-      scene = scene.replace(/양반다리로 앉아.*?(?=과|와|,|\.)/g, "현관에 서서 바닥의 이동장 케이지를 내려놓는 스탠딩 자세를 취한");
-      scene = scene.replace(/주저앉은/g, "선 채로 신발을 벗으려는");
+      scene = scene.replace(/주저앉은/g, "선 채로 뒤를 돌아보는");
     } else if (cutIdx === 3 && scene.includes("양반다리")) {
-      scene = scene.replace(/양반다리로 앉아.*?(?=과|와|,|\.)/g, "깜짝 놀라 엉덩방아를 찧으며 뒤로 물러서서 손사래 치는");
+      scene = scene.replace(/양반다리로 앉아.*?(?=과|와|,|\.)/g, "깜짝 놀라 뒤로 물러서서 손사래 치는");
     } else if (cutIdx === 4 && scene.includes("양반다리")) {
-      scene = scene.replace(/양반다리로 앉아.*?(?=과|와|,|\.)/g, "무릎을 꿇고 상체를 앞으로 숙여(kneeling forward)");
+      scene = scene.replace(/양반다리로 앉아.*?(?=과|와|,|\.)/g, "상체를 앞으로 숙이며");
     }
 
     return {
@@ -448,9 +519,26 @@ function toStoryboard(
         .join(" ");
       const emotionKor = EMOTION_LABEL[cut.emotion as CutEmotion] || "생생한";
       const beat = (input.story || "").slice(0, 35);
+      const protagonistName = characters[0]?.name || "주인공";
       sceneText = lineTexts
-        ? `고정 다크 그레이 후드티 차림의 20대 여성 주인공(나)이 ${emotionKor} 표정으로 상황에 반응하는 모습. 대화 상황: "${lineTexts.slice(0, 30)}"`
-        : `${beat}의 상황. 고정 다크 그레이 후드티 차림의 20대 여성 주인공(나)이 ${emotionKor} 표정으로 서 있는 장면.`;
+        ? `${protagonistName}이(가) ${emotionKor} 표정으로 상황에 반응하는 모습. 대화 상황: "${lineTexts.slice(0, 30)}"`
+        : `${beat}의 상황. ${protagonistName}이(가) ${emotionKor} 표정으로 서 있는 장면.`;
+    }
+
+    const rawLocation =
+      typeof cut.location === "string" && cut.location.trim().length > 0 && cut.location.trim() !== "없음"
+        ? cut.location.trim()
+        : typeof cut.background === "string" && cut.background.trim().length > 0
+          ? cut.background.trim()
+          : (cut.background && typeof cut.background === "object" && typeof cut.background.customName === "string"
+            ? cut.background.customName.trim()
+            : undefined);
+
+    let initialBg: CutBackground | undefined = undefined;
+    if (cut.background && typeof cut.background === "object" && "preset" in cut.background) {
+      initialBg = cut.background;
+    } else if (rawLocation) {
+      initialBg = { preset: "auto", customName: rawLocation };
     }
 
     return {
@@ -461,6 +549,7 @@ function toStoryboard(
         .map((c: any) => (typeof c === "string" ? c : (c?.key || c?.id || String(c)))),
       emotion: cut.emotion || "calm",
       camera: cut.camera || "medium",
+      background: initialBg,
       dialogue: (Array.isArray(cut.dialogue) ? cut.dialogue : []).map((line: any) => {
         const spId = normalizeSpeakerId(line.speaker ?? line.speakerId, characters);
         return {
@@ -468,6 +557,7 @@ function toStoryboard(
           speakerId: spId,
           text: line.text || "",
           balloon: (!spId && (!line.balloon || line.balloon === "normal")) ? "narration_box" : (line.balloon || "normal"),
+          position: line.position,
         };
       }),
       narration:

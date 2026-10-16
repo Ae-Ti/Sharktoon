@@ -7,10 +7,12 @@ import { dataSource } from "@/lib/supabase/env";
 import { removeObjects } from "@/lib/supabase/storage";
 import { getRepository } from "./data";
 import { checkUpload, resolveImages, storeImage, storeUpload } from "./data/images";
-import type { AssetInput, SeriesInput, SeriesRule } from "./data/types";
+import type { AssetInput, SeriesInput, SeriesRule, PlanTier } from "./data/types";
 import { extractCharacterFeaturesFromSelfie, extractStoryFromImage } from "./vision";
+import { generateAssetIllustrationSvg } from "./assets/assetVisuals";
+import { resolveStyleAnchor } from "@/features/generation/image/promptBuilder";
 
-/** 출석 체크. 하루 1크레딧, 7일 연속이면 3크레딧을 더 준다. */
+/** 출석 체크. 하루 1크레딧, 7일 연속이면 총 3크레딧(보너스 2크레딧)을 준다. */
 export async function checkInAction(): Promise<
   { ok: true; granted: number; streak: number } | { ok: false; message: string }
 > {
@@ -18,6 +20,7 @@ export async function checkInAction(): Promise<
     const repo = await getRepository();
     const { granted, streak } = await repo.checkIn();
     revalidatePath("/home");
+    revalidatePath("/settings");
     return { ok: true, granted, streak };
   } catch (e) {
     return {
@@ -36,6 +39,84 @@ function fail(e: unknown): Fail {
     ok: false,
     message: e instanceof Error ? e.message : "처리하지 못했어요",
   };
+}
+
+/**
+ * 소재의 레퍼런스/썸네일 비주얼 생성 (OpenAI 생성기 또는 화풍 맞춤 일러스트)
+ */
+export async function generateAssetVisualAction(input: {
+  name: string;
+  kind: "character" | "location" | "prop" | "animal";
+  description?: string | null;
+  tags?: string[];
+  stylePreset?: string;
+  customStyleImageUrl?: string | null;
+  referenceImageUrl?: string | null;
+}): Promise<{ ok: true; imageUrl: string } | Fail> {
+  try {
+    const style = input.stylePreset || "심플 라인";
+    const tagList = input.tags ?? [];
+    const desc = input.description || "";
+
+    // 1. OpenAI 또는 이미지 생성기 가용 시 실제 AI 생성 시도
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const generator = getImageGenerator();
+        const styleAnchor = resolveStyleAnchor(style);
+        const prompt = [
+          `[USE CASE & MEDIUM]: Korean 2D webtoon asset illustration on clean background.`,
+          `[ASSET TYPE]: ${input.kind} (${input.name})`,
+          `[SPECIFICATION]: ${desc}. Features & Tags: ${tagList.join(", ")}`,
+          `[ART DIRECTION & STYLE]: Clean 2D Korean webtoon manhwa style, uniform crisp lineart, solid flat cel shading, zero gradients, zero 3D rendering. Style preset: ${styleAnchor}.`,
+        ].join("\n");
+
+        const refs = input.referenceImageUrl
+          ? [input.referenceImageUrl]
+          : input.customStyleImageUrl
+          ? [input.customStyleImageUrl]
+          : [];
+
+        const result = await generator.generateCut({
+          cutId: `as_${crypto.randomUUID().slice(0, 8)}`,
+          index: 1,
+          episodeId: "asset_gen",
+          seriesId: "asset_gen",
+          intent: "regenerate",
+          prompt,
+          characterSheetRefs: refs,
+          assetRefs: refs,
+          seriesRule: {
+            stylePreset: style,
+            defaultCutCount: 6,
+            aspectRatio: "1:1",
+            tone: null,
+            fixedHashtags: [],
+            customStyleImageUrl: input.customStyleImageUrl,
+          },
+        });
+
+        if (result.imageUrl) {
+          return { ok: true, imageUrl: result.imageUrl };
+        }
+      } catch (genErr) {
+        console.warn("AI asset visual generation fallback to SVG:", genErr);
+      }
+    }
+
+    // 2. Fallback to style-aligned illustration SVG
+    const svg = generateAssetIllustrationSvg({
+      name: input.name,
+      kind: input.kind,
+      description: input.description,
+      tags: input.tags,
+      style,
+      customStyleImageUrl: input.customStyleImageUrl,
+    });
+
+    return { ok: true, imageUrl: svg };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 export async function saveAssetAction(
@@ -305,6 +386,44 @@ export async function startEpisodeAction(input: {
   }
 }
 
+/**
+ * 선택된 시리즈에서 사연 입력 없이 초안 회차를 바로 생성 (스토리보드 화면으로 이동)
+ */
+export async function startEpisodeDraftAction(input: {
+  seriesId: string;
+  cutCount?: number;
+}): Promise<{ ok: true; episodeId: string; seriesId: string } | Fail> {
+  try {
+    const repo = await getRepository();
+    const r = await repo.startEpisode({
+      story: "",
+      cutCount: input.cutCount ?? 4,
+      seriesId: input.seriesId,
+    });
+    revalidatePath("/home");
+    revalidatePath(`/series/${input.seriesId}`);
+    return { ok: true, ...r };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 회차의 소속 시리즈 변경 */
+export async function updateEpisodeSeriesAction(
+  episodeId: string,
+  seriesId: string
+): Promise<Result> {
+  try {
+    const repo = await getRepository();
+    await repo.updateEpisode(episodeId, { seriesId });
+    revalidatePath(`/episodes/${episodeId}/storyboard`);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+
 /** 환불 신청(약관 제14조). 견적은 서버가 그 시점 값으로 계산한다. */
 export async function requestRefundAction(reason: string | null): Promise<Result> {
   try {
@@ -400,4 +519,55 @@ export async function extractStoryFromImageAction(
     };
   }
 }
+
+/** 플랜 변경 / 구독 시작 */
+export async function updatePlanAction(
+  plan: PlanTier,
+): Promise<{ ok: true; plan: PlanTier } | { ok: false; message: string }> {
+  try {
+    const repo = await getRepository();
+    if ("updatePlan" in repo && typeof (repo as any).updatePlan === "function") {
+      await (repo as any).updatePlan(plan);
+    }
+    revalidatePath("/settings");
+    revalidatePath("/home");
+    return { ok: true, plan };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "플랜 변경에 실패했습니다.",
+    };
+  }
+}
+
+/** 크레딧 단품 팩 구매 충전 */
+export async function purchaseCreditPackAction(
+  packId: string
+): Promise<{ ok: true; credits: number; newBalance: number } | { ok: false; message: string }> {
+  try {
+    const repo = await getRepository();
+    const { CREDIT_PACKS } = await import("./pricing/creditPacks");
+    const pack = CREDIT_PACKS.find((p) => p.id === packId);
+    if (!pack) {
+      return { ok: false, message: "존재하지 않는 크레딧 팩입니다." };
+    }
+
+    if ("purchaseCredits" in repo && typeof (repo as any).purchaseCredits === "function") {
+      const res = await (repo as any).purchaseCredits(pack.credits, pack.priceKrw);
+      revalidatePath("/settings");
+      revalidatePath("/home");
+      return { ok: true, credits: pack.credits, newBalance: res.balance };
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/home");
+    return { ok: true, credits: pack.credits, newBalance: pack.credits };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "크레딧 충전에 실패했습니다.",
+    };
+  }
+}
+
 

@@ -14,7 +14,7 @@ export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
     "bg-surface-card text-ink border border-border-control hover:bg-surface-sunken",
   ghost: "text-brand-ink hover:bg-brand-tint",
   danger: "bg-danger text-on-signal",
-  cta: "relative overflow-hidden bg-gradient-to-r from-[#077b8a] via-[#0eb8ce] to-[#0284c7] text-white border border-cyan-300/40 shadow-md shadow-cyan-600/20 hover:shadow-lg hover:shadow-cyan-500/35 active:scale-98 transition-[box-shadow,transform,filter] duration-500 ease-out",
+  cta: "relative overflow-hidden bg-gradient-to-r from-[#077b8a] via-[#0eb8ce] to-[#0284c7] text-white border border-cyan-300/40 shadow-md shadow-cyan-600/20 hover:shadow-xl hover:shadow-cyan-500/35",
 };
 
 export const BUTTON_SIZE: Record<ButtonSize, string> = {
@@ -43,9 +43,17 @@ export function buttonClasses({
   block?: boolean;
   className?: string;
 } = {}): string {
+  const hasCustomTransition =
+    variant === "cta" ||
+    (className &&
+      (className.includes("transition-") ||
+        className.includes("transition ") ||
+        className.includes("cta-button-float")));
+
   return cn(
     "inline-flex items-center justify-center gap-2 rounded-md font-semibold whitespace-nowrap",
-    "cursor-pointer transition-colors",
+    "cursor-pointer",
+    !hasCustomTransition && "transition-colors",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
     "disabled:cursor-not-allowed disabled:opacity-45",
     BUTTON_VARIANT[variant],

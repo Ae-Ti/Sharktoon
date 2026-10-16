@@ -15,7 +15,7 @@ import type { CutEditIntent, GenerationJob, GenerationTier } from "@/contracts/g
 import { getRepository } from "@/features/platform/data";
 import { loadEpisodeContext, type EpisodeContext } from "@/features/platform/episode";
 import { getGenerationStore, type PostPackage } from "./data";
-import { generatePostPackage } from "./post/generate";
+import { generateFirstComment, generatePostPackage } from "./post/generate";
 import { drainQueue, regenerateCut, retryFailedCuts, startGeneration } from "./pipeline";
 import { generateStoryboard, isAnthropicConfigured } from "./storyboard/generate";
 import { extractEntitiesFromStory } from "./storyboard/extractEntities";
@@ -118,6 +118,14 @@ export async function generateStoryboardAction(input: {
 
     const { context: freshContext } = await ownedEpisode(input.episodeId);
 
+    const charDescs = freshContext.assets
+      .filter((a) => a.kind === "character")
+      .map((a) => ({
+        name: a.name,
+        description: a.description ?? undefined,
+        tags: a.tags,
+      }));
+
     // 시리즈 규칙과 고정 캐릭터는 화면이 아니라 서버가 읽는다.
     // 클라이언트가 보낸 값을 그대로 프롬프트에 넣으면 규칙을 우회할 수 있다.
     const result = await generateStoryboard({
@@ -127,6 +135,7 @@ export async function generateStoryboardAction(input: {
       cutCount: input.cutCount ?? freshContext.cutCount,
       seriesRule: describeRule(freshContext),
       fixedCharacters: characterNames(freshContext),
+      characterDescriptions: charDescs,
     });
 
     if (!result.ok) {
@@ -293,6 +302,7 @@ export async function regenerateCutAction(input: {
   jobId?: string;
   cutId: string;
   intent: CutEditIntent;
+  tier?: GenerationTier;
   prompt?: string;
   skipFaceLock?: boolean;
   maskUrl?: string;
@@ -314,6 +324,7 @@ export async function regenerateCutAction(input: {
       userId,
       cutId: input.cutId,
       intent: input.intent,
+      tier: input.tier,
       prompt: input.prompt?.slice(0, 200),
       skipFaceLock: input.skipFaceLock,
       maskUrl: input.maskUrl,
@@ -378,6 +389,37 @@ export async function generatePostPackageAction(
     }
     await store.savePostPackage(episodeId, result.data);
     return { ok: true, data: { ...result.data, updatedAt: new Date().toISOString() } };
+  } catch (e) {
+    return toCreditOrError(e);
+  }
+}
+
+/** 첫 댓글만 다시 쓰기. 크레딧을 쓰지 않는다. */
+export async function generateFirstCommentAction(
+  episodeId: string,
+): Promise<ActionResult<string>> {
+  try {
+    const { context } = await ownedEpisode(episodeId);
+    const store = await getGenerationStore();
+    const saved = await store.getStoryboard(episodeId);
+    if (!saved) return { ok: false, kind: "error", message: "콘티가 있어야 댓글을 만들 수 있어요." };
+
+    const result = await generateFirstComment({ context, storyboard: saved.storyboard });
+    if (!result.ok) {
+      return result.reason === "refusal"
+        ? { ok: false, kind: "safety", message: "이 내용으로는 댓글을 만들 수 없어요." }
+        : { ok: false, kind: "error", message: result.message };
+    }
+
+    const prev = await store.getPostPackage(episodeId);
+    if (prev) {
+      await store.savePostPackage(episodeId, {
+        ...prev,
+        firstComment: result.data,
+      });
+    }
+
+    return { ok: true, data: result.data };
   } catch (e) {
     return toCreditOrError(e);
   }
@@ -449,17 +491,28 @@ function toCreditOrError(e: unknown): ActionResult<never> {
 /** 생성 호출에 실릴 고정 레퍼런스. 캐릭터 시트는 모든 호출에 들어간다(PRD 2.1). */
 function generationRefs(context: EpisodeContext) {
   const characters = context.assets.filter((a) => a.kind === "character");
-  const characterTraits = characters.map((c) =>
-    [c.name !== "나" ? c.name : "", ...(c.tags ?? []), c.description].filter(Boolean).join(", "),
-  ).filter(Boolean);
+  const characterTraits = characters.map((c) => {
+    const details = [
+      c.name,
+      c.tags && c.tags.length > 0 ? `특징: ${c.tags.join(", ")}` : "",
+      c.description ? `외모/설정: ${c.description}` : "",
+    ].filter(Boolean).join(" · ");
+    return details;
+  }).filter(Boolean);
 
   return {
     characterAssetIds: characters.map((a) => a.id),
     assetIds: context.assets.filter((a) => a.kind !== "character").map((a) => a.id),
-    characterSheetRefs: characters.flatMap((a) => a.referenceUrls),
+    characterSheetRefs: characters.flatMap((a) => [
+      ...(a.referenceUrls ?? []),
+      ...(a.thumbUrl ? [a.thumbUrl] : []),
+    ]),
     assetRefs: context.assets
       .filter((a) => a.kind !== "character")
-      .flatMap((a) => a.referenceUrls),
+      .flatMap((a) => [
+        ...(a.referenceUrls ?? []),
+        ...(a.thumbUrl ? [a.thumbUrl] : []),
+      ]),
     seriesRule: {
       ...context.rule,
       characterTraits,

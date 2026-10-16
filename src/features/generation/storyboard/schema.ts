@@ -48,16 +48,29 @@ const BALLOON = z.enum([
   "none",
 ]);
 
+const DIALOGUE_POSITION = z.enum([
+  "top_left",
+  "top_right",
+  "bottom_left",
+  "bottom_right",
+  "top_center",
+  "bottom_center",
+]);
+
 const LineSchema = z.object({
   /** 등장인물 키. 화자가 없으면 빈 문자열(효과음·나레이션). */
   speaker: z.string(),
   text: z.string(),
   balloon: BALLOON,
+  /** 컷 내 최적 말풍선 배치 위치 (미지정 시 화자 위치 기반 자동 배치) */
+  position: DIALOGUE_POSITION.optional(),
 });
 
 const CutSchema = z.object({
   /** 무엇이 보이는지. 이미지 프롬프트의 본문이 된다. */
   scene: z.string(),
+  /** 장면의 배경 공간/장소 (예: 카페, 편의점, 사무실, 공원, 거실, 방 안, 길거리, 식당 등). */
+  location: z.string().optional(),
   /** 이 컷에 나오는 등장인물 키. characters 에 있는 것만 쓴다. */
   characters: z.array(z.string()),
   emotion: EMOTION,

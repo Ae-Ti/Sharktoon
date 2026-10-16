@@ -49,10 +49,10 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
   const [pending, start] = useTransition();
   const [done, setDone] = useState(checkedInToday);
   const [currentStreak, setCurrentStreak] = useState(streak);
-  const [bannerNotice, setBannerNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   const daysInCycle = policy.attendanceStreakDays || 7;
-  const streakBonus = policy.attendanceStreakBonus ?? 3;
+  const streakBonus = policy.attendanceStreakBonus ?? 2;
   const monthBonus = policy.attendanceMonthStreakBonus ?? 5;
   const dailyCredit = policy.attendanceDaily ?? 1;
 
@@ -60,8 +60,6 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
   const cycleDay = done
     ? ((currentStreak - 1) % daysInCycle) + 1
     : (currentStreak % daysInCycle) + 1;
-
-  const toNextBonus = daysInCycle - (currentStreak % daysInCycle);
 
   const steps = [1, 2, 3, 4, 5, 6, 7].map((day) => {
     const isCompleted = done ? day <= cycleDay : day < cycleDay;
@@ -90,20 +88,15 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
               <Gift className="size-5 text-brand" />
             )}
           </div>
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <h3 className="text-body font-bold text-ink flex items-center gap-2">
-              <span>
-                {bannerNotice ??
-                  (done
-                    ? `오늘 출석 완료! (연속 ${currentStreak}일째 달성)`
-                    : toNextBonus === 1
-                      ? `오늘 출석하면 7일 연속 보너스 +${streakBonus}C!`
-                      : `오늘의 출석 체크 (${toNextBonus}일 뒤 보너스 +${streakBonus}C)`)}
-              </span>
+          <div className="flex flex-col min-w-0">
+            <h3 className={cn("text-body font-bold", errorNotice ? "text-danger" : "text-ink")}>
+              {errorNotice ??
+                (done
+                  ? `연속 ${currentStreak}일 출석!`
+                  : currentStreak > 0
+                    ? `연속 ${currentStreak}일 출석 중`
+                    : "오늘의 출석 체크")}
             </h3>
-            <p className="text-caption text-ink-muted">
-              매일 +{dailyCredit}C · 7일 연속 +{streakBonus}C · 4주 연속 +{monthBonus}C 보너스
-            </p>
           </div>
         </div>
 
@@ -118,14 +111,10 @@ export function AttendanceBanner({ checkedInToday, streak, policy }: AttendanceB
               if (r.ok) {
                 setDone(true);
                 setCurrentStreak(r.streak);
+                setErrorNotice(null);
                 triggerFestiveConfetti();
-                setBannerNotice(
-                  r.granted > 0
-                    ? `+${r.granted} 크레딧 지급 완료! (연속 ${r.streak}일 달성 🎉)`
-                    : `연속 ${r.streak}일 출석 완료!`,
-                );
               } else {
-                setBannerNotice(r.message);
+                setErrorNotice(r.message);
               }
             })
           }

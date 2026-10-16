@@ -92,10 +92,11 @@ export function createMemoryQueue(runner: CutRunner, hooks: MemoryQueueHooks = {
 
     try {
       const { imageUrl, imageRef } = await runner({
-        job,
+        job: work.tier ? { ...job, tier: work.tier } : job,
         cut,
         intent: work.intent,
         prompt: work.prompt,
+        tier: work.tier,
         characterSheetRefs: context.characterSheetRefs,
         assetRefs: context.assetRefs,
         seriesRule: context.seriesRule,
@@ -148,7 +149,8 @@ export function createMemoryQueue(runner: CutRunner, hooks: MemoryQueueHooks = {
       if (prev && change) {
         context.cuts[cutId] = {
           intent: change.intent,
-          prompt: withRequest(prev.prompt, change.request),
+          prompt: withRequest(prev.prompt, change.request, change.intent),
+          tier: change.tier ?? prev.tier,
           skipFaceLock: change.skipFaceLock ?? prev.skipFaceLock,
           maskUrl: change.maskUrl ?? prev.maskUrl,
         };

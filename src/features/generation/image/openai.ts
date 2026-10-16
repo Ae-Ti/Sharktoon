@@ -88,8 +88,17 @@ async function translateKoreanToVisualEnglish(text: string, apiKey: string): Pro
   return cleaned;
 }
 
+const PRESET_SAMPLE_FILES: Record<string, string> = {
+  "심플 라인": "/styles/simple-line.png",
+  "파스텔": "/styles/pastel.png",
+  "굵은 선": "/styles/bold-line.png",
+  "명랑 코믹": "/styles/cheerful-comic.png",
+  "감성 색연필": "/styles/colored-pencil.png",
+  "모던 K-웹툰": "/styles/modern-k-webtoon.png",
+};
+
 /**
- * URL 또는 data URI를 Blob으로 변환
+ * URL, 로컬 파일 경로, 또는 data URI를 Blob으로 변환
  */
 async function resolveImageToBlob(urlOrDataUri: string): Promise<Blob | null> {
   try {
@@ -100,6 +109,22 @@ async function resolveImageToBlob(urlOrDataUri: string): Promise<Blob | null> {
       const buffer = Buffer.from(match[2], "base64");
       return new Blob([buffer], { type: mime });
     }
+
+    // 로컬 public 디렉토리 파일 처리 (예: /styles/simple-line.png)
+    if (urlOrDataUri.startsWith("/")) {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const localPath = path.join(process.cwd(), "public", urlOrDataUri);
+      try {
+        const buffer = await fs.readFile(localPath);
+        const ext = path.extname(urlOrDataUri).toLowerCase();
+        const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
+        return new Blob([buffer], { type: mime });
+      } catch (fileErr) {
+        console.warn("Could not read local file:", localPath, fileErr);
+      }
+    }
+
     const res = await fetch(urlOrDataUri);
     if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
@@ -133,32 +158,75 @@ export class OpenAIImageGenerator implements ImageGenerator {
     // 1. 한국어 씬 지문 비주얼 영문 변환
     const visualScene = await translateKoreanToVisualEnglish(req.prompt, apiKey);
 
-    // 2. 코덱스 스타일 스캐폴딩 및 Invariant(불변 규칙) 프롬프트 빌드
+    // 2. 캐릭터 설정(외모, 의상, 특징) 추출 및 영문 번역
+    const rawTraits = Array.isArray(req.seriesRule?.characterTraits)
+      ? (req.seriesRule.characterTraits as string[]).filter(Boolean)
+      : [];
+    const cutText = req.prompt;
+    const matchedTraits = rawTraits.filter((trait) => {
+      const parts = trait.split(/[·,]/).map((s) => s.trim()).filter(Boolean);
+      return parts.some((p) => p.length >= 2 && cutText.includes(p));
+    });
+    const activeTraits = matchedTraits.length > 0 ? matchedTraits : rawTraits;
+    const characterAppearance = activeTraits.length > 0
+      ? await translateKoreanToVisualEnglish(activeTraits.join(", "), apiKey)
+      : "";
+
+    const requestMatch = req.prompt.match(/요청:\s*([^\n]+)/);
+    const rawCustomRequest = requestMatch ? requestMatch[1].trim() : undefined;
+    let customRequest = rawCustomRequest;
+    if (rawCustomRequest && /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(rawCustomRequest)) {
+      try {
+        customRequest = await translateKoreanToVisualEnglish(rawCustomRequest, apiKey);
+      } catch {
+        customRequest = rawCustomRequest;
+      }
+    }
+
+    // 3. 코덱스 스타일 스캐폴딩 및 Invariant(불변 규칙) 프롬프트 빌드
     const structured = buildStructuredWebtoonPrompt({
       cutIndex: req.index,
       cutText: req.prompt,
       visualScene,
       stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+      characterAppearance,
+      intent: req.intent,
+      customRequest,
     });
 
     const prompt = structured.prompt;
 
-    // 3. 고정 레퍼런스 이미지 추출 (캐릭터 시트 및 시리즈 에셋)
-    const rawRefUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
-    const isRasterRef = Boolean(
-      rawRefUrl &&
-      !rawRefUrl.startsWith("data:image/svg") &&
-      !rawRefUrl.endsWith(".svg"),
-    );
+    // 4. 고정 레퍼런스 이미지 추출 (우선순위: 캐릭터 시트 -> 에셋 레퍼런스 -> 커스텀 화풍 사진 -> 스타일 프리셋 샘플)
+    const allCandidates = [
+      ...(req.characterSheetRefs ?? []),
+      ...(req.assetRefs ?? []),
+      req.seriesRule?.customStyleImageUrl as string | undefined,
+    ].filter(Boolean);
+
+    let rawRefUrl: string | null = null;
+    for (const url of allCandidates) {
+      if (url && !url.startsWith("data:image/svg") && !url.endsWith(".svg")) {
+        rawRefUrl = url;
+        break;
+      }
+    }
+
+    // 만약 사용자가 직접 올린 레퍼런스가 없지만 표준 스타일 프리셋인 경우, 프리셋 실제 화풍 샘플 PNG 사용
+    if (!rawRefUrl && req.seriesRule?.stylePreset) {
+      const presetFile = PRESET_SAMPLE_FILES[String(req.seriesRule.stylePreset)];
+      if (presetFile) {
+        rawRefUrl = presetFile;
+      }
+    }
 
     let referenceBlob: Blob | null = null;
-    if (isRasterRef && rawRefUrl && !req.skipFaceLock) {
+    if (rawRefUrl && !req.skipFaceLock) {
       referenceBlob = await resolveImageToBlob(rawRefUrl);
     }
 
     console.log(`\n🤖 [OpenAI ${this.modelName} Cut ${req.index}] Final Prompt:\n${prompt}\n`);
     if (referenceBlob) {
-      console.log(`🖼️ [OpenAI ${this.modelName} Cut ${req.index}] Attaching Reference Image: ${referenceBlob.size} bytes`);
+      console.log(`🖼️ [OpenAI ${this.modelName} Cut ${req.index}] Attaching Reference Image (${rawRefUrl?.slice(0, 40)}): ${referenceBlob.size} bytes`);
     }
 
     let imageUrl: string;

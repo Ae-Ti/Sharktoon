@@ -329,10 +329,33 @@ export class ComfyUIGenerator implements ImageGenerator {
       regionalLeftPrompt =
         "On the left side: 40-year-old Korean male veterinarian with neat short black hair and glasses, wearing a blue shirt and white medical lab coat with stethoscope, examining the cat on the table. (Strictly NO hoodie, NO white hair).";
       regionalRightPrompt =
-        "On the right side: 20-year-old Korean female pet owner, black hair tied loosely in low ponytail with curtain bangs, wearing oversized dark grey hoodie, dark pants, standing and watching calmly. (Strictly NO lab coat, NO stethoscope).";
+        "On the right side: Korean civilian pet owner with natural human ears, wearing casual civilian clothes, standing and watching calmly. (Strictly NO lab coat, NO stethoscope).";
     }
 
     const hasCatInCut = cutText.includes("고양이") || cutText.includes("냥이") || cutText.includes("cat");
+
+    const requestMatch = cutText.match(/요청:\s*([^\n]+)/);
+    const rawCustomRequest = requestMatch ? requestMatch[1].trim() : undefined;
+    let customRequest = rawCustomRequest;
+    if (rawCustomRequest && /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(rawCustomRequest)) {
+      try {
+        customRequest = await translateToVisualEnglishPrompt(rawCustomRequest, apiKey);
+      } catch {
+        customRequest = rawCustomRequest;
+      }
+    }
+
+    const rawTraits = Array.isArray(req.seriesRule?.characterTraits)
+      ? (req.seriesRule.characterTraits as string[]).filter(Boolean)
+      : [];
+    const matchedTraits = rawTraits.filter((trait) => {
+      const parts = trait.split(/[·,]/).map((s) => s.trim()).filter(Boolean);
+      return parts.some((p) => p.length >= 2 && cutText.includes(p));
+    });
+    const activeTraits = matchedTraits.length > 0 ? matchedTraits : rawTraits;
+    const characterAppearance = activeTraits.length > 0
+      ? await translateToVisualEnglishPrompt(activeTraits.join(", "), apiKey)
+      : "";
 
     // 2. Base Positive & Negative Prompts (Codex Invariant Architecture)
     const structured = buildStructuredWebtoonPrompt({
@@ -340,12 +363,35 @@ export class ComfyUIGenerator implements ImageGenerator {
       cutText,
       visualScene,
       stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+      characterAppearance,
+      intent: req.intent,
+      customRequest,
     });
     const positivePrompt = structured.prompt;
     const negativePrompt = structured.negativePrompt;
 
+    const allCandidates = [
+      ...(req.characterSheetRefs ?? []),
+      ...(req.assetRefs ?? []),
+      req.seriesRule?.customStyleImageUrl as string | undefined,
+    ].filter(Boolean);
 
-    const referenceImageUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
+    let referenceImageUrl: string | undefined;
+    for (const url of allCandidates) {
+      if (
+        url &&
+        !url.startsWith("data:image/svg") &&
+        !url.endsWith(".svg") &&
+        (url.startsWith("http://") ||
+          url.startsWith("https://") ||
+          url.startsWith("data:image/jpeg") ||
+          url.startsWith("data:image/png") ||
+          url.startsWith("data:image/webp"))
+      ) {
+        referenceImageUrl = url;
+        break;
+      }
+    }
 
     // 3. ComfyUI API 워크플로우 그래프 생성
     const workflow = buildComfyWebtoonWorkflow({

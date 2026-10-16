@@ -9,12 +9,91 @@ import { processSingleton } from "@/lib/singleton";
 import type { CutLayerTree } from "../types/layer";
 import type { CutRecord, GenerationStore, PostPackage, SavedStoryboard } from "./types";
 
-const S = processSingleton("generation-mock", () => ({
-  storyboards: new Map<string, SavedStoryboard>(),
-  jobs: new Map<string, GenerationJob>(),
-  cuts: new Map<string, Map<string, CutRecord>>(),
-  packages: new Map<string, PostPackage>(),
-}));
+const S = processSingleton("generation-mock", () => {
+  const storyboards = new Map<string, SavedStoryboard>();
+  const jobs = new Map<string, GenerationJob>();
+  const cuts = new Map<string, Map<string, CutRecord>>();
+  const packages = new Map<string, PostPackage>();
+
+  // 데모 및 게시 화면 검증을 위한 ep_001 시드 데이터
+  const ep1Cuts = new Map<string, CutRecord>();
+  for (let i = 1; i <= 4; i++) {
+    ep1Cuts.set(`cut_ep1_${i}`, {
+      cutId: `cut_ep1_${i}`,
+      index: i,
+      imageRef: `/benchmark/episodes/1_sunburst_cut_${i}.png`,
+      imageUrl: `/benchmark/episodes/1_sunburst_cut_${i}.png`,
+      layerTree: null,
+    });
+  }
+  cuts.set("ep_001", ep1Cuts);
+
+  storyboards.set("ep_001", {
+    usedMock: true,
+    storyboard: {
+      id: "sb_001",
+      episodeId: "ep_001",
+      seriesId: "sr_villain",
+      status: "generated",
+      story: "열심히 준비한 기획안, 회의실에서 순간 도둑맞았습니다.",
+      characters: [
+        { key: "me", name: "나" },
+        { key: "boss", name: "부장님" },
+      ],
+      hookOptions: [
+        { id: "hk_1", text: "다들 퇴근 직전에 이런 적 있으시죠? 😭", rationale: "공감형 질문" },
+        { id: "hk_2", text: "내 아이디어를 뺏겼을 때 대처법", rationale: "정보형 후킹" },
+      ],
+      selectedHookId: "hk_1",
+      ctaOptions: [
+        { id: "cta_1", kind: "question", text: "여러분이라면 어떻게 하셨을까요? 댓글로 알려주세요!", rationale: "댓글 참여 유도" },
+      ],
+      selectedCtaId: "cta_1",
+      cuts: [
+        {
+          id: "cut_ep1_1",
+          index: 1,
+          scene: "회의실에서 아이디어 발표",
+          characterIds: ["me"],
+          emotion: "determined",
+          camera: "medium",
+          dialogue: [{ id: "l1", speakerId: "me", text: "이번 신규 아이디어는 이렇습니다!", balloon: "normal" }],
+        },
+        {
+          id: "cut_ep1_2",
+          index: 2,
+          scene: "부장님의 가로채기",
+          characterIds: ["boss"],
+          emotion: "surprised",
+          camera: "close_up",
+          dialogue: [{ id: "l2", speakerId: "boss", text: "어, 그 아이디어 말이야~ 내가 생각한 건데.", balloon: "normal" }],
+        },
+        {
+          id: "cut_ep1_3",
+          index: 3,
+          scene: "당황한 주인공의 표정",
+          characterIds: ["me"],
+          emotion: "embarrassed",
+          camera: "close_up",
+          dialogue: [{ id: "l3", speakerId: "me", text: "(네...? 지난주에 보고드렸는데...)", balloon: "thought" }],
+        },
+        {
+          id: "cut_ep1_4",
+          index: 4,
+          scene: "체념하고 퇴근길 혼술",
+          characterIds: ["me"],
+          emotion: "sad",
+          camera: "medium",
+          dialogue: [{ id: "l4", speakerId: "me", text: "하... 인생 참 쓰다", balloon: "normal" }],
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  });
+
+  return { storyboards, jobs, cuts, packages };
+});
 
 function cutsOf(episodeId: string) {
   let m = S.cuts.get(episodeId);

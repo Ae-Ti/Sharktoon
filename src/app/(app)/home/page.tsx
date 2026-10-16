@@ -4,7 +4,7 @@ import { Badge, ButtonLink, EmptyState } from "@/components/ui";
 import { getRepository, type EpisodeStatus } from "@/features/platform/data";
 import { AttendanceBanner } from "@/features/platform/shell/AttendanceBanner";
 import { NewSeriesButton } from "@/features/platform/series/NewSeriesButton";
-import { Plus, Sparkles } from "lucide-react";
+import { BookOpen, Plus, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = { title: "홈 · 샥툰" };
 
@@ -34,14 +34,14 @@ export default async function Page() {
           href="/episodes/new"
           size="lg"
           variant="cta"
-          className="group relative overflow-hidden h-12 px-6 text-body font-extrabold w-full sm:w-auto justify-center transition-[box-shadow,transform] duration-500 ease-out hover:-translate-y-0.5"
+          className="group relative overflow-hidden h-12 px-6 text-body font-extrabold w-full sm:w-auto justify-center cta-button-float hover:-translate-y-1"
         >
           {/* Shimmer 광택 효과 레이어 */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent animate-shimmer-sweep"
+            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 ease-out group-hover:translate-x-full"
           />
-          <Plus className="size-5 shrink-0 stroke-[2.8] text-cyan-100 group-hover:rotate-90 transition-transform duration-300 relative z-10" />
+          <Plus className="size-5 shrink-0 stroke-[2.8] text-cyan-100 group-hover:rotate-90 transition-transform duration-500 ease-out relative z-10" />
           <span className="relative z-10 tracking-tight text-white drop-shadow-xs">새 인스타툰 만들기</span>
           <Sparkles className="size-4 shrink-0 text-cyan-200 animate-pulse relative z-10" />
         </ButtonLink>
@@ -57,9 +57,19 @@ export default async function Page() {
         <section className="flex flex-col gap-3">
           <h2 className="text-title font-semibold">이어서 만들기</h2>
           <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface-card p-4 shadow-2xs">
-            <span className="size-14 shrink-0 rounded-lg bg-skeleton" />
-            <span className="flex flex-1 flex-col gap-1">
-              <span className="text-body font-semibold">
+            {resumable.thumbUrl ? (
+              <img
+                src={resumable.thumbUrl}
+                alt={resumable.seriesTitle}
+                className="size-14 shrink-0 rounded-lg object-cover border border-border/60 shadow-2xs"
+              />
+            ) : (
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-brand-tint text-brand shadow-2xs">
+                <Sparkles className="size-6" />
+              </div>
+            )}
+            <span className="flex flex-1 flex-col gap-1 min-w-0">
+              <span className="text-body font-semibold truncate">
                 {resumable.seriesTitle} · {resumable.number}화
               </span>
               <span className="text-caption text-ink-muted">{RESUME[resumable.status].note}</span>
@@ -78,46 +88,68 @@ export default async function Page() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-title font-semibold">최근 시리즈</h2>
+          <h2 className="text-title font-semibold">최근 작품</h2>
           {series.length > 3 && (
             <Link
               href="/series"
               className="text-caption font-semibold text-brand hover:underline"
             >
-              전체 시리즈 ({series.length}) ↗
+              전체 작품 ({series.length}) ↗
             </Link>
           )}
         </div>
 
         {series.length === 0 ? (
           <EmptyState
-            title="아직 시리즈가 없어요"
+            title="아직 작품이 없어요"
             description="첫 화를 만들면 같은 캐릭터로 다음 화를 이어갈 수 있어요."
             actionLabel="첫 화 만들기"
             actionHref="/episodes/new"
           />
         ) : (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+          <ul className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {series.slice(0, 3).map((s) => (
-              <li key={s.id}>
+              <li key={s.id} className="flex">
                 <Link
                   href={`/series/${s.id}`}
-                  className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface-card text-ink hover:border-border-control"
+                  className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface-card text-ink transition-all hover:border-brand/70 hover:shadow-xs"
                 >
-                  <span className="grid h-33 place-items-center bg-skeleton text-caption text-ink-subtle">
-                    대표 컷
-                  </span>
-                  <span className="flex flex-col gap-1.5 p-3">
-                    <span className="text-body font-semibold">{s.title}</span>
-                    <span className="flex items-center gap-2 text-caption text-ink-muted">
-                      {s.episodeCount}화
-                      {!s.isPublic && <Badge>비공개</Badge>}
+                  <div className="relative aspect-4/3 sm:aspect-square w-full overflow-hidden bg-surface-muted">
+                    {s.thumbUrl ? (
+                      <img
+                        src={s.thumbUrl}
+                        alt={s.title}
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-brand-tint/20 text-brand">
+                        <BookOpen className="size-6 text-brand/70" />
+                        <span className="text-caption font-medium">연재 준비 중</span>
+                      </div>
+                    )}
+                    {!s.isPublic && (
+                      <span className="absolute top-2 right-2">
+                        <Badge tone="neutral" className="text-[10px] px-1.5 py-0.5 bg-black/60 text-white backdrop-blur-xs border-0">
+                          비공개
+                        </Badge>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col justify-between p-3.5">
+                    <span className="text-body font-bold text-ink line-clamp-1 group-hover:text-brand transition-colors">
+                      {s.title}
                     </span>
-                  </span>
+                    <div className="mt-1 flex items-center justify-between text-caption text-ink-muted">
+                      <span>{s.episodeCount}화 연재 중</span>
+                      <span className="text-ink-subtle text-[11px]">
+                        {new Date(s.updatedAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
                 </Link>
               </li>
             ))}
-            <li>
+            <li className="flex">
               <NewSeriesButton variant="card" />
             </li>
           </ul>

@@ -166,7 +166,7 @@ export function createSupabaseQueue(runner: CutRunner, hooks: { onSettled?: (job
         cut_id: cutId,
         index: prev.index,
         intent: change?.intent ?? prev.intent,
-        prompt: change ? withRequest(prev.prompt, change.request) : prev.prompt,
+        prompt: change ? withRequest(prev.prompt, change.request, change.intent) : prev.prompt,
         attempt: prev.attempt + 1,
       });
       if (error) throw error;

@@ -105,7 +105,7 @@ export async function translateToVisualEnglishPrompt(text: string, apiKey: strin
           "CRITICAL INSTRUCTION FOR TEXTLESS VISUAL ART:\n" +
           "Under NO circumstances should you output or describe speech bubbles, dialogue balloons, text, sound effects, subtitles, or captions. Do NOT use words like 'speech bubble', 'text', 'dialogue', 'balloon', or 'caption'. Focus EXCLUSIVELY on visual scene elements: character poses, hand gestures, facial expressions, and background objects.\n" +
           "CRITICAL RULES:\n" +
-          "1. Protagonist identity: The main character is ALWAYS an ordinary civilian young woman with natural human ears (STRICTLY NO animal ears, NO cat ears headband, NO tail) in casual clothing (dark grey hoodie over white t-shirt, dark pants). NEVER dress the protagonist in professional uniforms (like a doctor's white coat or scrubs) and NEVER put a stethoscope on her.\n" +
+          "1. Protagonist identity: The main character is an ordinary civilian person with natural human ears (STRICTLY NO animal ears, NO animal headband, NO tail). Faithfully depict the character's gender, hairstyle, and outfit as specified in the scene. NEVER dress the protagonist in professional uniforms (like a doctor's white coat or scrubs) unless the scene explicitly specifies it.\n" +
           "2. Secondary characters: If a veterinarian or doctor is present, describe them distinctly as a separate male character (e.g. 'A separate male veterinarian in a white lab coat examines the cat while the female protagonist watches').\n" +
           "3. Animal & Prop consistency: Always preserve specific visual details such as cat breed and color (e.g. 'a chubby grey tabby cat with white chest and paws') identically.\n" +
           "4. Concrete facial expressions: Translate abstract emotions into physical facial cues (e.g., instead of just 'embarrassed', use 'flustered expression, wide eyes, a drop of cold sweat'; instead of 'discontent', use 'pouting sulky expression, folded arms'; instead of 'moved/touched', use 'warm gentle smile, touched sparkling eyes').\n" +
@@ -160,12 +160,25 @@ export class FalFluxGenerator implements ImageGenerator {
       ? await translateToVisualEnglishPrompt(activeTraits.join(", "), apiKey)
       : "";
 
+    const requestMatch = cutText.match(/요청:\s*([^\n]+)/);
+    const rawCustomRequest = requestMatch ? requestMatch[1].trim() : undefined;
+    let customRequest = rawCustomRequest;
+    if (rawCustomRequest && /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(rawCustomRequest)) {
+      try {
+        customRequest = await translateToVisualEnglishPrompt(rawCustomRequest, apiKey);
+      } catch {
+        customRequest = rawCustomRequest;
+      }
+    }
+
     const structured = buildStructuredWebtoonPrompt({
       cutIndex: req.index,
       cutText,
       visualScene,
       stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
       characterAppearance,
+      intent: req.intent,
+      customRequest,
     });
     const prompt = structured.prompt;
     const negative_prompt = structured.negativePrompt;
@@ -175,16 +188,29 @@ export class FalFluxGenerator implements ImageGenerator {
     console.log(`\n🎨 [FLUX Cut ${req.index}] Final Prompt:\n${prompt}\n`);
     console.log(`🛑 [FLUX Cut ${req.index}] Negative Prompt:\n${negative_prompt}\n`);
 
-    // 고정 레퍼런스 이미지 (캐릭터 시트 정면/전신 뷰 또는 사용자 에셋 레퍼런스)
-    const rawRefUrl = req.characterSheetRefs?.[0] || req.assetRefs?.[0];
-    // SVG data URI 또는 빈 값은 PuLID facexlib에서 얼굴 인식이 불가능하므로 제외 (HTTP/HTTPS URL 또는 래스터 base64만 허용)
-    const isValidRasterUrl = Boolean(
-      rawRefUrl &&
-      !rawRefUrl.startsWith("data:image/svg") &&
-      !rawRefUrl.endsWith(".svg") &&
-      (rawRefUrl.startsWith("http://") || rawRefUrl.startsWith("https://") || rawRefUrl.startsWith("data:image/jpeg") || rawRefUrl.startsWith("data:image/png"))
-    );
-    const referenceImageUrl = isValidRasterUrl ? rawRefUrl : undefined;
+    // 고정 레퍼런스 이미지 (캐릭터 시트 정면/전신 뷰, 사용자 에셋 레퍼런스, 또는 커스텀 화풍 사진)
+    const allCandidates = [
+      ...(req.characterSheetRefs ?? []),
+      ...(req.assetRefs ?? []),
+      req.seriesRule?.customStyleImageUrl as string | undefined,
+    ].filter(Boolean);
+
+    let referenceImageUrl: string | undefined;
+    for (const url of allCandidates) {
+      if (
+        url &&
+        !url.startsWith("data:image/svg") &&
+        !url.endsWith(".svg") &&
+        (url.startsWith("http://") ||
+          url.startsWith("https://") ||
+          url.startsWith("data:image/jpeg") ||
+          url.startsWith("data:image/png") ||
+          url.startsWith("data:image/webp"))
+      ) {
+        referenceImageUrl = url;
+        break;
+      }
+    }
 
     // 레퍼런스 이미지가 있고 dev 모델인 경우 PuLID(Plug-and-Play Identity)를 사용하여 얼굴/인물/화풍을 완전 고정
     // 사용자가 명시적으로 임의 AI 얼굴(skipFaceLock)을 원하지 않는 한 고정 레퍼런스를 적용합니다.
@@ -349,11 +375,11 @@ export class FalFluxGenerator implements ImageGenerator {
         const prompt = [
           `A character design sheet for a 2D Korean webcomic manhwa character '${req.name}', soft line art style.`,
           `Art Style: soft line art, ${stylePrompt}, clean ink lineart, flat solid cel shading with crisp hard shadow boundaries, zero gradients, clean digital webcomic aesthetic.`,
-          `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult proportions, anatomically correct Korean manhwa anatomy, slender young adult female silhouette, natural limb lengths, normal head-to-body ratio, strictly NO chibi, NO super-deformed (SD) style, NO oversized head, NO dwarfism.`,
-          `[Facial Proportions]: Delicate, proportionate Korean manhwa facial features, natural eye size fitting modern webtoon aesthetics (NOT oversized bug-eyes, NOT chibi doll eyes), well-defined slender jawline, refined small nose, natural lips, mature 20-year-old female face structure.`,
+          `[Body & Anatomy]: Realistic 6.5 to 7.0 heads tall natural adult proportions, anatomically correct Korean manhwa anatomy, natural limb lengths, normal head-to-body ratio, strictly NO chibi, NO super-deformed (SD) style, NO oversized head.`,
+          `[Facial Proportions]: Delicate, proportionate Korean manhwa facial features, natural eye size fitting modern webtoon aesthetics (NOT oversized bug-eyes, NOT chibi doll eyes), well-defined jawline, refined small nose, natural lips, mature young adult face structure.`,
           `View & Pose: ${viewDesc}.`,
           `Background: pure solid flat white background (#FFFFFF), neutral flat high-key studio lighting, strictly NO background elements, NO room, NO furniture, NO shadows on floor, isolated character model reference sheet.`,
-          `[Character Appearance]: 20-year-old Korean human girl with natural human ears (STRICTLY NO animal ears, NO cat ears, NO headband, NO animal costume, NO tail). Exact same hairstyle: black hair tied back loosely into a low ponytail behind the neck with two distinct side curtain bangs framing her face/cheekbones, forehead partially visible, strictly NO top bun, NO hair scrunchie. Casual signature outfit: dark grey oversized zip-up hoodie (hood resting down on shoulders, NEVER pulled over head) over a dark t-shirt, dark pants, sneakers.`,
+          `[Character Appearance]: Korean human character '${req.name}' with natural human ears (STRICTLY NO animal ears, NO headband, NO costume, NO tail). ${descPrompt ? `Appearance description: ${descPrompt}.` : "Natural neat hairstyle and clean casual outfit."} ${tagsPrompt ? `Style tags: ${tagsPrompt}.` : ""}`,
           descPrompt,
           tagsPrompt,
           `Strict Requirements: Clean 2D outline drawing, flat solid cel shading, pure white background, consistent 6.5-head adult proportions, pure textless model reference.`,

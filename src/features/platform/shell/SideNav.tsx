@@ -20,9 +20,9 @@ export function SideNav({ seriesHref, isAdmin = false, streak = 0 }: SideNavProp
   const ITEMS = [
     { href: "/home", label: "홈", icon: Home, match: undefined as string | undefined },
     ...(seriesHref
-      ? [{ href: seriesHref, label: "시리즈", icon: BookOpen, match: "/series" }]
+      ? [{ href: seriesHref, label: "작품", icon: BookOpen, match: "/series" }]
       : []),
-    { href: "/assets", label: "에셋 라이브러리", icon: Sparkles, match: undefined },
+    { href: "/assets", label: "소재 보관함", icon: Sparkles, match: undefined },
     { href: "/settings", label: "마이페이지", icon: User, match: undefined },
     ...(isAdmin ? [{ href: "/admin", label: "관리자 운영", icon: ShieldAlert, match: undefined }] : []),
   ];

@@ -61,7 +61,7 @@ import {
   type ActionResult,
 } from "../actions";
 import { EpisodeHeader } from "./EpisodeHeader";
-import { extractStoryFromImageAction } from "@/features/platform/actions";
+import { extractStoryFromImageAction, updateEpisodeSeriesAction } from "@/features/platform/actions";
 import { SeriesFormModal } from "@/features/platform/series/SeriesFormModal";
 import type { SeriesSummary } from "@/features/platform/data/types";
 
@@ -134,7 +134,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
   // 시리즈 관리 상태
   const [seriesList, setSeriesList] = useState<SeriesSummary[]>(props.allSeries ?? []);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(
-    props.seriesId ?? (props.allSeries?.[0]?.id || null)
+    props.seriesId ?? null
   );
   const [openNewSeriesModal, setOpenNewSeriesModal] = useState(false);
   const [openSelectSeriesModal, setOpenSelectSeriesModal] = useState(false);
@@ -523,132 +523,197 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
         onBlockedStepClick={() => {
           showToast("콘티 단계(이미지 생성)를 완성해야 편집 및 게시로 넘어갈 수 있어요.");
         }}
-      />
-
-      {/* 1, 2단계 스텝 네비게이션 & 빠른 이미지 생성 탑 바 */}
-      <div className="sticky top-0 z-20 border-b border-border bg-surface-card/95 backdrop-blur-md shadow-2xs">
-        <div className="mx-auto flex max-w-[880px] items-center justify-between px-3 sm:px-4 py-2 gap-2">
-          {/* 좌측: 1, 2단계 스텝 버튼 */}
-          <nav aria-label="콘티 제작 단계" className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {/* 1단계 */}
-            <button
-              type="button"
-              onClick={() => setStep("story")}
-              className={cn(
-                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                step === "story"
-                  ? "bg-brand text-on-brand shadow-2xs font-bold"
-                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
-                  step === "story"
-                    ? "bg-white/20 text-white"
-                    : "bg-surface-sunken text-ink-muted border border-border/80",
-                )}
-              >
-                1
-              </span>
-              <span>사연 & 기획</span>
-            </button>
-
-            <ChevronRight
-              className={cn("size-4 text-ink-subtle select-none shrink-0", !canProceedToCuts && "opacity-40")}
-            />
-
-            {/* 2단계 */}
-            <button
-              type="button"
-              onClick={() => {
-                if (canProceedToCuts) {
-                  setStep("cuts");
-                } else {
-                  showToast("사연 & 기획 단계를 완성해야 콘티 편집으로 넘어갈 수 있어요.");
-                }
-              }}
-              title={canProceedToCuts ? undefined : "사연을 입력하고 콘티를 먼저 생성해 주세요"}
-              className={cn(
-                "flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                step === "cuts"
-                  ? "bg-brand text-on-brand shadow-2xs font-bold"
-                  : canProceedToCuts
-                    ? "text-ink-muted hover:bg-surface-sunken hover:text-ink"
-                    : "text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid size-5 place-items-center rounded-full text-[11px] font-bold",
-                  step === "cuts"
-                    ? "bg-white/20 text-white"
-                    : "bg-surface-sunken text-ink-muted border border-border/80",
-                )}
-              >
-                2
-              </span>
-              <span>컷 콘티 편집</span>
-            </button>
-          </nav>
-
-          {/* 우측: 품질 토글(일반/Pro) + 이미지 생성 버튼 (모바일에서는 숨기고 하단 플로팅 바 사용) */}
-          {sb && sb.cuts.length > 0 ? (
-            <div className="hidden sm:flex items-center gap-2 shrink-0">
-              {/* 생성 품질 토글 */}
-              <div
-                role="radiogroup"
-                aria-label="생성 품질"
-                className="flex items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
-              >
+        subHeader={
+          <>
+            {/* 1. 모바일 전용 콘티 1, 2단계 세그먼트 플로팅 탭 (md 미만) - 콘티/편집/게시와 동일한 UI */}
+            <div className="border-t border-border/50 px-3 py-1.5 md:hidden bg-surface-sunken/40">
+              <nav aria-label="콘티 세부 단계 (모바일)" className="grid grid-cols-2 gap-1.5">
+                {/* 1단계 */}
                 <button
                   type="button"
-                  role="radio"
-                  aria-checked={tier === "standard"}
-                  onClick={() => setTier("standard")}
+                  onClick={() => setStep("story")}
+                  aria-current={step === "story" ? "step" : undefined}
                   className={cn(
-                    "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
-                    tier === "standard"
-                      ? "bg-surface-card text-ink shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
+                    "flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                    step === "story"
+                      ? "bg-surface-card font-bold text-brand shadow-2xs ring-1 ring-border/50"
+                      : "text-ink-muted hover:text-ink hover:bg-surface-sunken",
                   )}
-                  title="표준 화질 빠른 생성 (컷당 1크레딧)"
                 >
-                  ⚡ 일반
+                  <span
+                    className={cn(
+                      "grid size-4 place-items-center rounded-full text-[10px] font-bold",
+                      step === "story"
+                        ? "bg-brand text-white"
+                        : "bg-surface-sunken text-ink-muted border border-border/80",
+                    )}
+                  >
+                    1
+                  </span>
+                  <span>사연 & 기획</span>
                 </button>
+
+                {/* 2단계 */}
                 <button
                   type="button"
-                  role="radio"
-                  aria-checked={tier === "pro"}
-                  onClick={() => setTier("pro")}
+                  onClick={() => {
+                    if (canProceedToCuts) {
+                      setStep("cuts");
+                    } else {
+                      showToast("사연 & 기획 단계를 완성해야 콘티 편집으로 넘어갈 수 있어요.");
+                    }
+                  }}
+                  aria-current={step === "cuts" ? "step" : undefined}
+                  title={canProceedToCuts ? undefined : "사연을 입력하고 콘티를 먼저 생성해 주세요"}
                   className={cn(
-                    "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
-                    tier === "pro"
-                      ? "bg-brand text-on-brand shadow-2xs font-bold"
-                      : "text-ink-muted hover:text-ink",
+                    "flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                    step === "cuts"
+                      ? "bg-surface-card font-bold text-brand shadow-2xs ring-1 ring-border/50"
+                      : canProceedToCuts
+                        ? "text-ink-muted hover:text-ink hover:bg-surface-sunken"
+                        : "text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60",
                   )}
-                  title="고화질 디테일 생성 (컷당 2크레딧)"
                 >
-                  💎 Pro
+                  <span
+                    className={cn(
+                      "grid size-4 place-items-center rounded-full text-[10px] font-bold",
+                      step === "cuts"
+                        ? "bg-brand text-white"
+                        : "bg-surface-sunken text-ink-muted border border-border/80",
+                    )}
+                  >
+                    2
+                  </span>
+                  <span>컷 콘티 편집</span>
                 </button>
-              </div>
-
-              {/* 이미지 생성 버튼 */}
-              <Button
-                variant="cta"
-                size="sm"
-                cost={cost}
-                disabled={!ready}
-                loading={pending}
-                onClick={startGeneration}
-                className="font-bold shadow-md shadow-cyan-600/20 px-3.5 hover:shadow-cyan-500/35 transition-all"
-              >
-                {tier === "pro" ? "Pro 이미지 생성" : "일반 이미지 생성"}
-              </Button>
+              </nav>
             </div>
-          ) : null}
-        </div>
-      </div>
+
+            {/* 2. 데스크톱 전용 바 (md 이상) */}
+            <div className="hidden md:block border-t border-border/60 bg-surface-card">
+              <div className="mx-auto flex max-w-[880px] items-center justify-between px-4 py-2 gap-2">
+                {/* 좌측: 1, 2단계 스텝 버튼 */}
+                <nav aria-label="콘티 제작 단계 (데스크톱)" className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setStep("story")}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold transition-all cursor-pointer",
+                      step === "story"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                        step === "story"
+                          ? "bg-white/20 text-white"
+                          : "bg-surface-sunken text-ink-muted border border-border/80",
+                      )}
+                    >
+                      1
+                    </span>
+                    <span>사연 & 기획</span>
+                  </button>
+
+                  <ChevronRight
+                    className={cn("size-4 text-ink-subtle select-none shrink-0", !canProceedToCuts && "opacity-40")}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canProceedToCuts) {
+                        setStep("cuts");
+                      } else {
+                        showToast("사연 & 기획 단계를 완성해야 콘티 편집으로 넘어갈 수 있어요.");
+                      }
+                    }}
+                    title={canProceedToCuts ? undefined : "사연을 입력하고 콘티를 먼저 생성해 주세요"}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold transition-all cursor-pointer",
+                      step === "cuts"
+                        ? "bg-brand text-on-brand shadow-2xs font-bold"
+                        : canProceedToCuts
+                          ? "text-ink-muted hover:bg-surface-sunken hover:text-ink"
+                          : "text-ink-subtle opacity-40 hover:opacity-75 hover:bg-surface-sunken/60",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-5 place-items-center rounded-full text-[11px] font-bold",
+                        step === "cuts"
+                          ? "bg-white/20 text-white"
+                          : "bg-surface-sunken text-ink-muted border border-border/80",
+                      )}
+                    >
+                      2
+                    </span>
+                    <span>컷 콘티 편집</span>
+                  </button>
+                </nav>
+
+                {/* 우측: 품질 토글(일반/Pro) + 이미지 생성 버튼 */}
+                {sb && sb.cuts.length > 0 ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* 생성 품질 토글 */}
+                    <div
+                      role="radiogroup"
+                      aria-label="생성 품질"
+                      className="flex items-center rounded-lg border border-border bg-surface-sunken p-0.5 text-xs font-semibold"
+                    >
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={tier === "standard"}
+                        onClick={() => setTier("standard")}
+                        className={cn(
+                          "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
+                          tier === "standard"
+                            ? "bg-surface-card text-ink shadow-2xs font-bold"
+                            : "text-ink-muted hover:text-ink",
+                        )}
+                        title="표준 화질 빠른 생성 (컷당 1크레딧)"
+                      >
+                        ⚡ 일반
+                      </button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={tier === "pro"}
+                        onClick={() => setTier("pro")}
+                        className={cn(
+                          "cursor-pointer rounded-md px-2.5 py-1 transition-all text-xs",
+                          tier === "pro"
+                            ? "bg-brand text-on-brand shadow-2xs font-bold"
+                            : "text-ink-muted hover:text-ink",
+                        )}
+                        title="고화질 디테일 생성 (컷당 2크레딧)"
+                      >
+                        💎 Pro
+                      </button>
+                    </div>
+
+                    {/* 이미지 생성 버튼 */}
+                    <Button
+                      variant="cta"
+                      size="sm"
+                      cost={cost}
+                      disabled={!ready}
+                      loading={pending}
+                      onClick={startGeneration}
+                      className="font-bold shadow-md shadow-cyan-600/20 px-3.5 hover:shadow-cyan-500/35 transition-all"
+                    >
+                      {tier === "pro" ? "Pro 이미지 생성" : "일반 이미지 생성"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </>
+        }
+      />
 
       <main className="mx-auto max-w-[880px] p-4 pb-36 lg:pb-16 flex flex-col gap-5">
         {notice && (
@@ -873,8 +938,8 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                   <RefreshCw className={cn("size-4", pending && "animate-spin")} />
                   <span>
                     {sb && sb.cuts.length > 0
-                      ? `🔄 사연으로 콘티 다시 생성 (${cutCount}컷)`
-                      : `✨ 이 사연으로 콘티 생성하기 (${cutCount}컷)`}
+                      ? `사연으로 콘티 다시 생성 (${cutCount}컷)`
+                      : `이 사연으로 콘티 생성하기 (${cutCount}컷)`}
                   </span>
                 </Button>
               </div>
@@ -1052,8 +1117,11 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
       {/* 모바일 하단 플로팅 바 (2단계 컷 콘티 편집 시 모바일 전용 노출) */}
       {step === "cuts" && sb && sb.cuts.length > 0 && (
         <div
-          className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 pt-3 px-3.5 shadow-2xl backdrop-blur-md sm:hidden"
-          style={{ paddingBottom: "max(calc(env(safe-area-inset-bottom, 0px) + 16px), 24px)" }}
+          className="sticky bottom-0 z-30 border-t border-border/80 bg-surface-card/95 px-4 shadow-2xl backdrop-blur-md md:hidden"
+          style={{
+            paddingTop: "14px",
+            paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
+          }}
         >
           <div className="flex items-center gap-2.5">
             <div
@@ -1122,6 +1190,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
           };
           setSeriesList((prev) => [created, ...prev]);
           setSelectedSeriesId(newS.id);
+          void updateEpisodeSeriesAction(props.episodeId, newS.id);
         }}
       />
 
@@ -1160,6 +1229,7 @@ export function StoryboardScreen(props: StoryboardScreenProps) {
                 onClick={() => {
                   setSelectedSeriesId(s.id);
                   setOpenSelectSeriesModal(false);
+                  void updateEpisodeSeriesAction(props.episodeId, s.id);
                 }}
                 className={cn(
                   "flex items-center justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer focus:outline-none",
@@ -1283,8 +1353,12 @@ function StoryCharacterManager({
 
 const DEFAULT_LOCATIONS: { id: BackgroundPreset; label: string }[] = [
   { id: "living_room", label: "거실" },
-  { id: "bedroom", label: "침실" },
+  { id: "bedroom", label: "침실/방" },
+  { id: "street", label: "길거리/야외" },
   { id: "cafe", label: "카페" },
+  { id: "convenience_store", label: "편의점/마트" },
+  { id: "restaurant", label: "식당/술집" },
+  { id: "park", label: "공원/산책로" },
   { id: "office", label: "사무실" },
   { id: "vet_clinic", label: "동물병원" },
   { id: "entrance", label: "현관" },

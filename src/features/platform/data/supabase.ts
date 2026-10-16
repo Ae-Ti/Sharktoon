@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createCreditLedger } from "@/features/platform/credit/ledger";
 import { resolveImages } from "./images";
+import { generateAssetsFromFirstEpisodeStory } from "../assets/assetVisuals";
 import type { AssetKind } from "@/lib/supabase/database.types";
 import type {
   AccountStatus,
@@ -13,6 +14,7 @@ import type {
   SeriesDetail,
   SeriesInput,
   SeriesRule,
+  UserActivityItem,
 } from "./types";
 
 /**
@@ -162,6 +164,34 @@ export const supabaseRepository: PlatformRepository = {
     };
   },
 
+  async getActivityLogs(): Promise<UserActivityItem[]> {
+    const db = await createClient();
+    const { data: attendanceData } = await db
+      .from("attendance")
+      .select("attended_on, streak")
+      .order("attended_on", { ascending: false })
+      .limit(60);
+
+    const items: UserActivityItem[] = [];
+
+    if (attendanceData) {
+      for (const a of attendanceData) {
+        items.push({
+          id: `att_${a.attended_on}`,
+          date: a.attended_on,
+          type: "attendance",
+          title: `출석 체크 완료 (${a.streak}일차)`,
+          description: a.streak % 7 === 0 ? "7일 연속 출석 보너스" : "매일 출석 보너스",
+          creditDelta: a.streak % 7 === 0 ? 3 : 1,
+          time: "09:00",
+          createdAt: `${a.attended_on}T09:00:00.000Z`,
+        });
+      }
+    }
+
+    return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
   async listSeries() {
     const db = await createClient();
     const { data } = await db
@@ -177,6 +207,7 @@ export const supabaseRepository: PlatformRepository = {
       episodeCount:
         (s.episodes as unknown as { count: number }[] | null)?.[0]?.count ?? 0,
       updatedAt: s.updated_at,
+      thumbUrl: null,
     }));
   },
 
@@ -286,9 +317,11 @@ export const supabaseRepository: PlatformRepository = {
     const { data: auth } = await db.auth.getUser();
     if (!auth.user) throw new Error("로그인이 필요해요");
 
+    const { thumbUrl, ...fields } = input;
+    const referencePaths = thumbUrl ? [thumbUrl] : [];
     const { data, error } = await db
       .from("assets")
-      .insert({ ...input, owner_id: auth.user.id })
+      .insert({ ...fields, reference_paths: referencePaths, owner_id: auth.user.id })
       .select("id, kind, name, description, tags, reference_paths")
       .single();
     if (error) throw error;
@@ -299,9 +332,22 @@ export const supabaseRepository: PlatformRepository = {
 
   async updateAsset(id: string, input: AssetInput) {
     const db = await createClient();
+    const { thumbUrl, ...fields } = input;
+
+    let reference_paths: string[] | undefined;
+    if (thumbUrl) {
+      const { data: existing } = await db
+        .from("assets")
+        .select("reference_paths")
+        .eq("id", id)
+        .single();
+      const current = existing?.reference_paths ?? [];
+      reference_paths = current.includes(thumbUrl) ? current : [thumbUrl, ...current].slice(0, 8);
+    }
+
     const { data, error } = await db
       .from("assets")
-      .update(input)
+      .update(reference_paths ? { ...fields, reference_paths } : fields)
       .eq("id", id)
       .select("id, kind, name, description, tags, reference_paths, asset_references(episodes(number, status))")
       .single();
@@ -403,6 +449,7 @@ export const supabaseRepository: PlatformRepository = {
       isPublic: data.is_public,
       episodeCount: 0,
       updatedAt: data.updated_at,
+      thumbUrl: null,
     };
   },
 
@@ -504,6 +551,7 @@ export const supabaseRepository: PlatformRepository = {
       number: e.number,
       status: e.status,
       cutCount: e.cut_count,
+      thumbUrl: null,
     };
   },
 
@@ -603,6 +651,48 @@ export const supabaseRepository: PlatformRepository = {
       .select("id")
       .single();
     if (error) throw error;
+
+    // 첫 화 사연 입력 시점에 시리즈에 등록된 소재가 없다면, 사연에 실제로 등장하는 인물·배경·소품 자동 생성
+    const { count: assetCount } = await db
+      .from("series_assets")
+      .select("*", { count: "exact", head: true })
+      .eq("series_id", sid);
+
+    if ((assetCount ?? 0) === 0 && story.trim()) {
+      const { data: sRow } = await db
+        .from("series")
+        .select("title, series_rules(style_preset)")
+        .eq("id", sid)
+        .single();
+      const style = oneRule(sRow?.series_rules)?.style_preset ?? "심플 라인";
+      const storyAssets = generateAssetsFromFirstEpisodeStory({
+        story,
+        seriesTitle: sRow?.title ?? "작품",
+        stylePreset: style,
+      });
+
+      for (const sa of storyAssets) {
+        const { data: createdAsset } = await db
+          .from("assets")
+          .insert({
+            owner_id: auth.user.id,
+            kind: sa.kind,
+            name: sa.name,
+            description: sa.description,
+            tags: sa.tags,
+            reference_paths: sa.thumbUrl ? [sa.thumbUrl] : [],
+          })
+          .select("id")
+          .single();
+
+        if (createdAsset) {
+          await db.from("series_assets").insert({
+            series_id: sid,
+            asset_id: createdAsset.id,
+          });
+        }
+      }
+    }
 
     return { episodeId: data.id, seriesId: sid as string };
   },

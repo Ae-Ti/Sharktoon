@@ -127,6 +127,12 @@ export const ELEMENT_TEMPLATES: ElementTemplateItem[] = [
 ];
 
 /** 템플릿 ID로 새 벡터 레이어 생성 */
+import {
+  computeBalloonBoxSize,
+  computeNarrationBoxHeight,
+  computeSmartTail,
+} from "./buildLayerTree";
+
 export function buildLayerFromPreset(
   tree: CutLayerTree,
   presetId: ElementPresetId,
@@ -139,21 +145,23 @@ export function buildLayerFromPreset(
 
   switch (presetId) {
     case "balloon_normal": {
-      const width = Math.round(W * 0.44);
-      const height = Math.round(H * 0.14);
+      const text = textVal || "대사를 적어요";
+      const size = computeBalloonBoxSize(text, "normal", W, H);
+      const box = {
+        x: Math.round((W - size.width) / 2),
+        y: Math.round((H - size.height) / 2),
+        width: size.width,
+        height: size.height,
+      };
+      const tail = computeSmartTail(box, "center", W, H);
       return {
         id: `ly_balloon_${uid}`,
         name: "대사 말풍선",
         kind: "balloon",
-        box: {
-          x: Math.round((W - width) / 2),
-          y: Math.round((H - height) / 2),
-          width,
-          height,
-        },
-        text: textVal || "대사를 적어요",
+        box,
+        text,
         balloon: "normal",
-        tail: { x: Math.round(W / 2), y: Math.round((H + height) / 2 + 80) },
+        tail,
         style: {
           fontFamily: "Gowun Dodum",
           fontSize: 38,
@@ -164,21 +172,23 @@ export function buildLayerFromPreset(
       };
     }
     case "balloon_thought": {
-      const width = Math.round(W * 0.42);
-      const height = Math.round(H * 0.14);
+      const text = textVal || "속마음 생각...";
+      const size = computeBalloonBoxSize(text, "thought", W, H);
+      const box = {
+        x: Math.round((W - size.width) / 2),
+        y: Math.round(H * 0.35),
+        width: size.width,
+        height: size.height,
+      };
+      const tail = computeSmartTail(box, "center", W, H);
       return {
         id: `ly_thought_${uid}`,
         name: "생각 말풍선",
         kind: "balloon",
-        box: {
-          x: Math.round((W - width) / 2),
-          y: Math.round(H * 0.35),
-          width,
-          height,
-        },
-        text: textVal || "속마음 생각...",
+        box,
+        text,
         balloon: "thought",
-        tail: { x: Math.round(W / 2 - 40), y: Math.round(H * 0.35 + height + 70) },
+        tail,
         style: {
           fontFamily: "Gowun Dodum",
           fontSize: 36,
@@ -189,21 +199,23 @@ export function buildLayerFromPreset(
       };
     }
     case "balloon_shout": {
-      const width = Math.round(W * 0.46);
-      const height = Math.round(H * 0.15);
+      const text = textVal || "앗 깜짝이야!";
+      const size = computeBalloonBoxSize(text, "shout", W, H);
+      const box = {
+        x: Math.round((W - size.width) / 2),
+        y: Math.round((H - size.height) / 2),
+        width: size.width,
+        height: size.height,
+      };
+      const tail = computeSmartTail(box, "center", W, H);
       return {
         id: `ly_shout_${uid}`,
         name: "외침 말풍선",
         kind: "balloon",
-        box: {
-          x: Math.round((W - width) / 2),
-          y: Math.round((H - height) / 2),
-          width,
-          height,
-        },
-        text: textVal || "앗 깜짝이야!",
+        box,
+        text,
         balloon: "shout",
-        tail: { x: Math.round(W / 2 + 50), y: Math.round((H + height) / 2 + 90) },
+        tail,
         style: {
           fontFamily: "Gowun Dodum",
           fontSize: 40,
@@ -215,14 +227,15 @@ export function buildLayerFromPreset(
       };
     }
     case "narration_top": {
+      const text = textVal || "어느 날 오후...";
       const width = W - 120;
-      const height = 110;
+      const height = computeNarrationBoxHeight(text);
       return {
         id: `ly_narr_top_${uid}`,
         name: "상단 나레이션",
         kind: "narration",
         box: { x: 60, y: 60, width, height },
-        text: textVal || "어느 날 오후...",
+        text,
         balloon: "narration_box",
         style: {
           fontFamily: "Gowun Dodum",
@@ -234,14 +247,15 @@ export function buildLayerFromPreset(
       };
     }
     case "narration_bottom": {
+      const text = textVal || "상황을 설명하는 나레이션";
       const width = W - 120;
-      const height = 110;
+      const height = computeNarrationBoxHeight(text);
       return {
         id: `ly_narr_bot_${uid}`,
         name: "하단 나레이션",
         kind: "narration",
         box: { x: 60, y: H - height - 70, width, height },
-        text: textVal || "상황을 설명하는 나레이션",
+        text,
         balloon: "narration_box",
         style: {
           fontFamily: "Gowun Dodum",

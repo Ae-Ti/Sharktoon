@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Modal } from "@/components/ui";
+import { Button, ButtonLink, Modal } from "@/components/ui";
 import { CREDIT_COST } from "@/contracts/credit";
 
 export interface CreditSheetProps {
@@ -13,6 +13,7 @@ export interface CreditSheetProps {
   canCheckIn?: boolean;
   onCheckIn?: () => void;
   onOpenPlans?: () => void;
+  onOpenPurchase?: () => void;
 }
 
 /**
@@ -29,6 +30,7 @@ export function CreditSheet({
   canCheckIn,
   onCheckIn,
   onOpenPlans,
+  onOpenPurchase,
 }: CreditSheetProps) {
   const short = Math.max(0, required - available);
 
@@ -39,12 +41,28 @@ export function CreditSheet({
       title="크레딧이 모자라요"
       description={`이 작업에 ${required}크레딧이 필요한데 ${available}크레딧 남았어요.`}
       footer={
-        <>
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <Button variant="secondary" onClick={onClose}>
             나중에
           </Button>
-          <Button onClick={onOpenPlans}>요금제 보기</Button>
-        </>
+          <div className="flex items-center gap-2">
+            {onOpenPurchase ? (
+              <Button variant="secondary" onClick={onOpenPurchase} className="font-bold">
+                크레딧 충전
+              </Button>
+            ) : (
+              <ButtonLink href="/settings?tab=3" variant="secondary" className="font-bold">
+                크레딧 충전
+              </ButtonLink>
+            )}
+            <Button
+              onClick={onOpenPlans ?? (() => { window.location.href = "/settings?tab=3"; })}
+              className="font-bold"
+            >
+              요금제 보기
+            </Button>
+          </div>
+        </div>
       }
     >
       <div className="flex items-center justify-between gap-4 rounded-lg bg-accent-tint px-4 py-3">
@@ -63,7 +81,7 @@ export function CreditSheet({
           <span className="flex flex-col gap-0.5">
             <span className="text-body font-semibold">오늘 출석 크레딧 받기</span>
             <span className="text-body-sm text-ink-muted">
-              하루 1크레딧, 7일 연속이면 3크레딧을 더 드려요.
+              하루 1크레딧, 7일 연속이면 총 3크레딧(+2C 보너스)을 드려요.
             </span>
           </span>
           <span className="text-title font-bold text-accent-ink">+1</span>

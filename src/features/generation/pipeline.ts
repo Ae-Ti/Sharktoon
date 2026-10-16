@@ -68,7 +68,8 @@ function amountFor(intent: CutEditIntent, tier: GenerationTier = "standard") {
 const runCut: CutRunner = async (work: CutWork) => {
   const repo = await getRepository();
   const store = await getGenerationStore();
-  const { reason, amount } = amountFor(work.intent, work.job.tier);
+  const cutTier = work.tier || work.job.tier || "standard";
+  const { reason, amount } = amountFor(work.intent, cutTier);
 
   // 앞선 작업자가 죽으면서 잡아 둔 크레딧. 이미 정산됐으면(SK002) 그냥 지나간다.
   if (work.staleHoldId) {
@@ -98,7 +99,7 @@ const runCut: CutRunner = async (work: CutWork) => {
       baseImageUrl = existing?.imageUrl ?? undefined;
     }
 
-    const result = await getImageGenerator(work.job.tier).generateCut({
+    const result = await getImageGenerator(cutTier).generateCut({
       cutId: work.cut.cutId,
       index: work.cut.index,
       attempt: work.cut.attempt,
@@ -279,6 +280,7 @@ export async function regenerateCut(input: {
   userId: string;
   cutId: string;
   intent: CutEditIntent;
+  tier?: GenerationTier;
   prompt?: string;
   skipFaceLock?: boolean;
   maskUrl?: string;
@@ -296,13 +298,15 @@ export async function regenerateCut(input: {
     return { ok: false, message: "이 컷은 지금 만드는 중이에요" };
   }
 
-  const { amount } = amountFor(input.intent, job.tier);
+  const targetTier = input.tier ?? job.tier ?? "standard";
+  const { amount } = amountFor(input.intent, targetTier);
   const { balance } = await (await getRepository()).getCredit();
   if (balance < amount) throw new InsufficientCreditError(amount, balance);
 
   await (await getQueue()).requeue(input.jobId, input.cutId, {
     intent: input.intent,
     request: input.prompt,
+    tier: targetTier,
     skipFaceLock: input.skipFaceLock,
     maskUrl: input.maskUrl,
   });

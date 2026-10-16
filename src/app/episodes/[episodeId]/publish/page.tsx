@@ -50,6 +50,9 @@ export default async function Page({ params }: { params: Promise<{ episodeId: st
   });
 
   const status = series?.episodes.find((e) => e.id === episodeId)?.status;
+  if (status !== "published") {
+    await store.markPublished(episodeId);
+  }
 
   return (
     <PublishScreen
@@ -60,7 +63,8 @@ export default async function Page({ params }: { params: Promise<{ episodeId: st
       defaultRatio={context.rule.aspectRatio}
       // 무료 요금제는 워터마크(요금제 정책). 프로필을 못 읽으면 무료로 본다.
       watermark={(profile?.plan ?? "free") === "free"}
-      published={status === "published"}
+      userPlan={profile?.plan ?? "free"}
+      published={true}
       credits={credit.balance}
       {...titlesOf(context)}
     />

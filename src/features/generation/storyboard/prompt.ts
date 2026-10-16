@@ -11,6 +11,8 @@ export interface StoryboardPromptInput {
   seriesRule?: string;
   /** 고정 캐릭터 이름들. 사연에 안 나와도 이 이름을 쓴다. */
   fixedCharacters?: string[];
+  /** 고정 캐릭터 상세 정보 (이름, 외모 설명 등) */
+  characterDescriptions?: { name: string; description?: string; tags?: string[] }[];
   /** 만들 컷 수. 인스타 캐러셀 상한이 10장이다. */
   cutCount: number;
 }
@@ -55,13 +57,15 @@ export const STORYBOARD_SYSTEM = `너는 한국 인스타툰 콘티 작가다. �
 
 장면(scene) 쓰는 법:
 - 그림으로 그릴 수 있는 것만 적는다. "후회했다"가 아니라 "현관에 신발도 안 벗고 주저앉은"이다.
-- [주인공 역할 및 외모 분리]: 주인공(나)은 항상 일반 사복 차림(단정한 흑발 묶음머리, 다크 그레이 오버핏 후드티, 다크 팬츠)의 20대 여성 보호자/손님이다. 배경 장소가 병원, 진료실, 경찰서, 회사 등이라도 주인공에게 흰 가운, 유니폼, 청진기, 정장을 절대 걸치지 않는다.
-- [조연 외모 격리]: 조연(수의사, 의사, 직장 상사, 점원 등)이 나오는 장면은 주인공과 속성이 섞이지 않도록 엄격히 분리한다. 조연에게 '백발' 같은 특이한 헤어 속성을 절대 부여하지 말고, 무조건 '단정한 흑발 쇼트커트에 흰색 의사 가운을 입은 남성 수의사' 또는 '안경을 쓰고 단정한 셔츠를 입은 30대 남성 팀장'처럼 표준적이고 차별화된 룩으로 묘사하여 주인공의 머리색이나 의상에 간섭하지 않게 한다.
+- [등장인물 엄격 제한 및 사연 일치 불변식 (STRICT Character Constraint - 절대 원칙)]:
+  * 오직 사연(Story) 본문에 명시적으로 언급되었거나 사연 기획에 지정된 인물만 characters 목록 및 컷별 characters, dialogue 의 speaker 로 등장시켜야 한다.
+  * 사연에 전혀 언급되지 않은 인물(예: 부장님, 직장 상사, 의사, 수의사, 팀장, 낯선 행인 등)을 AI가 임의로 날조하여 컷에 등장시키는 것을 엄격히 금지한다!
+  * 사연에 등장인물이 '나' 1명뿐인 독백/일상 사연이라면 회차 전체 모든 컷의 등장인물은 오직 '나(ch_me)'만 있어야 하며, 임의의 조연을 절대 추가하지 마라.
+  * 등장인물의 외모와 역할은 사연 맥락에 맞추어 주인공과 조연의 속성이 서로 섞이지 않도록 차별화하여 일관되게 묘사한다.
 - [등장 동물/소품 일관성]: 사연에 반려동물(고양이, 강아지 등)이나 중요 소품이 나오면 털 색깔과 무늬(예: 주황색 줄무늬 치즈 태비 고양이)를 1컷부터 마지막 컷까지 매 컷 똑같은 수식어로 일관되게 명시한다.
 - [소품과 상호작용]: 사연에 소품(스마트폰, 츄르 간식, 이동장 케이지, 서류, 커피잔 등)이 나오면, 인물이나 동물이 소품을 손에 쥐거나(holding), 바라보거나, 건네는 구체적인 손동작과 상호작용을 반드시 장면에 명시한다.
 - [포즈 중복 절대 금지 (Strict Pose Diversity)]: 컷마다 인물의 자세와 신체 동작을 반드시 다르게 바꾼다. 앞선 컷과 동일한 포즈(예: 연속 양반다리, 연속 바닥 주저앉기, 연속 서있기)를 다음 컷에서 재사용하는 것을 엄격히 금지한다.
-  * 컷별 포즈 리듬 필수 예시: 1컷: 진료대/책상 옆에 서서 두 손 모으고 지켜보기(스탠딩) ➡️ 2컷: 현관/복도에 짐을 내려놓으며 신발 벗는 전신 동작 ➡️ 3컷: 돌발 상황에 깜짝 놀라 엉덩방아 찧으며 뒤로 물러서서 손사래 치는 역동적 리액션 ➡️ 4컷: 무릎 꿇고 상체를 앞으로 숙여 간식을 조심스럽게 내미는 동작
-- [표정의 극적인 만화적 과장]: 정적이거나 밋밋한 표정을 금지하고, 컷마다 완전히 다른 극적 표정(1컷: 안도하며 눈을 반짝이는 감동 표정 / 2컷: 긴장 풀려 한숨 쉬는 표정 / 3컷: 입을 떡 벌리고 식은땀 흘리며 경악하는 코믹 표정 / 4컷: 땀을 삐질 흘리며 간절하게 비는 코믹 표정)을 강렬하게 묘사한다.
+- [표정의 극적인 만화적 과장]: 정적이거나 밋밋한 표정을 금지하고, 컷마다 완전히 다른 극적 표정(1컷: 안도하며 눈을 반짝이는 표정 / 2컷: 긴장 풀려 한숨 쉬는 표정 / 3컷: 입을 떡 벌리고 식은땀 흘리며 경악하는 코믹 표정 / 4컷: 땀을 삐질 흘리며 간절하게 비는 코믹 표정)을 강렬하게 묘사한다.
 
 안전 규칙 — 아래에 해당하면 컷을 만들지 말고 safety.allowed 를 false 로 준다:
 - real_person: 실존 인물을 알아볼 수 있게 그리라는 요청
@@ -72,10 +76,12 @@ export const STORYBOARD_SYSTEM = `너는 한국 인스타툰 콘티 작가다. �
 
 출력 규칙:
 - scene (필수): 각 컷마다 실제로 그려질 만화의 구체적인 시각 장면 묘사(등장인물의 표정, 자세, 포즈, 들고 있는 소품, 손동작, 공간 배경)를 2~3문장의 상세한 한국어로 반드시 작성한다. 절대 빈 문자열("")이나 "장면 묘사"라는 기본 단어만 달랑 넣지 않는다.
+- location (선택): 각 컷의 구체적인 공간/장소 이름 (예: "아늑한 방 안", "골목길", "편의점", "사무실", "공원", "거실", "식당", "카페" 등). 사연의 분위기와 어울리는 생생한 배경 공간을 지정한다.
 - camera 는 ["extreme_wide", "wide", "medium", "close_up", "extreme_close_up", "over_shoulder", "pov", "top_down"] 중에서 컷마다 반드시 다르게 지정한다. 모든 컷을 "medium"으로 통일하는 것을 엄격히 금지한다! (예: 1컷 wide/medium ➡️ 2컷 wide ➡️ 3컷 close_up/pov ➡️ 4컷 top_down/close_up)
 - emotion 은 ["joy", "sad", "angry", "anxious", "surprised", "embarrassed", "calm", "determined"] 중에서 컷별 기승전결(상황-반전-갈등-해결)에 맞추어 반드시 다채롭게 지정한다. 모든 컷을 "calm"으로 채우는 것을 엄격히 금지한다.
-- characters 의 key 는 영문 소문자와 밑줄만 쓴다(ch_me, ch_boss, ch_vet, ch_friend). 주인공은 항상 ch_me 다. 각 컷의 characters 와 dialogue 의 speaker 는 반드시 여기 정의된 key 만 쓴다 (이름을 직접 쓰지 않는다).
+- characters 의 key 는 영문 소문자와 밑줄만 쓴다(ch_me, ch_friend, ch_coworker 등). 주인공은 항상 ch_me 다. 각 컷의 characters 와 dialogue 의 speaker 는 반드시 여기 정의된 key 만 쓴다.
 - 화자가 없는 대사(효과음)는 speaker 를 빈 문자열로 둔다.
+- dialogue 의 position (선택): ["top_left", "top_right", "bottom_left", "bottom_right", "top_center", "bottom_center"] 중에서 컷 내 인물의 위치나 시각적 균형에 맞추어 지정할 수 있다.
 - narration 은 전체 컷 중 최대 1~2컷(1컷 도입 또는 마지막 컷 마무리)에만 넣고, 나머지 컷(특히 대사가 있는 컷)은 반드시 빈 문자열 "" 로 둔다. 모든 컷에 나레이션을 채우는 것을 엄격히 금지한다!
 - hooks 는 3개, ctas 는 3개를 주고 ctas 의 kind 는 서로 달라야 한다.
 - rationale 은 "왜 이 안이 이 사연에 맞는지"를 한 문장으로 쓴다. 일반론을 쓰지 않는다.
@@ -86,25 +92,38 @@ export const STORYBOARD_SYSTEM = `너는 한국 인스타툰 콘티 작가다. �
   "characters": [{ "key": "ch_me", "name": "나" }],
   "cuts": [
     {
-      "scene": "어두워진 사무실. 고정 다크 그레이 후드티 차림의 20대 여성 주인공(나)이 어이없다는 듯 입을 떡 벌리고 부장님을 바라보는 모습.",
-      "characters": ["ch_me", "ch_boss"],
+      "scene": "어두워진 방 안. 스마트폰을 보며 어이없다는 듯 입을 떡 벌리고 당황하는 주인공(나)의 상반신 클로즈업.",
+      "location": "아늑한 방 안",
+      "characters": ["ch_me"],
       "emotion": "surprised",
-      "camera": "medium",
-      "dialogue": [{ "speaker": "ch_me", "text": "네...?", "balloon": "normal" }],
+      "camera": "close_up",
+      "dialogue": [{ "speaker": "ch_me", "text": "네...?!", "balloon": "shout", "position": "top_right" }],
       "narration": ""
     }
   ],
   "hooks": [{ "text": "후킹 카피", "rationale": "이유" }],
   "ctas": [{ "kind": "like", "text": "CTA 문구", "rationale": "이유" }]
-}`;
+}
+`;
 
 /** 요청마다 바뀌는 부분. 캐시 경계 뒤에 온다. */
 export function buildStoryboardUserMessage(input: StoryboardPromptInput): string {
   const parts = [`컷 수: ${input.cutCount}컷`];
 
-  if (input.seriesRule) parts.push(`시리즈 규칙: ${input.seriesRule}`);
-  if (input.fixedCharacters?.length) {
-    parts.push(`고정 캐릭터: ${input.fixedCharacters.join(", ")}`);
+  if (input.seriesRule) parts.push(`작품 화풍 및 규칙: ${input.seriesRule}`);
+
+  if (input.characterDescriptions?.length) {
+    const descLines = input.characterDescriptions.map((c) => {
+      const details = [c.description, c.tags?.join(", ")].filter(Boolean).join(" / ");
+      return `- ${c.name}${details ? `: ${details}` : ""}`;
+    });
+    parts.push(
+      `지정된 고정 캐릭터 설정:\n${descLines.join("\n")}\n(각 인물의 외모와 설정(성별, 헤어, 복장 등)을 컷 장면에 충실히 반영하고 임의로 다른 복장이나 성별로 바꾸지 마세요. 사연에 없는 새로운 인물은 추가하지 마세요.)`
+    );
+  } else if (input.fixedCharacters?.length) {
+    parts.push(`지정된 고정 캐릭터: ${input.fixedCharacters.join(", ")} (반드시 이 인물들과 아래 사연에 직접 언급된 인물만 컷에 등장시키고, 사연에 없는 새로운 인물을 절대 만들지 마세요)`);
+  } else {
+    parts.push(`등장인물 엄격 제한: 사연 본문에 직접 나오는 인물만 등장시키세요. 사연에 없는 새로운 인물을 임의로 추가하지 마세요.`);
   }
 
   // 사연은 맨 뒤에 둔다. 앞에 두면 뒤따르는 지시를 사연의 일부로 읽는 경우가 있다.

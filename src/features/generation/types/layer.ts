@@ -125,6 +125,14 @@ export interface VectorTextLayer extends LayerBase {
    * true 면 이 레이어가 시리즈 값을 덮어쓴 상태다.
    */
   overridesSeriesStyle?: boolean;
+  /** 말풍선·나레이션 테두리 색상. 없으면 기본 (#121820) */
+  borderColor?: string;
+  /** 말풍선·나레이션 테두리 굵기 (px). 없으면 기본 모양 굵기(shape.stroke) */
+  borderWidth?: number;
+  /** 말풍선 꼬리 곡선화 여부. 기본 false(직선) */
+  tailCurved?: boolean;
+  /** 말풍선 꼬리 곡률 백분율 (-60 ~ +60, 0=직선, 기본 +25) */
+  tailCurvature?: number;
 }
 
 export type Layer = ImageLayer | VectorTextLayer;

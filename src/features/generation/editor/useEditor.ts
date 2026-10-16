@@ -12,6 +12,7 @@ import {
   type HistoryState,
 } from "./history";
 import type { CutLayerTree, Layer, LayerBox } from "../types/layer";
+import { transformTailWithBox } from "./shapes";
 
 /** PRD 비기능 요구사항 — 자동 저장은 3초 디바운스. */
 const AUTOSAVE_MS = 3000;
@@ -68,11 +69,14 @@ export function useEditor({ initial, save }: UseEditorOptions) {
             id,
             (l) => {
               const next = { ...l, box: { ...l.box, ...box } };
-              // 말풍선을 옮기면 꼬리 끝도 같이 옮긴다. 꼬리만 남아 엉뚱한 곳을 가리키지 않게.
+              // 말풍선을 옮기거나 회전하면 꼬리 끝도 박스의 로컬 상대 위치를 유지하며 함께 회전·이동한다.
               if ("tail" in l && l.tail) {
-                const dx = next.box.x - l.box.x;
-                const dy = next.box.y - l.box.y;
-                return { ...next, tail: { x: l.tail.x + dx, y: l.tail.y + dy } };
+                const baseLayer = dragBase.current?.layers.find((x) => x.id === id);
+                const originalBox = baseLayer?.box ?? l.box;
+                const originalTail =
+                  baseLayer && "tail" in baseLayer && baseLayer.tail ? baseLayer.tail : l.tail;
+                const newTail = transformTailWithBox(originalBox, next.box, originalTail);
+                return { ...next, tail: newTail };
               }
               return next;
             },

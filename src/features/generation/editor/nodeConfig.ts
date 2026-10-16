@@ -4,7 +4,13 @@
  */
 
 import type { VectorTextLayer } from "../types/layer";
-import { BALLOON_SHAPE, tailBubbles, tailWedge, textPadding } from "./shapes";
+import {
+  BALLOON_SHAPE,
+  curvedTailWedgePoints,
+  tailBubbles,
+  tailWedge,
+  textPadding,
+} from "./shapes";
 
 const PAPER = "#ffffff";
 const INK = "#121820";
@@ -20,8 +26,8 @@ export function bodyConfig(layer: VectorTextLayer) {
     rotation: layer.box.rotation ?? 0,
     cornerRadius: shape.radius(layer.box),
     fill: PAPER,
-    stroke: INK,
-    strokeWidth: shape.stroke,
+    stroke: layer.borderColor ?? INK,
+    strokeWidth: layer.borderWidth ?? shape.stroke,
     dash: shape.dash,
     listening: false,
   };
@@ -35,8 +41,13 @@ export function tailConfigs(layer: VectorTextLayer) {
   const shape = BALLOON_SHAPE[layer.balloon];
   if (!shape?.tail || !layer.tail) return null;
 
+  const strokeColor = layer.borderColor ?? INK;
+  const strokeWidth = layer.borderWidth ?? shape.stroke;
+  const inset = Math.max(4, Math.round(strokeWidth + 2));
+  const curvature = layer.tailCurved ? (layer.tailCurvature ?? 25) : 0;
+
   if (shape.tail === "bubbles") {
-    const bubbles = tailBubbles(layer.box, layer.tail);
+    const bubbles = tailBubbles(layer.box, layer.tail, curvature);
     return {
       kind: "bubbles" as const,
       circles: bubbles.map((b) => ({
@@ -44,29 +55,33 @@ export function tailConfigs(layer: VectorTextLayer) {
         y: b.y,
         radius: b.r,
         fill: PAPER,
-        stroke: INK,
-        strokeWidth: shape.stroke,
+        stroke: strokeColor,
+        strokeWidth: strokeWidth,
         listening: false,
       })),
     };
   }
 
-  const wedge = tailWedge(layer.box, layer.tail);
+  const wedge = tailWedge(layer.box, layer.tail, inset);
   if (!wedge) return null;
   const [a, b] = wedge.base;
   const t = wedge.tip;
+  const points = layer.tailCurved
+    ? curvedTailWedgePoints(wedge, curvature)
+    : [a.x, a.y, t.x, t.y, b.x, b.y];
+
   return {
     kind: "wedge" as const,
     fill: {
-      points: [a.x, a.y, t.x, t.y, b.x, b.y],
+      points,
       closed: true,
       fill: PAPER,
       listening: false,
     },
     outline: {
-      points: [a.x, a.y, t.x, t.y, b.x, b.y],
-      stroke: INK,
-      strokeWidth: shape.stroke,
+      points,
+      stroke: strokeColor,
+      strokeWidth: strokeWidth,
       dash: shape.dash,
       lineJoin: "round" as const,
       listening: false,

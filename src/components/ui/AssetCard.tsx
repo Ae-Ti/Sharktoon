@@ -36,8 +36,19 @@ export function AssetCard({
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       )}
     >
-      <span className="relative grid aspect-square w-full place-items-center overflow-hidden bg-surface-sunken text-caption text-ink-subtle">
-        {thumb ?? "레퍼런스"}
+      <span className="relative grid aspect-square w-full place-items-center overflow-hidden bg-gradient-to-br from-surface-sunken to-surface-card text-caption text-ink-subtle">
+        {thumb ?? (
+          <div className="flex flex-col items-center justify-center gap-1.5 p-3 text-center">
+            <span className="text-2xl">
+              {kind.includes("캐릭터") || kind.includes("인물") || kind.includes("동물")
+                ? "🎨"
+                : kind.includes("장소") || kind.includes("배경")
+                ? "🏞️"
+                : "✨"}
+            </span>
+            <span className="text-[11px] font-medium text-ink-muted">{name}</span>
+          </div>
+        )}
       </span>
       <span className="flex flex-col gap-1.5 p-3.5">
         <span className="text-body font-semibold text-ink group-hover:text-brand transition-colors line-clamp-1">

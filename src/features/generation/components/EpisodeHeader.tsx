@@ -28,6 +28,8 @@ export interface EpisodeHeaderProps {
   hasGenerated?: boolean;
   /** 미완료 상태에서 비활성화된 단계를 클릭했을 때 호출되는 콜백 */
   onBlockedStepClick?: (step: GenerationStep) => void;
+  /** 헤더 하단에 추가로 고정할 서브 네비게이션 또는 요소 (예: 콘티 1, 2단계 탭) */
+  subHeader?: ReactNode;
 }
 
 /**
@@ -44,6 +46,7 @@ export function EpisodeHeader({
   hideActionOnMobile = false,
   hasGenerated = true,
   onBlockedStepClick,
+  subHeader,
 }: EpisodeHeaderProps) {
   const isCurrentStep = (stepKey: GenerationStep) =>
     stepKey === current || (stepKey === "editor" && current === "generate");
@@ -187,6 +190,9 @@ export function EpisodeHeader({
           </div>
         </div>
       )}
+
+      {/* 4. 서브 헤더 (콘티 1,2단계 등) */}
+      {subHeader}
     </header>
   );
 }

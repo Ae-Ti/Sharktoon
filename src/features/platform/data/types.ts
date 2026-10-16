@@ -1,9 +1,10 @@
 /** 화면이 쓰는 도메인 타입. DB 행과 1:1 이 아니라 화면에 필요한 모양이다. */
 
 import type { CreditSpendReason } from "@/contracts/credit";
-import type { AssetKind, EpisodeStatus, PlanTier } from "@/lib/supabase/database.types";
+import type { AssetKind, EpisodeStatus } from "@/lib/supabase/database.types";
 
-export type { AssetKind, EpisodeStatus, PlanTier };
+export type { AssetKind, EpisodeStatus };
+export type PlanTier = "free" | "basic" | "pro" | "max";
 
 export interface Profile {
   id: string;
@@ -99,6 +100,7 @@ export interface EpisodeSummary {
   status: EpisodeStatus;
   cutCount: number;
   publishedAt: string | null;
+  thumbUrl?: string | null;
 }
 
 export interface SeriesRule {
@@ -107,6 +109,7 @@ export interface SeriesRule {
   aspectRatio: "1:1" | "4:5";
   tone: string | null;
   fixedHashtags: string[];
+  customStyleImageUrl?: string | null;
 }
 
 export interface SeriesSummary {
@@ -116,6 +119,7 @@ export interface SeriesSummary {
   isPublic: boolean;
   episodeCount: number;
   updatedAt: string;
+  thumbUrl?: string | null;
 }
 
 export interface SeriesDetail extends SeriesSummary {
@@ -211,6 +215,35 @@ export interface PlatformRepository {
   processRefund(id: string, approve: boolean, note: string | null): Promise<void>;
   /** 운영자 수동 지급(베타 테스터, 계좌이체). 결제 기록과 구매 크레딧을 같이 만든다. */
   grantPurchase(input: { userId: string; credits: number; amountKrw: number; note: string | null }): Promise<void>;
+
+  /** 출석 및 크레딧/생성 활동 이력 */
+  getActivityLogs(): Promise<UserActivityItem[]>;
+
+  /** 플랜 변경 */
+  updatePlan?(plan: PlanTier): Promise<Profile>;
+
+  /** 크레딧 단품 팩 구매 충전 */
+  purchaseCredits?(credits: number, krw: number): Promise<{ balance: number }>;
+}
+
+export type UserActivityType =
+  | "attendance"
+  | "generation"
+  | "series"
+  | "credit"
+  | "instagram"
+  | "publish"
+  | "share";
+
+export interface UserActivityItem {
+  id: string;
+  date: string;
+  type: UserActivityType;
+  title: string;
+  description: string;
+  creditDelta?: number | null;
+  time: string;
+  createdAt: string;
 }
 
 export interface Resumable {
@@ -220,6 +253,7 @@ export interface Resumable {
   number: number;
   status: EpisodeStatus;
   cutCount: number;
+  thumbUrl?: string | null;
 }
 
 /** 회차 하나를 생성하는 데 필요한 고정 컨텍스트. */
@@ -241,6 +275,7 @@ export interface AssetInput {
   name: string;
   description: string | null;
   tags: string[];
+  thumbUrl?: string | null;
 }
 
 export interface SeriesInput {

@@ -8,6 +8,7 @@ import { WebtoonComicViewer } from "@/components/ui/WebtoonComicViewer";
 import { cn } from "@/lib/cn";
 import { deleteCutAction, saveLayerTreeAction } from "../actions";
 import { TOON_FONTS, ensureToonFont } from "../editor/fonts";
+import { BALLOON_SHAPE } from "../editor/shapes";
 import {
   isVectorTextLayer,
   toLayerRowProps,
@@ -25,15 +26,11 @@ import {
 import {
   Undo2,
   Redo2,
-  MessageSquare,
-  Scroll,
-  Cloud,
-  Flame,
-  Zap,
-  Type,
-  PanelBottom,
-  Heading,
   Sparkles,
+  Zap,
+  Camera,
+  Smile,
+  Image as ImageIcon,
   ChevronUp,
   ChevronDown,
   BookOpen,
@@ -43,6 +40,8 @@ import {
   Loader2,
   CheckCircle2,
   Plus,
+  Paintbrush,
+  Check,
 } from "lucide-react";
 import { EpisodeHeader } from "./EpisodeHeader";
 import { AddLayerModal } from "./AddLayerModal";
@@ -122,6 +121,7 @@ export function CutEditorScreen({
   const [viewerCuts, setViewerCuts] = useState<{ cutId: string; imageUrl?: string; index: number }[]>([]);
   const [mobileTab, setMobileTab] = useState<"layers" | "inspector">("layers");
   const [addLayerModalOpen, setAddLayerModalOpen] = useState(false);
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
 
   // 실시간 잡 상태가 반영된 컷 목록
   const liveCuts = useMemo(() => {
@@ -164,7 +164,11 @@ export function CutEditorScreen({
   }
 
   // 컷 이미지 재생성 실행
-  async function handleRegenerateCut(intent: CutEditIntent, prompt?: string) {
+  async function handleRegenerateCut(
+    intent: CutEditIntent,
+    prompt?: string,
+    targetTier?: "standard" | "pro",
+  ) {
     setIsRegenerating(true);
     setRegenNotice(null);
     const res = await regenerateCutAction({
@@ -172,6 +176,7 @@ export function CutEditorScreen({
       jobId: jobId ?? undefined,
       cutId: initialTree.cutId,
       intent,
+      tier: targetTier,
       prompt: prompt?.trim() || undefined,
     });
     setIsRegenerating(false);
@@ -244,7 +249,6 @@ export function CutEditorScreen({
       const layer = buildLayerFromPreset(tree, presetId, customText);
       editor.add(layer);
       editor.setSelectedId(layer.id);
-      setMobileTab("inspector");
     },
     [editor, tree],
   );
@@ -285,6 +289,23 @@ export function CutEditorScreen({
     }
   }, [canvasH, canvasW, liveCuts, editor.tree, initialTree.cutId]);
 
+  // 저장 상태 표시: 저장됨은 3초 후 자동 페이드아웃하여 숨긴다.
+  const [showSaveLabel, setShowSaveLabel] = useState(false);
+
+  useEffect(() => {
+    if (editor.saveState === "dirty" || editor.saveState === "saving" || editor.saveState === "error") {
+      setShowSaveLabel(true);
+    } else if (editor.saveState === "saved") {
+      setShowSaveLabel(true);
+      const timer = setTimeout(() => {
+        setShowSaveLabel(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowSaveLabel(false);
+    }
+  }, [editor.saveState]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page">
       <EpisodeHeader
@@ -293,6 +314,7 @@ export function CutEditorScreen({
         episodeTitle={episodeTitle}
         current="editor"
         credits={balance}
+        hideActionOnMobile={true}
         action={
           <div className="flex items-center gap-2">
             {live && (
@@ -313,22 +335,21 @@ export function CutEditorScreen({
                 실패 재시도 ({failedCuts.length})
               </Button>
             )}
-            {!live && allDone && (
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-success">
-                <CheckCircle2 className="size-3.5" />
-                전체 완성
-              </span>
-            )}
             <Button
               size="sm"
               variant="secondary"
               loading={renderingViewer}
               onClick={handleOpenViewer}
+              className="hidden md:inline-flex"
             >
               <BookOpen className="mr-1.5 h-3.5 w-3.5" />
               웹툰 뷰어
             </Button>
-            <ButtonLink href={`/episodes/${episodeId}/publish`} size="sm">
+            <ButtonLink
+              href={`/episodes/${episodeId}/publish`}
+              size="sm"
+              className="hidden md:inline-flex"
+            >
               게시물로 내보내기
             </ButtonLink>
           </div>
@@ -342,6 +363,7 @@ export function CutEditorScreen({
         onRedo={editor.redo}
         saveLabel={SAVE_LABEL[editor.saveState]}
         saveError={editor.saveState === "error"}
+        showSaveLabel={showSaveLabel}
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[132px_minmax(0,1fr)_340px]">
@@ -353,37 +375,105 @@ export function CutEditorScreen({
           onDeleteCut={(c) => setCutToDelete(c)}
         />
 
-        <section
-          ref={canvasBox}
-          aria-label="캔버스"
-          className="relative grid min-h-[320px] place-items-center overflow-hidden rounded-2xl border border-border/80 bg-surface-sunken p-4 shadow-inner"
-        >
-          {/* 이미지가 아직 생성 중일 때 캔버스 중앙 안내 오버레이 */}
-          {!currentImageUrl && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface-sunken/80 backdrop-blur-xs p-6 text-center">
-              <Sparkles className="size-8 text-brand animate-pulse" />
-              <div className="flex flex-col gap-1">
-                <p className="text-body font-bold text-ink">이 컷의 AI 이미지를 생성하고 있어요</p>
-                <p className="text-caption text-ink-muted">
-                  완료되면 이미지가 바로 나타납니다. 대사와 말풍선 배치는 지금 미리 수정할 수 있어요!
-                </p>
+        <div className="flex flex-col gap-2 min-h-0">
+          <section
+            ref={canvasBox}
+            aria-label="캔버스"
+            className="relative flex-1 grid min-h-[320px] place-items-center overflow-hidden rounded-2xl border border-border/80 bg-surface-sunken p-4 shadow-inner"
+          >
+            {/* 이미지가 아직 생성 중일 때 캔버스 중앙 안내 오버레이 */}
+            {!currentImageUrl && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface-sunken/80 backdrop-blur-xs p-6 text-center">
+                <Sparkles className="size-8 text-brand animate-pulse" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-body font-bold text-ink">이 컷의 AI 이미지를 생성하고 있어요</p>
+                  <p className="text-caption text-ink-muted">
+                    완료되면 이미지가 바로 나타납니다. 대사와 말풍선 배치는 지금 미리 수정할 수 있어요!
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {size > 0 && (
-            <EditorCanvas
-              tree={tree}
-              selectedId={selectedId}
-              size={size}
-              onSelect={editor.setSelectedId}
-              onBeginDrag={editor.beginDrag}
-              onPreviewBox={editor.previewBox}
-              onPreviewTail={editor.previewTail}
-              onCommit={editor.commitDrag}
-            />
-          )}
-        </section>
+            {size > 0 && (
+              <EditorCanvas
+                tree={tree}
+                selectedId={selectedId}
+                size={size}
+                onSelect={editor.setSelectedId}
+                onBeginDrag={editor.beginDrag}
+                onPreviewBox={editor.previewBox}
+                onPreviewTail={editor.previewTail}
+                onCommit={editor.commitDrag}
+                editingId={editingLayerId}
+                onEditingIdChange={setEditingLayerId}
+                onUpdateText={(id, text) =>
+                  editor.update(id, (l) => (isVectorTextLayer(l) ? { ...l, text } : l))
+                }
+              />
+            )}
+          </section>
+
+          {/* 캔버스 하단 컨트롤 바 (캔버스를 덮지 않고 외부에 배치) */}
+          <div className="flex items-center justify-between px-1 shrink-0">
+            {/* 뒤로 가기 / 앞으로 가기 (Undo / Redo) */}
+            <div className="flex items-center gap-1 rounded-xl border border-border/80 bg-surface-card p-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={editor.undo}
+                disabled={!editor.canUndo}
+                aria-label="실행 취소 (뒤로 가기)"
+                title="뒤로 가기 (Ctrl+Z)"
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-lg transition-all cursor-pointer",
+                  editor.canUndo
+                    ? "text-ink hover:bg-surface-sunken active:scale-95"
+                    : "text-ink-subtle opacity-30 cursor-not-allowed",
+                )}
+              >
+                <Undo2 className="size-4" />
+              </button>
+              <div className="h-4 w-px bg-border/60" />
+              <button
+                type="button"
+                onClick={editor.redo}
+                disabled={!editor.canRedo}
+                aria-label="다시 실행 (앞으로 가기)"
+                title="앞으로 가기 (Ctrl+Shift+Z)"
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-lg transition-all cursor-pointer",
+                  editor.canRedo
+                    ? "text-ink hover:bg-surface-sunken active:scale-95"
+                    : "text-ink-subtle opacity-30 cursor-not-allowed",
+                )}
+              >
+                <Redo2 className="size-4" />
+              </button>
+            </div>
+
+            {/* 저장 상태 표시 (3초 지나면 자동으로 숨김) */}
+            <div
+              className={cn(
+                "flex items-center transition-opacity duration-300",
+                showSaveLabel ? "opacity-100" : "opacity-0 pointer-events-none",
+              )}
+            >
+              <span
+                aria-live="polite"
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-card px-2.5 py-1 text-[11px] font-semibold shadow-2xs",
+                  editor.saveState === "error"
+                    ? "text-danger border-danger/40"
+                    : editor.saveState === "saved"
+                      ? "text-success border-success/30"
+                      : "text-ink-subtle",
+                )}
+              >
+                {editor.saveState === "saved" && <Check className="size-3 text-success stroke-[2.5]" />}
+                {SAVE_LABEL[editor.saveState]}
+              </span>
+            </div>
+          </div>
+        </div>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           {/* 모바일 전용 레이어 목록 vs 속성 편집 탭 (lg 미만) */}
@@ -410,7 +500,7 @@ export function CutEditorScreen({
                   : "text-ink-muted hover:text-ink",
               )}
             >
-              속성/재생성 {selected ? `(${selected.name})` : ""}
+              레이어 편집 {selected ? `(${selected.name})` : ""}
             </button>
           </div>
 
@@ -439,9 +529,9 @@ export function CutEditorScreen({
                         <LayerRow
                           {...toLayerRowProps(layer)}
                           selected={layer.id === selectedId}
-                          onSelect={() => {
-                            editor.setSelectedId(layer.id);
-                            setMobileTab("inspector");
+                          onSelect={() => editor.setSelectedId(layer.id)}
+                          onRename={(newName) => {
+                            editor.update(layer.id, (l) => ({ ...l, name: newName }));
                           }}
                           onToggle={() =>
                             editor.update(layer.id, (l) => ({ ...l, hidden: !l.hidden }))
@@ -470,9 +560,6 @@ export function CutEditorScreen({
                 isRegenerating={isRegenerating}
                 regenNotice={regenNotice}
                 onRegenerate={handleRegenerateCut}
-                onChangeName={(name) =>
-                  editor.update(selected.id, (l) => ({ ...l, name }))
-                }
                 onChangeText={(text) =>
                   editor.update(selected.id, (l) =>
                     isVectorTextLayer(l) ? { ...l, text } : l,
@@ -529,6 +616,40 @@ export function CutEditorScreen({
                     };
                   });
                 }}
+                onChangeBorderColor={(borderColor) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, borderColor } : l,
+                  )
+                }
+                onChangeBorderWidth={(borderWidth) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, borderWidth } : l,
+                  )
+                }
+                onChangeTailCurved={(tailCurved) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, tailCurved } : l,
+                  )
+                }
+                onChangeTailCurvature={(tailCurvature) =>
+                  editor.update(selected.id, (l) =>
+                    isVectorTextLayer(l) ? { ...l, tailCurvature } : l,
+                  )
+                }
+                onToggleTail={(enabled) =>
+                  editor.update(selected.id, (l) => {
+                    if (!isVectorTextLayer(l)) return l;
+                    if (enabled) {
+                      const tail = l.tail ?? {
+                        x: Math.round(l.box.x + l.box.width / 2),
+                        y: Math.min(tree.canvas.height - 30, l.box.y + l.box.height + 90),
+                      };
+                      return { ...l, tail };
+                    } else {
+                      return { ...l, tail: undefined };
+                    }
+                  })
+                }
                 onToggleLock={() =>
                   editor.update(selected.id, (l) => ({ ...l, locked: !l.locked }))
                 }
@@ -543,9 +664,53 @@ export function CutEditorScreen({
         </aside>
       </div>
 
+      {/* 모바일 하단 플로팅 액션 바 (웹툰 뷰어 & 게시물로 내보내기) */}
+      <div
+        className="sticky bottom-0 z-20 border-t border-border/80 bg-surface-card/95 px-4 shadow-2xl backdrop-blur-md md:hidden"
+        style={{
+          paddingTop: "14px",
+          paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          {!live && failedCuts.length > 0 && (
+            <Button
+              size="md"
+              variant="danger"
+              loading={isRetrying}
+              onClick={handleRetryFailed}
+              title="실패한 컷을 다시 생성합니다"
+              className="justify-center font-semibold text-caption shrink-0"
+            >
+              <RefreshCw className="mr-1 size-3.5" />
+              재시도 ({failedCuts.length})
+            </Button>
+          )}
+          <Button
+            size="md"
+            variant="secondary"
+            loading={renderingViewer}
+            onClick={handleOpenViewer}
+            className="flex-1 justify-center font-semibold text-caption"
+          >
+            <BookOpen className="mr-1.5 size-4" />
+            웹툰 뷰어
+          </Button>
+          <ButtonLink
+            href={`/episodes/${episodeId}/publish`}
+            size="md"
+            variant="primary"
+            className="flex-1 justify-center font-bold text-caption shadow-xs"
+          >
+            게시물로 내보내기 ↗
+          </ButtonLink>
+        </div>
+      </div>
+
       <Modal
         open={confirmDelete !== null}
         onClose={() => setConfirmDelete(null)}
+        sheetOnMobile={false}
         title="이 레이어를 지울까요?"
         description={
           confirmDelete
@@ -554,7 +719,11 @@ export function CutEditorScreen({
         }
         footer={
           <>
-            <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmDelete(null)}
+              className="flex-1 sm:flex-initial"
+            >
               그대로 두기
             </Button>
             <Button
@@ -563,6 +732,7 @@ export function CutEditorScreen({
                 if (confirmDelete) editor.remove(confirmDelete.id);
                 setConfirmDelete(null);
               }}
+              className="flex-1 sm:flex-initial"
             >
               지우기
             </Button>
@@ -573,17 +743,23 @@ export function CutEditorScreen({
       <Modal
         open={cutToDelete !== null}
         onClose={() => setCutToDelete(null)}
+        sheetOnMobile={false}
         title={`${cutToDelete?.index}컷을 삭제할까요?`}
         description="이 컷과 작업한 레이어가 회차에서 제외됩니다. 컷 순서는 자동으로 재정렬돼요."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setCutToDelete(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => setCutToDelete(null)}
+              className="flex-1 sm:flex-initial"
+            >
               그대로 두기
             </Button>
             <Button
               variant="danger"
               loading={isDeletingCut}
               onClick={handleConfirmDeleteCut}
+              className="flex-1 sm:flex-initial"
             >
               컷 삭제
             </Button>
@@ -623,6 +799,7 @@ function Toolbar({
   onRedo,
   saveLabel,
   saveError,
+  showSaveLabel,
 }: {
   canUndo: boolean;
   canRedo: boolean;
@@ -630,9 +807,10 @@ function Toolbar({
   onRedo: () => void;
   saveLabel: string;
   saveError: boolean;
+  showSaveLabel: boolean;
 }) {
   return (
-    <div className="flex h-13 items-center justify-between border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md">
+    <div className="hidden md:flex h-13 items-center justify-between border-b border-border/80 bg-surface-card/90 px-4 backdrop-blur-md">
       <div className="flex items-center gap-1.5 shrink-0">
         <ToolButton label="실행 취소 (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 className="size-4.5" />
@@ -649,7 +827,11 @@ function Toolbar({
       <div className="flex shrink-0 items-center gap-3">
         <span
           aria-live="polite"
-          className={cn("text-caption font-medium", saveError ? "text-danger" : "text-ink-subtle")}
+          className={cn(
+            "text-caption font-medium transition-opacity duration-300",
+            showSaveLabel ? "opacity-100" : "opacity-0",
+            saveError ? "text-danger" : "text-ink-subtle",
+          )}
         >
           {saveLabel}
         </span>
@@ -734,7 +916,7 @@ function CutStrip({
   return (
     <nav
       aria-label="컷"
-      className="flex gap-2.5 overflow-x-auto lg:flex-col lg:overflow-x-visible lg:overflow-y-auto"
+      className="flex gap-2.5 overflow-x-auto p-1.5 lg:flex-col lg:overflow-y-auto lg:p-2"
     >
       {cuts.map((cut) => {
         const open = cut.cutId === openCutId;
@@ -743,7 +925,7 @@ function CutStrip({
         const isFailed = !ready && cut.status === "failed";
 
         return (
-          <div key={cut.cutId} className="group relative mx-auto">
+          <div key={cut.cutId} className="group relative mx-auto shrink-0 pt-1.5 pr-1.5">
             <button
               type="button"
               aria-current={open ? "true" : undefined}
@@ -784,7 +966,10 @@ function CutStrip({
                 }}
                 title={`${cut.index}컷 삭제`}
                 aria-label={`${cut.index}컷 삭제`}
-                className="absolute -top-1.5 -right-1.5 hidden size-5.5 cursor-pointer items-center justify-center rounded-full bg-danger text-white shadow-xs transition-transform hover:scale-110 group-hover:flex"
+                className={cn(
+                  "absolute top-0 right-0 z-10 size-5.5 cursor-pointer items-center justify-center rounded-full bg-danger text-white border-2 border-black shadow-sm transition-transform hover:scale-110 active:scale-95",
+                  open ? "flex" : "hidden group-hover:flex",
+                )}
               >
                 <Trash2 className="size-3" />
               </button>
@@ -796,36 +981,16 @@ function CutStrip({
   );
 }
 
-function getLayerKindInfo(layer: Layer): { label: string; icon: React.ReactNode } {
-  if (layer.kind === "balloon") {
-    if (layer.balloon === "thought") {
-      return { label: "생각 말풍선", icon: <Cloud className="size-3.5 text-sky-500" /> };
-    }
-    if (layer.balloon === "shout") {
-      return { label: "외침 말풍선", icon: <Flame className="size-3.5 text-rose-500" /> };
-    }
-    return { label: "말풍선", icon: <MessageSquare className="size-3.5 text-brand" /> };
-  }
-  if (layer.kind === "narration") {
-    if (layer.name.includes("하단") || layer.box.y > 600) {
-      return { label: "하단 나레이션", icon: <PanelBottom className="size-3.5 text-amber-600" /> };
-    }
-    return { label: "상단 나레이션", icon: <Scroll className="size-3.5 text-amber-600" /> };
-  }
-  if (layer.kind === "sfx") {
-    return { label: "효과음", icon: <Zap className="size-3.5 text-yellow-500" /> };
-  }
-  if (layer.kind === "text") {
-    if (layer.name.includes("제목") || layer.name.includes("후킹")) {
-      return { label: "제목", icon: <Heading className="size-3.5 text-brand" /> };
-    }
-    return { label: "텍스트", icon: <Type className="size-3.5 text-violet-500" /> };
-  }
-  if (layer.kind === "background") {
-    return { label: "배경 이미지", icon: <Sparkles className="size-3.5 text-brand" /> };
-  }
-  return { label: "캐릭터 이미지", icon: <Sparkles className="size-3.5 text-brand" /> };
-}
+const BORDER_PRESET_COLORS = [
+  { label: "잉크 블랙", value: "#121820" },
+  { label: "차콜 그레이", value: "#374151" },
+  { label: "브랜드 청록", value: "#0f766e" },
+  { label: "딥 블루", value: "#1e3a8a" },
+  { label: "비비드 레드", value: "#dc2626" },
+  { label: "코랄 오렌지", value: "#ea580c" },
+  { label: "바이올렛 퍼플", value: "#7c3aed" },
+  { label: "화이트", value: "#ffffff" },
+];
 
 function LayerInspector({
   layer,
@@ -834,11 +999,15 @@ function LayerInspector({
   isRegenerating = false,
   regenNotice,
   onRegenerate,
-  onChangeName,
   onChangeText,
   onChangeFontSize,
   onChangeFont,
   onChangePosition,
+  onChangeBorderColor,
+  onChangeBorderWidth,
+  onChangeTailCurved,
+  onChangeTailCurvature,
+  onToggleTail,
   onToggleLock,
   onDelete,
 }: {
@@ -847,38 +1016,31 @@ function LayerInspector({
   tier?: "standard" | "pro";
   isRegenerating?: boolean;
   regenNotice?: string | null;
-  onRegenerate?: (intent: CutEditIntent, prompt?: string) => void;
-  onChangeName: (name: string) => void;
+  onRegenerate?: (intent: CutEditIntent, prompt?: string, tier?: "standard" | "pro") => void;
   onChangeText: (text: string) => void;
   onChangeFont: (family: string) => void;
   onChangeFontSize: (size: number) => void;
   onChangePosition: (pos: "top_left" | "top_center" | "top_right" | "center" | "bottom") => void;
+  onChangeBorderColor: (color: string) => void;
+  onChangeBorderWidth: (width: number) => void;
+  onChangeTailCurved: (curved: boolean) => void;
+  onChangeTailCurvature: (curvature: number) => void;
+  onToggleTail: (enabled: boolean) => void;
   onToggleLock: () => void;
   onDelete: () => void;
 }) {
   const vector = isVectorTextLayer(layer) ? (layer as VectorTextLayer) : null;
-  const kindInfo = getLayerKindInfo(layer);
   const [regenIntent, setRegenIntent] = useState<CutEditIntent>("regenerate");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [selectedTier, setSelectedTier] = useState<"standard" | "pro">(tier);
+
+  useEffect(() => {
+    if (tier) setSelectedTier(tier);
+  }, [tier]);
 
   return (
-    <Panel title={layer.name || "레이어 속성"}>
+    <Panel title={layer.name || "레이어 편집"}>
       <div className="flex flex-col gap-3">
-        <Field
-          label="레이어 이름"
-          value={layer.name}
-          onChange={onChangeName}
-          placeholder="레이어 이름 입력"
-          maxLength={30}
-        />
-
-        <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-3 py-2 text-caption">
-          <span className="font-medium text-ink-muted">종류</span>
-          <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
-            {kindInfo.icon}
-            {kindInfo.label}
-          </span>
-        </div>
 
         {vector ? (
           <>
@@ -974,9 +1136,226 @@ function LayerInspector({
               </span>
             </label>
 
-            <p className="text-caption text-ink-subtle">
-              벡터라 이미지에 굽지 않아요. 나중에 글자만 고칠 수 있어요.
-            </p>
+            {/* 말풍선 및 나레이션 박스 테두리 스타일 (색상 & 굵기) */}
+            {(vector.kind === "balloon" || vector.kind === "narration") && (
+              <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-surface-sunken/40 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-label font-bold text-ink flex items-center gap-1.5">
+                    <Paintbrush className="size-3.5 text-brand" />
+                    테두리 스타일
+                  </span>
+                  <span className="text-caption font-semibold tabular-nums text-brand">
+                    {vector.borderWidth ?? (BALLOON_SHAPE[vector.balloon]?.stroke ?? 3)}px
+                  </span>
+                </div>
+
+                {/* 테두리 색상 선택 */}
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-caption font-medium text-ink-muted">테두리 색상</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {BORDER_PRESET_COLORS.map((c) => {
+                      const isSelected =
+                        (vector.borderColor ?? "#121820").toLowerCase() === c.value.toLowerCase();
+                      return (
+                        <button
+                          key={c.value}
+                          type="button"
+                          title={c.label}
+                          onClick={() => onChangeBorderColor?.(c.value)}
+                          className={cn(
+                            "size-6 rounded-full border transition-all cursor-pointer relative flex items-center justify-center shadow-2xs",
+                            isSelected
+                              ? "ring-2 ring-brand ring-offset-2 scale-110 border-brand"
+                              : "border-black/20 hover:scale-105",
+                          )}
+                          style={{ backgroundColor: c.value }}
+                        >
+                          {isSelected && (
+                            <Check
+                              className={cn(
+                                "size-3 stroke-[3]",
+                                c.value === "#ffffff" ? "text-ink" : "text-white",
+                              )}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {/* 커스텀 색상 선택기 */}
+                    <label
+                      title="직접 색상 선택"
+                      className="relative size-6 rounded-full border border-dashed border-border-control cursor-pointer flex items-center justify-center bg-surface-card hover:border-brand shadow-2xs transition-all overflow-hidden"
+                    >
+                      <span className="text-[10px] font-bold text-ink-muted">+</span>
+                      <input
+                        type="color"
+                        value={vector.borderColor ?? "#121820"}
+                        onChange={(e) => onChangeBorderColor?.(e.target.value)}
+                        className="absolute inset-0 size-full opacity-0 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* 테두리 굵기 슬라이더 & 프리셋 */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-caption font-medium text-ink-muted">테두리 굵기</span>
+                    <span className="text-caption font-semibold text-ink tabular-nums">
+                      {vector.borderWidth ?? (BALLOON_SHAPE[vector.balloon]?.stroke ?? 3)}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    step={0.5}
+                    value={vector.borderWidth ?? (BALLOON_SHAPE[vector.balloon]?.stroke ?? 3)}
+                    onChange={(e) => onChangeBorderWidth?.(Number(e.target.value))}
+                    className="h-control-sm min-w-0 flex-1 accent-brand"
+                  />
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    {[
+                      { label: "얇게", w: 1.5 },
+                      { label: "보통", w: 3 },
+                      { label: "굵게", w: 5 },
+                      { label: "강조", w: 8 },
+                    ].map((p) => {
+                      const currentW = vector.borderWidth ?? (BALLOON_SHAPE[vector.balloon]?.stroke ?? 3);
+                      return (
+                        <button
+                          key={p.w}
+                          type="button"
+                          onClick={() => onChangeBorderWidth?.(p.w)}
+                          className={cn(
+                            "rounded-md py-1 text-[11px] font-semibold transition-all cursor-pointer text-center",
+                            currentW === p.w
+                              ? "bg-brand text-on-brand shadow-2xs font-bold"
+                              : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
+                          )}
+                        >
+                          {p.label} ({p.w}px)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 말풍선 꼬리 옵션 (직선 / 곡선화 / 곡률) */}
+            {vector.kind === "balloon" && Boolean(BALLOON_SHAPE[vector.balloon]?.tail) && (
+              <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-surface-sunken/40 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-label font-bold text-ink flex items-center gap-1.5">
+                    말풍선 꼬리
+                  </span>
+                  {onToggleTail && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleTail(!vector.tail)}
+                      className="text-[11px] font-semibold text-brand hover:underline cursor-pointer"
+                    >
+                      {vector.tail ? "꼬리 숨기기" : "+ 꼬리 달기"}
+                    </button>
+                  )}
+                </div>
+
+                {vector.tail ? (
+                  <>
+                    {/* 직선 꼬리 vs 곡선 꼬리 토글 */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onChangeTailCurved?.(false)}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-2 text-xs font-semibold transition-all cursor-pointer",
+                          !vector.tailCurved
+                            ? "bg-brand text-on-brand shadow-2xs font-bold"
+                            : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
+                        )}
+                      >
+                        <span>─</span> 직선 꼬리
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChangeTailCurved?.(true)}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-2 text-xs font-semibold transition-all cursor-pointer",
+                          vector.tailCurved
+                            ? "bg-brand text-on-brand shadow-2xs font-bold"
+                            : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
+                        )}
+                      >
+                        <span>~</span> 곡선 꼬리
+                      </button>
+                    </div>
+
+                    {/* 곡선 꼬리 옵션 활성화 시 세부 조절 */}
+                    {vector.tailCurved && (
+                      <div className="flex flex-col gap-2 pt-1 border-t border-border/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-caption font-medium text-ink-muted">곡선 휘는 정도</span>
+                          <span className="text-caption font-semibold text-brand tabular-nums">
+                            {(vector.tailCurvature ?? 25) < 0
+                              ? `좌측 ${Math.abs(vector.tailCurvature ?? 25)}%`
+                              : (vector.tailCurvature ?? 25) > 0
+                                ? `우측 ${vector.tailCurvature ?? 25}%`
+                                : "직선 (0%)"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onChangeTailCurvature?.(-25)}
+                            className={cn(
+                              "rounded-md py-1 px-2 text-[11px] font-semibold transition-all cursor-pointer text-center",
+                              (vector.tailCurvature ?? 25) < 0
+                                ? "bg-brand/15 text-brand font-bold border border-brand/30"
+                                : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
+                            )}
+                          >
+                            ⤹ 좌측으로 휘기 (-25)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onChangeTailCurvature?.(25)}
+                            className={cn(
+                              "rounded-md py-1 px-2 text-[11px] font-semibold transition-all cursor-pointer text-center",
+                              (vector.tailCurvature ?? 25) > 0
+                                ? "bg-brand/15 text-brand font-bold border border-brand/30"
+                                : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
+                            )}
+                          >
+                            ⤸ 우측으로 휘기 (+25)
+                          </button>
+                        </div>
+
+                        <input
+                          type="range"
+                          min={-60}
+                          max={60}
+                          step={5}
+                          value={vector.tailCurvature ?? 25}
+                          onChange={(e) => onChangeTailCurvature?.(Number(e.target.value))}
+                          className="h-control-sm min-w-0 flex-1 accent-brand"
+                        />
+
+                        <p className="text-[11px] text-ink-subtle leading-tight">
+                          💡 캔버스에서 꼬리 끝 흰색 원 핸들을 드래그해 방향을 잡고, 곡률로 자연스럽게 휘게 만들 수 있어요.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-caption text-ink-subtle">
+                    현재 꼬리가 없어요. 상단의 &apos;+ 꼬리 달기&apos;를 눌러 말풍선 꼬리를 추가할 수 있어요.
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : layer.kind === "background" ? (
           <div className="flex flex-col gap-3 pt-1">
@@ -1002,14 +1381,41 @@ function LayerInspector({
             {/* 이미지 실시간 재생성 옵션 카드 */}
             {onRegenerate && (
               <div className="flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand-subtle/30 p-3 shadow-2xs">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
                   <span className="text-label font-bold text-ink flex items-center gap-1.5">
                     <RefreshCw className={cn("size-3.5 text-brand", isRegenerating && "animate-spin")} />
                     이 컷 이미지 다시 생성
                   </span>
-                  <span className="text-caption text-ink-muted">
-                    {tier === "pro" ? "💎 Pro (2C)" : "⚡ 일반 (1C)"}
-                  </span>
+
+                  {/* 일반 / Pro 플랫 토글 */}
+                  <div className="inline-flex rounded-lg bg-surface-card p-0.5 border border-border/80 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTier("standard")}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold transition-all cursor-pointer",
+                        selectedTier === "standard"
+                          ? "bg-brand text-on-brand shadow-2xs font-bold"
+                          : "text-ink-muted hover:text-ink",
+                      )}
+                    >
+                      <Zap className="size-3" />
+                      일반 (1C)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTier("pro")}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold transition-all cursor-pointer",
+                        selectedTier === "pro"
+                          ? "bg-brand text-on-brand shadow-2xs font-bold"
+                          : "text-ink-muted hover:text-ink",
+                      )}
+                    >
+                      <Sparkles className="size-3" />
+                      Pro (2C)
+                    </button>
+                  </div>
                 </div>
 
                 {/* 인텐트 선택 */}
@@ -1018,36 +1424,39 @@ function LayerInspector({
                     type="button"
                     onClick={() => setRegenIntent("regenerate")}
                     className={cn(
-                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      "flex items-center justify-center gap-1 rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
                       regenIntent === "regenerate"
                         ? "bg-brand text-on-brand shadow-2xs font-bold"
-                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
                     )}
                   >
+                    <Camera className="size-3 shrink-0" />
                     새 구도
                   </button>
                   <button
                     type="button"
                     onClick={() => setRegenIntent("keep_composition_change_expression")}
                     className={cn(
-                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      "flex items-center justify-center gap-1 rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
                       regenIntent === "keep_composition_change_expression"
                         ? "bg-brand text-on-brand shadow-2xs font-bold"
-                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
                     )}
                   >
+                    <Smile className="size-3 shrink-0" />
                     표정 변경
                   </button>
                   <button
                     type="button"
                     onClick={() => setRegenIntent("replace_background")}
                     className={cn(
-                      "rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
+                      "flex items-center justify-center gap-1 rounded-md py-1 px-1.5 text-xs font-semibold transition-all cursor-pointer text-center",
                       regenIntent === "replace_background"
                         ? "bg-brand text-on-brand shadow-2xs font-bold"
-                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60"
+                        : "bg-surface-card text-ink-muted hover:text-ink border border-border/60",
                     )}
                   >
+                    <ImageIcon className="size-3 shrink-0" />
                     배경 변경
                   </button>
                 </div>
@@ -1073,10 +1482,13 @@ function LayerInspector({
                   size="sm"
                   block
                   loading={isRegenerating}
-                  onClick={() => onRegenerate(regenIntent, customPrompt)}
-                  className="mt-0.5 font-bold"
+                  onClick={() => onRegenerate(regenIntent, customPrompt, selectedTier)}
+                  className="mt-0.5 font-bold flex items-center justify-center gap-1.5"
                 >
-                  {isRegenerating ? "이미지 생성 중..." : "🔄 이 컷 다시 만들기"}
+                  <RefreshCw className={cn("size-3.5", isRegenerating && "animate-spin")} />
+                  {isRegenerating
+                    ? "이미지 생성 중..."
+                    : `이 컷 다시 만들기 (${selectedTier === "pro" ? "2" : "1"}크레딧)`}
                 </Button>
               </div>
             )}

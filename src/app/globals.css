@@ -96,3 +96,10 @@ dialog::backdrop {
 :root[data-theme="dark"] dialog::backdrop {
   background: rgba(0, 0, 0, 0.66);
 }
+
+/* 홈 상단 CTA '인스타툰 만들기' 버튼 - 딸깍거림 없이 천천히 부드럽게 떠오르는 플로팅 애니메이션 */
+.cta-button-float {
+  transition: transform 650ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 650ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  will-change: transform, box-shadow;
+}
+

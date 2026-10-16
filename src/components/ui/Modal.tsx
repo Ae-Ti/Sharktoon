@@ -16,7 +16,7 @@ export interface ModalProps {
   /** 배경 클릭·ESC 로 닫을 수 있는지. 되돌릴 수 없는 확인에서는 false. 기본 true. */
   dismissible?: boolean;
   /** 데스크톱에서의 최대 너비. */
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 /**
@@ -63,12 +63,18 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        "border-0 bg-transparent p-0 text-ink outline-hidden",
+        "fixed inset-0 border-0 bg-transparent p-0 text-ink outline-hidden",
         // 모바일: sheetOnMobile 이 true 면 아래 붙는 시트, false 면 화면 정중앙
         sheetOnMobile
           ? "m-0 mt-auto mb-0 w-full max-h-dvh sm:my-auto sm:mx-auto sm:w-auto sm:max-h-[calc(100dvh-40px)]"
           : "my-auto mx-auto w-[calc(100%-32px)] sm:w-full max-h-[calc(100dvh-40px)]",
-        size === "sm" ? "sm:max-w-[420px]" : "sm:max-w-[560px]",
+        size === "sm"
+          ? "max-w-[420px]"
+          : size === "md"
+          ? "max-w-[560px]"
+          : size === "lg"
+          ? "max-w-[760px]"
+          : "max-w-[960px]",
       )}
     >
       <div
@@ -100,7 +106,18 @@ export function Modal({
 
         {children}
 
-        {footer && <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">{footer}</div>}
+        {footer && (
+          <div
+            className={cn(
+              "flex gap-2",
+              sheetOnMobile
+                ? "flex-col-reverse sm:flex-row sm:justify-end"
+                : "flex-row justify-end",
+            )}
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </dialog>
   );

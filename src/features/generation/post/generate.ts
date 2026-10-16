@@ -87,6 +87,39 @@ export async function generatePostPackage(input: {
   };
 }
 
+const FirstCommentSchema = z.object({
+  first_comment: z.string(),
+});
+
+const FIRST_COMMENT_SYSTEM = `너는 한국 인스타툰 작가의 게시물 담당이다. 완성된 화의 콘티와 사연을 받아, 작가가 직접 독자와 소통하고 대화를 열기 위해 올릴 첫 댓글 1개를 작성한다.
+- 질문을 던져 댓글 참여를 유도하거나 다음 화를 궁금하게 만드는 한두 줄.
+- 과장되지 않고 친근하며 자연스러운 말투. 이모지 1~2개 포함.`;
+
+export async function generateFirstComment(input: {
+  context: EpisodeContext;
+  storyboard: Storyboard;
+}): Promise<StructuredResult<string>> {
+  if (!isAnthropicConfigured()) {
+    const mockComments = [
+      "여러분이라면 그때 뭐라고 하셨을 것 같나요? 댓글로 알려주세요 👇",
+      "다들 비슷한 경험 있으신가요? 여러분의 사연도 들려주세요 💬",
+      "이때 진짜 어떻게 해야 했을까요... 여러분의 꿀팁이 필요합니다 😭",
+      "다음 화에서는 과연 어떻게 될까요? 기대해 주세요 ✨",
+      "오늘도 끝까지 읽어주셔서 감사합니다! 재밌으셨다면 좋아요 부탁드려요 ❤️",
+    ];
+    const picked = mockComments[Math.floor(Math.random() * mockComments.length)];
+    return { ok: true, data: picked };
+  }
+
+  const result = await parseStructured({
+    schema: FirstCommentSchema,
+    system: FIRST_COMMENT_SYSTEM,
+    user: buildUserMessage(input),
+  });
+  if (!result.ok) return result;
+  return { ok: true, data: result.data.first_comment };
+}
+
 function buildUserMessage({ context, storyboard }: { context: EpisodeContext; storyboard: Storyboard }) {
   const hook = storyboard.hookOptions.find((h) => h.id === storyboard.selectedHookId)?.text;
   const cta = storyboard.ctaOptions.find((c) => c.id === storyboard.selectedCtaId)?.text;

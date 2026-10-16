@@ -5,12 +5,15 @@
  * 목 모드와 검증 스크립트는 인메모리 큐(`memory.ts`)를 쓴다. 파이프라인은 이 인터페이스만 본다.
  */
 
-import type { CutEditIntent, GenerationJob, GenerationJobCut } from "@/contracts/generation";
+import type { CutEditIntent, GenerationJob, GenerationJobCut, GenerationTier } from "@/contracts/generation";
 
 /** 잡을 등록할 때 같이 넘기는 생성 재료. */
 export interface JobContext {
   /** 컷마다 이미지 지시문과 수정 동작. */
-  cuts: Record<string, { prompt: string; intent: CutEditIntent; skipFaceLock?: boolean; maskUrl?: string }>;
+  cuts: Record<
+    string,
+    { prompt: string; intent: CutEditIntent; tier?: GenerationTier; skipFaceLock?: boolean; maskUrl?: string }
+  >;
   /**
    * 고정 레퍼런스. Supabase 큐는 에셋 id 만 저장하고 꺼낼 때 다시 서명한다(서명 URL 은 만료된다).
    * 인메모리 큐는 지금 받은 URL 을 그대로 쓴다.
@@ -28,6 +31,7 @@ export interface CutWork {
   cut: Pick<GenerationJobCut, "cutId" | "index" | "attempt">;
   intent: CutEditIntent;
   prompt: string;
+  tier?: GenerationTier;
   characterSheetRefs: string[];
   assetRefs: string[];
   seriesRule: Record<string, unknown>;
@@ -59,7 +63,7 @@ export interface JobQueue {
   requeue(
     jobId: string,
     cutId: string,
-    change?: { intent: CutEditIntent; request?: string; skipFaceLock?: boolean; maskUrl?: string },
+    change?: { intent: CutEditIntent; request?: string; tier?: GenerationTier; skipFaceLock?: boolean; maskUrl?: string },
   ): Promise<void>;
   /** 화면이 보는 현재 상태. 소유자 확인은 부르는 쪽이 한다. */
   get(jobId: string): Promise<GenerationJob | null>;
@@ -73,9 +77,23 @@ export interface JobQueue {
 }
 
 /** 실패한 컷의 지시문에 붙는 한 컷 모드 요청. 여러 번 고치면 마지막 요청만 남긴다. */
-export function withRequest(prompt: string, request?: string): string {
-  const base = prompt.split("\n요청: ")[0];
-  return request ? `${base}\n요청: ${request}` : base;
+export function withRequest(prompt: string, request?: string, intent?: CutEditIntent): string {
+  const base = prompt.split("\n요청: ")[0].split("\n[수정: ")[0];
+  const parts: string[] = [base];
+
+  if (intent === "keep_composition_change_expression") {
+    parts.push("[수정: 구도와 배경은 그대로 유지하고 표정만 변경]");
+  } else if (intent === "replace_background") {
+    parts.push("[수정: 인물의 외모와 포즈는 유지하고 배경만 교체]");
+  } else if (intent === "regenerate") {
+    parts.push("[수정: 새로운 구도와 카메라 앵글로 재구성]");
+  }
+
+  if (request) {
+    parts.push(`요청: ${request}`);
+  }
+
+  return parts.join("\n");
 }
 
 /** 한 잡 안에서 모델에 동시에 던지는 컷 수. */

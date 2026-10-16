@@ -92,7 +92,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
           <span className="flex size-7 items-center justify-center rounded-lg bg-brand-tint text-brand">
             <BookOpen className="size-4" />
           </span>
-          <h2 className="text-title font-semibold text-ink">연재할 시리즈</h2>
+          <h2 className="text-title font-semibold text-ink">연재할 작품</h2>
         </div>
 
         {/* 2대 선택 카드 */}
@@ -107,7 +107,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
             </div>
             <div className="flex flex-col">
               <span className="text-body font-bold text-ink group-hover:text-brand transition-colors">
-                새 시리즈 만들기
+                새 작품 만들기
               </span>
               <span className="text-caption text-ink-muted">
                 새 화풍과 규칙으로 새로운 이야기 시작
@@ -131,10 +131,10 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
             </div>
             <div className="flex flex-col">
               <span className="text-body font-bold text-ink">
-                기존 시리즈 불러오기
+                기존 작품 불러오기
               </span>
               <span className="text-caption text-ink-muted">
-                {seriesList.length > 0 ? `${seriesList.length}개 시리즈 중 선택` : "등록된 기존 시리즈 없음"}
+                {seriesList.length > 0 ? `${seriesList.length}개 작품 중 선택` : "등록된 기존 작품 없음"}
               </span>
             </div>
           </button>
@@ -157,7 +157,7 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
                   </Badge>
                 </div>
                 <span className="text-[11px] text-ink-muted truncate">
-                  이 시리즈의 고정 에셋 및 화풍 규칙이 회차에 적용돼요.
+                  이 작품의 고정 소재 및 화풍 규칙이 회차에 적용돼요.
                 </span>
               </div>
             </div>
@@ -167,12 +167,12 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
               onClick={() => setOpenSelectSeriesModal(true)}
               className="shrink-0 text-caption font-semibold"
             >
-              시리즈 변경
+              작품 변경
             </Button>
           </div>
         ) : (
           <p className="text-caption text-ink-muted">
-            시리즈를 선택하지 않으면 사연 내용으로 임시 시리즈가 자동 생성됩니다.
+            작품을 선택하지 않으면 사연 내용으로 임시 작품이 자동 생성됩니다.
           </p>
         )}
       </div>
@@ -201,8 +201,8 @@ export function NewEpisodeForm({ allSeries, initialSeriesId }: NewEpisodeFormPro
         open={openSelectSeriesModal}
         onClose={() => setOpenSelectSeriesModal(false)}
         sheetOnMobile={false}
-        title="시리즈 불러오기"
-        description="이어서 연재할 시리즈를 선택해 주세요."
+        title="작품 불러오기"
+        description="이어서 연재할 작품을 선택해 주세요."
         footer={
           <Button variant="secondary" onClick={() => setOpenSelectSeriesModal(false)}>
             닫기

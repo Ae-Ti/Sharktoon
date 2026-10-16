@@ -51,6 +51,15 @@ export const EMOTION_LABEL: Record<CutEmotion, string> = {
   determined: "결심",
 };
 
+/** 컷 내 말풍선/나레이션의 권장 배치 구역 */
+export type DialoguePosition =
+  | "top_left"
+  | "top_right"
+  | "bottom_left"
+  | "bottom_right"
+  | "top_center"
+  | "bottom_center";
+
 /** 컷 안의 대사 한 줄. 말풍선 종류는 편집기가 레이어를 만들 때 쓰는 힌트다. */
 export interface StoryboardLine {
   id: string;
@@ -58,6 +67,8 @@ export interface StoryboardLine {
   speakerId: string | null;
   text: string;
   balloon: BalloonKind;
+  /** 스마트 배치 힌트 (옵션). 컷 내 인물 위치에 따른 최적 배치 구역 */
+  position?: DialoguePosition;
 }
 
 export type BackgroundPreset =
@@ -68,16 +79,24 @@ export type BackgroundPreset =
   | "bedroom"
   | "cafe"
   | "office"
+  | "street"
+  | "park"
+  | "restaurant"
+  | "convenience_store"
   | "solid_color";
 
 export const BACKGROUND_PRESET_LABEL: Record<BackgroundPreset, string> = {
   auto: "자동 추천 배경",
-  vet_clinic: "동물병원 진료실",
+  vet_clinic: "동물병원",
   living_room: "거실",
   entrance: "현관",
-  bedroom: "침실",
+  bedroom: "침실/방",
   cafe: "카페",
   office: "사무실",
+  street: "길거리/야외",
+  park: "공원/산책로",
+  restaurant: "식당/술집",
+  convenience_store: "편의점/마트",
   solid_color: "단색 배경",
 };
 

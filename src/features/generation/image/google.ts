@@ -52,11 +52,28 @@ export class GoogleImagenGenerator implements ImageGenerator {
     const apiKey = getApiKey();
     const aspectRatio = req.seriesRule?.aspectRatio === "4:5" ? "3:4" : "1:1";
 
+    const requestMatch = req.prompt.match(/요청:\s*([^\n]+)/);
+    const customRequest = requestMatch ? requestMatch[1].trim() : undefined;
+
+    const rawTraits = Array.isArray(req.seriesRule?.characterTraits)
+      ? (req.seriesRule.characterTraits as string[]).filter(Boolean)
+      : [];
+    const cutText = req.prompt;
+    const matchedTraits = rawTraits.filter((trait) => {
+      const parts = trait.split(/[·,]/).map((s) => s.trim()).filter(Boolean);
+      return parts.some((p) => p.length >= 2 && cutText.includes(p));
+    });
+    const activeTraits = matchedTraits.length > 0 ? matchedTraits : rawTraits;
+    const characterAppearance = activeTraits.length > 0 ? activeTraits.join(", ") : "";
+
     const structured = buildStructuredWebtoonPrompt({
       cutIndex: req.index,
       cutText: req.prompt,
       visualScene: req.prompt,
       stylePreset: String(req.seriesRule?.stylePreset ?? "심플 라인"),
+      characterAppearance,
+      intent: req.intent,
+      customRequest,
     });
     const prompt = structured.prompt;
 

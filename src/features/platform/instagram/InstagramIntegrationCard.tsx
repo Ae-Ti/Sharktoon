@@ -1,12 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { CheckCircle2, TrendingUp, Sparkles, RefreshCw, Unlink, ExternalLink } from "lucide-react";
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import {
+  TrendingUp,
+  Sparkles,
+  RefreshCw,
+  Unlink,
+  ExternalLink,
+  BarChart2,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+} from "lucide-react";
 import { Badge, Button, Modal, Field } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import {
+  connectInstagramAction,
+  disconnectInstagramAction,
+  refreshSnsAnalyticsAction,
+} from "@/features/platform/analytics/actions";
+import type { SnsAnalyticsData } from "@/features/platform/analytics/types";
+import {
+  getSeriesSnsMetrics,
+  formatCompactNumber,
+} from "@/features/platform/analytics/seriesAnalytics";
+import type { EpisodeStatus, SeriesRule, PlanTier } from "@/features/platform/data/types";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
       <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
       <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
       <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
@@ -15,53 +46,96 @@ function InstagramIcon({ className }: { className?: string }) {
 }
 
 export interface InstagramIntegrationCardProps {
-  seriesTitle?: string;
+  series: {
+    id: string;
+    title: string;
+    rule?: SeriesRule;
+  };
+  episodes: {
+    id: string;
+    number: number;
+    title: string | null;
+    status: EpisodeStatus;
+  }[];
+  initialSnsData: SnsAnalyticsData;
+  userPlan?: PlanTier;
+  onSnsDataUpdate?: (newData: SnsAnalyticsData) => void;
 }
 
-export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCardProps) {
-  const [connected, setConnected] = useState(false);
-  const [username, setUsername] = useState("webtoon_creator");
+export function InstagramIntegrationCard({
+  series,
+  episodes,
+  initialSnsData,
+  userPlan = "free",
+  onSnsDataUpdate,
+}: InstagramIntegrationCardProps) {
+  const isProOrAbove = userPlan === "pro" || userPlan === "max";
+  const [snsData, setSnsData] = useState<SnsAnalyticsData>(initialSnsData);
   const [openModal, setOpenModal] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const [inputUsername, setInputUsername] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, start] = useTransition();
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sharktoon_insta_connected");
-      if (saved === "true") {
-        setConnected(true);
-        const savedUser = localStorage.getItem("sharktoon_insta_username");
-        if (savedUser) setUsername(savedUser);
-      }
-    }
-  }, []);
+  const summary = getSeriesSnsMetrics(series, episodes, snsData);
 
   function handleConnect() {
-    setConnecting(true);
-    setTimeout(() => {
-      const finalUser = inputUsername.trim() ? inputUsername.trim().replace(/^@/, "") : "sharktoon_author";
-      setConnected(true);
-      setUsername(finalUser);
-      setConnecting(false);
-      setOpenModal(false);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("sharktoon_insta_connected", "true");
-        localStorage.setItem("sharktoon_insta_username", finalUser);
+    start(async () => {
+      const res = await connectInstagramAction(inputUsername);
+      if (res.ok) {
+        setSnsData(res.data);
+        onSnsDataUpdate?.(res.data);
+        setOpenModal(false);
+        setNotice("인스타그램 계정이 연동되었습니다!");
+        setTimeout(() => setNotice(null), 3000);
+      } else {
+        setNotice(res.message);
       }
-    }, 700);
+    });
   }
 
   function handleDisconnect() {
-    setConnected(false);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("sharktoon_insta_connected");
-      localStorage.removeItem("sharktoon_insta_username");
-    }
+    if (!confirm("인스타그램 계정 연동을 해제하시겠어요? 마이페이지에서도 함께 해제됩니다.")) return;
+    start(async () => {
+      const res = await disconnectInstagramAction();
+      if (res.ok) {
+        const next: SnsAnalyticsData = {
+          ...snsData,
+          account: { ...snsData.account, connected: false },
+        };
+        setSnsData(next);
+        onSnsDataUpdate?.(next);
+        setNotice("연동이 해제되었습니다.");
+        setTimeout(() => setNotice(null), 3000);
+      } else {
+        setNotice(res.message);
+      }
+    });
   }
 
-  if (connected) {
+  function handleRefresh() {
+    start(async () => {
+      const res = await refreshSnsAnalyticsAction();
+      if (res.ok) {
+        setSnsData(res.data);
+        onSnsDataUpdate?.(res.data);
+        setNotice("최신 성과 데이터가 동기화되었습니다.");
+        setTimeout(() => setNotice(null), 2500);
+      } else {
+        setNotice(res.message);
+      }
+    });
+  }
+
+  if (summary.connected) {
     return (
-      <div className="flex w-full shrink-0 flex-col gap-3.5 rounded-xl border border-pink-500/30 bg-gradient-to-b from-pink-500/5 to-transparent p-5 lg:w-80 shadow-2xs">
+      <div className="flex w-full shrink-0 flex-col gap-3.5 rounded-xl border border-pink-500/30 bg-gradient-to-b from-pink-500/5 to-transparent p-5 lg:w-88 shadow-2xs">
+        {notice && (
+          <div className="flex items-center gap-2 rounded-lg bg-brand-tint px-3 py-1.5 text-caption font-semibold text-brand">
+            <CheckCircle2 className="size-3.5 shrink-0" />
+            <span>{notice}</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="grid size-7 place-items-center rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white shadow-2xs">
@@ -74,13 +148,13 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
           </Badge>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/80 bg-surface-card p-3">
+        <div className="flex items-center justify-between rounded-lg border border-border/80 bg-surface-card p-3 shadow-2xs">
           <div className="flex flex-col">
-            <span className="text-body-sm font-bold text-ink">@{username}</span>
-            <span className="text-[11px] text-ink-muted">크리에이터 계정</span>
+            <span className="text-body-sm font-bold text-ink">@{summary.username}</span>
+            <span className="text-[11px] text-ink-muted">크리에이터 계정 · 실시간 수집 중</span>
           </div>
           <a
-            href={`https://instagram.com/${username}`}
+            href={`https://instagram.com/${summary.username}`}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
@@ -90,51 +164,120 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
           </a>
         </div>
 
-        {/* 연동 성과 지표 */}
-        <div className="grid grid-cols-3 gap-1.5 text-center">
-          <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2">
-            <span className="text-[10px] text-ink-muted">주간 도달</span>
-            <span className="text-body-sm font-bold text-ink">12.4K</span>
+        {/* 시리즈 맞춤형 성과 지표 */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-caption font-semibold text-ink-muted px-0.5">
+            <span>이 시리즈 연재 성과</span>
+            <span className="text-[11px] text-brand">
+              게시된 {summary.publishedCount}개 회차 합산
+            </span>
           </div>
-          <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2">
-            <span className="text-[10px] text-ink-muted">게시물 저장</span>
-            <span className="text-body-sm font-bold text-ink">842회</span>
-          </div>
-          <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2">
-            <span className="text-[10px] text-ink-muted">공유</span>
-            <span className="text-body-sm font-bold text-ink">318회</span>
+
+          <div className="grid grid-cols-3 gap-1.5 text-center">
+            <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2 shadow-2xs">
+              <span className="text-[10px] text-ink-muted">누적 도달</span>
+              <span className="text-body-sm font-bold text-ink tabular-nums">
+                {summary.totalReach > 0 ? formatCompactNumber(summary.totalReach) : "집계 중"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2 shadow-2xs">
+              <span className="text-[10px] text-ink-muted">게시물 저장</span>
+              <span className="text-body-sm font-bold text-ink tabular-nums">
+                {summary.totalSaves > 0 ? `${summary.totalSaves.toLocaleString()}회` : "0회"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5 rounded-lg bg-surface-card border border-border/60 p-2 shadow-2xs">
+              <span className="text-[10px] text-ink-muted">평균 반응률</span>
+              <span className="text-body-sm font-bold text-brand tabular-nums">
+                {summary.avgEngagementRate > 0 ? `${summary.avgEngagementRate}%` : "0%"}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* 성과 기반 다음 화 제안 */}
+        {/* 시리즈 맞춤형 AI 소재 추천 */}
         <div className="flex flex-col gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-          <div className="flex items-center gap-1.5 text-caption font-bold text-amber-700">
-            <Sparkles className="size-3.5 text-amber-500" />
-            <span>성과 기반 추천 소재</span>
+          <div className="flex items-center justify-between text-caption font-bold text-amber-800">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-amber-500" />
+              <span>{summary.aiRecommendation.title}</span>
+            </div>
+            <span className="text-[10px] rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-800 font-semibold">
+              {summary.aiRecommendation.badge}
+            </span>
           </div>
-          <p className="text-[11px] text-amber-900 leading-relaxed">
-            저장율이 높았던 ‘직장 대화 갈등’을 주제로 다음 화를 이어가면 도달률이 +28% 상승할 것으로 예측돼요.
+          <p className="text-[11px] text-amber-950 leading-relaxed">
+            {summary.aiRecommendation.description}
           </p>
         </div>
 
-        <div className="flex items-center justify-between pt-1">
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-danger cursor-pointer transition-colors"
+        {/* 방안 B: Free 이용자를 위한 Pro 업그레이드 안내 */}
+        {!isProOrAbove && (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-pink-500/20 bg-pink-500/5 p-2.5 text-[11px]">
+            <div className="flex items-center justify-between font-semibold text-pink-900">
+              <span className="flex items-center gap-1">
+                <Lock className="size-3 text-pink-500" />
+                1-Click 피드 발행 & 자동 예약 발행
+              </span>
+              <span className="text-[10px] text-pink-600 bg-pink-500/10 px-1 rounded font-bold">Pro</span>
+            </div>
+            <p className="text-ink-muted text-[10px] leading-tight">
+              Pro 플랜으로 업그레이드하시면 원클릭 즉시 게재와 정밀 AI 반응 분석이 완전히 열려요.
+            </p>
+            <Link
+              href="/settings?tab=3"
+              className="text-[10px] font-bold text-pink-600 hover:underline pt-0.5"
+            >
+              Pro 플랜 알아보기 ↗
+            </Link>
+          </div>
+        )}
+
+        {/* 제어 바 & 대시보드 바로가기 */}
+        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-[11px]">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleRefresh}
+              className="flex items-center gap-1 text-ink-muted hover:text-ink cursor-pointer transition-colors"
+            >
+              <RefreshCw className={cn("size-3", pending && "animate-spin")} />
+              <span>새로고침</span>
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleDisconnect}
+              className="flex items-center gap-1 text-ink-muted hover:text-danger cursor-pointer transition-colors"
+            >
+              <Unlink className="size-3" />
+              <span>연결 해제</span>
+            </button>
+          </div>
+          <Link
+            href="/settings?tab=1"
+            className="flex items-center gap-0.5 font-semibold text-brand hover:underline"
           >
-            <Unlink className="size-3" />
-            <span>연결 해제</span>
-          </button>
-          <span className="text-[10px] text-ink-subtle">10분 전 자동 동기화</span>
+            <span>전체 대시보드</span>
+            <ExternalLink className="size-3" />
+          </Link>
         </div>
       </div>
     );
   }
 
+  // Not Connected State
   return (
     <>
-      <div className="flex w-full shrink-0 flex-col gap-3 rounded-xl border border-dashed border-border-control p-5 lg:w-80">
+      <div className="flex w-full shrink-0 flex-col gap-3 rounded-xl border border-dashed border-border-control p-5 lg:w-88 bg-surface-card/60">
+        {notice && (
+          <div className="flex items-center gap-2 rounded-lg bg-brand-tint px-3 py-1.5 text-caption font-semibold text-brand">
+            <CheckCircle2 className="size-3.5 shrink-0" />
+            <span>{notice}</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <div className="grid size-7 place-items-center rounded-lg bg-surface-sunken text-ink-muted">
             <InstagramIcon className="size-4" />
@@ -143,8 +286,16 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
         </div>
 
         <p className="text-body-sm text-ink-muted leading-relaxed">
-          인스타그램 크리에이터 계정을 연결하면 회차별 도달·저장·공유 반응을 자동으로 수집하고, 독자 반응이 좋은 다음 화 소재를 추천해 드려요.
+          인스타그램 크리에이터 계정을 연결하면 <strong>'{series.title}'</strong> 회차별 도달·저장 반응을 자동 수집하고, 독자 반응이 검증된 다음 화 소재를 추천해 드려요.
         </p>
+
+        <div className="rounded-lg bg-surface-sunken/60 p-3 text-caption text-ink-muted space-y-1 border border-border/60">
+          <p className="font-semibold text-ink">연동 시 제공되는 기능 (방안 B):</p>
+          <p>• 회차별 썸네일 도달 수 및 저장률 성과 뱃지 표시</p>
+          <p>• 1-Click 피드 즉시 발행 & 자동 예약 발행 (Pro/Max 전용)</p>
+          <p>• 고성과 에피소드 기반 독자 맞춤형 다음 화 소재 제안</p>
+          <p>• 마이페이지 SNS 성과 분석 및 협찬 미디어킷 자동 생성</p>
+        </div>
 
         <div className="flex-1" />
 
@@ -160,6 +311,15 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
           <InstagramIcon className="size-4 text-pink-500" />
           <span>인스타그램 계정 연결</span>
         </Button>
+
+        <div className="text-center">
+          <Link
+            href="/settings?tab=0"
+            className="text-[11px] text-ink-subtle hover:text-brand underline"
+          >
+            마이페이지에서 연동 설정 관리 ↗
+          </Link>
+        </div>
       </div>
 
       <Modal
@@ -174,7 +334,7 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
             </Button>
             <Button
               variant="primary"
-              loading={connecting}
+              loading={pending}
               onClick={handleConnect}
               className="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-bold"
             >
@@ -200,15 +360,14 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
             label="인스타그램 아이디 (@사용자명)"
             value={inputUsername}
             onChange={setInputUsername}
-            placeholder="예: my_toon_official (미입력 시 기본 계정으로 테스트)"
+            placeholder="예: sharktoon_daily (미입력 시 기본 데모 계정)"
             help="비즈니스 또는 크리에이터 계정만 인사이트 조회가 가능합니다."
           />
 
           <div className="rounded-lg bg-surface-sunken p-3 text-caption text-ink-muted space-y-1">
-            <p className="font-semibold text-ink">연동 시 제공되는 기능:</p>
-            <p>• 완성된 4~10컷 만화 인스타그램 캐러셀 1-Click 피드 자동 발행</p>
-            <p>• 컷별 독자 반응 및 이탈률, 저장 수 분석 대시보드</p>
-            <p>• 고성과 에피소드 기반 다음 화 콘티 자동 추천</p>
+            <p className="font-semibold text-ink">연동 시 유의사항:</p>
+            <p>• 마이페이지와 모든 시리즈 탭에 동일하게 적용됩니다.</p>
+            <p>• 실제 회차가 인스타에 올라갈 때마다 인사이트가 자동 갱신됩니다.</p>
           </div>
         </div>
       </Modal>
@@ -217,4 +376,3 @@ export function InstagramIntegrationCard({ seriesTitle }: InstagramIntegrationCa
 }
 
 export default InstagramIntegrationCard;
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Stage,
   Layer as KonvaLayer,
@@ -22,6 +22,7 @@ import {
 } from "../types/layer";
 import { bodyConfig, tailConfigs, textConfig } from "./nodeConfig";
 import { ensureToonFont } from "./fonts";
+import { BALLOON_SHAPE, textPadding } from "./shapes";
 
 import { cn } from "@/lib/cn";
 
@@ -42,6 +43,12 @@ export interface EditorCanvasProps {
   onCommit: () => void;
   /** 캔버스가 차지할 화면 폭(px). 부모가 재어서 준다. */
   size: number;
+  /** 인라인 텍스트 편집 완료 시 호출 */
+  onUpdateText?: (id: string, text: string) => void;
+  /** 외부에서 지정한 편집 중인 레이어 ID */
+  editingId?: string | null;
+  /** 편집 중인 레이어 변경 알림 */
+  onEditingIdChange?: (id: string | null) => void;
 }
 
 /** 스냅 거리(화면 px). 캔버스 배율로 나눠 원본 좌표로 바꾼다. */
@@ -66,10 +73,91 @@ export function EditorCanvas({
   onPreviewTail,
   onCommit,
   size,
+  onUpdateText,
+  editingId,
+  onEditingIdChange,
 }: EditorCanvasProps) {
   const fit = size / tree.canvas.width;
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
   const scale = fit * view.zoom;
+
+  const [localEditingId, setLocalEditingId] = useState<string | null>(null);
+  const editingLayerId = editingId !== undefined ? editingId : localEditingId;
+  const setEditingId = (id: string | null) => {
+    setLocalEditingId(id);
+    onEditingIdChange?.(id);
+  };
+  const [editingText, setEditingText] = useState<string>("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const editingLayer =
+    editingLayerId ? (tree.layers.find((l) => l.id === editingLayerId) as VectorTextLayer | undefined) : null;
+
+  useEffect(() => {
+    if (editingLayerId) {
+      const l = tree.layers.find((x) => x.id === editingLayerId);
+      if (l && isVectorTextLayer(l)) {
+        setEditingText(l.text);
+      }
+    }
+  }, [editingLayerId, tree.layers]);
+
+  useEffect(() => {
+    if (editingLayerId && textareaRef.current) {
+      textareaRef.current.focus();
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [editingLayerId]);
+
+  const handleStartEdit = (id: string) => {
+    const l = tree.layers.find((x) => x.id === id);
+    if (!l || !isVectorTextLayer(l) || l.locked) return;
+    onSelect(id);
+    setEditingId(id);
+    setEditingText(l.text);
+  };
+
+  const handleFinishEdit = () => {
+    if (!editingLayerId) return;
+    if (onUpdateText && editingLayer && editingText !== editingLayer.text) {
+      onUpdateText(editingLayerId, editingText);
+    }
+    setEditingId(null);
+  };
+
+  const editingScreenBox = useMemo(() => {
+    if (!editingLayer) return null;
+    const shape = BALLOON_SHAPE[editingLayer.balloon];
+    const box = editingLayer.box;
+    const x = view.x + box.x * scale;
+    const y = view.y + box.y * scale;
+    const width = box.width * scale;
+    const height = box.height * scale;
+    const rotation = box.rotation ?? 0;
+    const fontSize = Math.max(12, Math.round(editingLayer.style.fontSize * scale));
+    const lineHeight = editingLayer.style.lineHeight || 1.35;
+    const paddingX = Math.round(textPadding(editingLayer.balloon, box) * scale);
+    const radius = shape ? shape.radius(box) * scale : 6 * scale;
+
+    const lineCount = Math.max(1, (editingText || "").split("\n").length);
+    const totalTextH = lineCount * fontSize * lineHeight;
+    const verticalPad = Math.max(paddingX, Math.round((height - totalTextH) / 2));
+
+    return {
+      x,
+      y,
+      width,
+      height,
+      rotation,
+      fontSize,
+      lineHeight,
+      paddingX,
+      paddingTop: verticalPad,
+      paddingBottom: verticalPad,
+      borderRadius: Math.min(width / 2, Math.max(4, radius)),
+    };
+  }, [editingLayer, editingText, scale, view.x, view.y]);
 
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
@@ -77,14 +165,15 @@ export function EditorCanvas({
   const pinch = useRef<{ dist: number; center: { x: number; y: number } } | null>(null);
   const fontEpoch = useFontEpoch(tree);
 
-  // 선택이 바뀌면 변형 핸들을 그 노드에 붙인다.
+  // 선택이 바뀌면 변형 핸들을 그 노드에 붙인다 (편집 중일 때는 숨긴다).
   useEffect(() => {
     const tr = trRef.current;
     if (!tr) return;
-    const node = selectedId ? nodeRefs.current.get(selectedId) : null;
+    const node =
+      selectedId && selectedId !== editingLayerId ? nodeRefs.current.get(selectedId) : null;
     tr.nodes(node ? [node] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, tree.layers, fontEpoch]);
+  }, [selectedId, editingLayerId, tree.layers, fontEpoch]);
 
   function register(id: string, node: Konva.Node | null) {
     if (node) nodeRefs.current.set(id, node);
@@ -191,7 +280,11 @@ export function EditorCanvas({
 
   const selected = tree.layers.find((l) => l.id === selectedId) ?? null;
   const tailHandle =
-    selected && isVectorTextLayer(selected) && selected.tail && !selected.locked
+    selected &&
+    isVectorTextLayer(selected) &&
+    selected.tail &&
+    !selected.locked &&
+    selected.id !== editingLayerId
       ? selected
       : null;
 
@@ -205,9 +298,15 @@ export function EditorCanvas({
         y={view.y}
         onWheel={onWheel}
         onMouseDown={(e) => {
+          if (editingLayerId) {
+            handleFinishEdit();
+          }
           if (e.target === e.target.getStage()) onSelect(null);
         }}
         onTouchStart={(e) => {
+          if (editingLayerId) {
+            handleFinishEdit();
+          }
           if (e.target === e.target.getStage()) onSelect(null);
         }}
         onTouchMove={(e) => {
@@ -224,13 +323,29 @@ export function EditorCanvas({
           {tree.layers.map((layer) => {
             if (layer.hidden) return null;
 
+            const isEditing = layer.id === editingLayerId;
             const common = {
               id: layer.id,
-              draggable: !layer.locked,
+              draggable: !layer.locked && !isEditing,
               onMouseDown: () => onSelect(layer.id),
               onTouchStart: () => onSelect(layer.id),
+              onDblClick: () => handleStartEdit(layer.id),
+              onDblTap: () => handleStartEdit(layer.id),
               onDragStart: onBeginDrag,
               onTransformStart: onBeginDrag,
+              onTransform: (e: Konva.KonvaEventObject<Event>) => {
+                const node = e.target;
+                const sx = node.scaleX();
+                const sy = node.scaleY();
+                // 회전 중일 때는 scale이 1이므로 rotation과 위치를 실시간 반영하여 꼬리도 부드럽게 함께 회전시킵니다.
+                if (Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001) {
+                  onPreviewBox(layer.id, {
+                    x: node.x(),
+                    y: node.y(),
+                    rotation: node.rotation(),
+                  });
+                }
+              },
               onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
                 snap(layer.id, e.target);
                 onPreviewBox(layer.id, { x: e.target.x(), y: e.target.y() });
@@ -266,6 +381,7 @@ export function EditorCanvas({
                 layer={layer}
                 common={common}
                 register={register}
+                isEditing={isEditing}
               />
             ) : (
               <ImageNode
@@ -301,11 +417,26 @@ export function EditorCanvas({
           <Transformer
             ref={trRef}
             rotateEnabled
-            // 44px 터치 규칙(디자인 가이드). 캔버스 배율을 거슬러 화면상 크기를 맞춘다.
-            anchorSize={12 / scale}
-            anchorCornerRadius={3 / scale}
-            borderStrokeWidth={1.5 / scale}
-            // 너무 작아지면 다시 잡을 수 없다.
+            keepRatio={false}
+            enabledAnchors={[
+              "top-left",
+              "top-right",
+              "bottom-left",
+              "bottom-right",
+              "middle-left",
+              "middle-right",
+            ]}
+            // Konva Transformer는 절대 화면 좌표계로 렌더링되므로 scale로 나누지 않고 고정 픽셀(8px)을 지정합니다.
+            anchorSize={8}
+            anchorCornerRadius={2}
+            anchorStroke={GUIDE}
+            anchorFill="#ffffff"
+            anchorStrokeWidth={1.5}
+            borderStroke={GUIDE}
+            borderStrokeWidth={1}
+            borderDash={[4, 4]}
+            padding={2}
+            rotateAnchorOffset={24}
             boundBoxFunc={(oldBox, newBox) =>
               newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
             }
@@ -315,12 +446,12 @@ export function EditorCanvas({
             <Circle
               x={tailHandle.tail!.x}
               y={tailHandle.tail!.y}
-              radius={10 / scale}
+              radius={5.5 / scale}
               fill="#ffffff"
               stroke={GUIDE}
-              strokeWidth={2 / scale}
-              // 손가락으로 잡을 수 있게 판정 영역을 넓힌다.
-              hitStrokeWidth={24 / scale}
+              strokeWidth={1.5 / scale}
+              // 손가락으로 쉽게 잡을 수 있게 터치 판정 영역을 넓게 유지
+              hitStrokeWidth={28 / scale}
               draggable
               onDragStart={onBeginDrag}
               onDragMove={(e) =>
@@ -331,6 +462,60 @@ export function EditorCanvas({
           )}
         </KonvaLayer>
       </Stage>
+
+      {editingLayer && editingScreenBox && (
+        <div
+          className="absolute z-30 pointer-events-auto flex flex-col items-center"
+          style={{
+            left: `${editingScreenBox.x}px`,
+            top: `${editingScreenBox.y}px`,
+            width: `${editingScreenBox.width}px`,
+            height: `${editingScreenBox.height}px`,
+            transform: editingScreenBox.rotation
+              ? `rotate(${editingScreenBox.rotation}deg)`
+              : undefined,
+            transformOrigin: "top left",
+          }}
+        >
+          <textarea
+            ref={textareaRef}
+            value={editingText}
+            onChange={(e) => setEditingText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                handleFinishEdit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                handleFinishEdit();
+              }
+            }}
+            onBlur={handleFinishEdit}
+            style={{
+              width: "100%",
+              height: "100%",
+              fontFamily: `"${editingLayer.style.fontFamily}", sans-serif`,
+              fontSize: `${editingScreenBox.fontSize}px`,
+              fontWeight: editingLayer.style.bold ? 700 : 400,
+              lineHeight: editingScreenBox.lineHeight,
+              textAlign: editingLayer.style.align ?? "center",
+              color: editingLayer.style.color ?? "#121820",
+              paddingTop: `${editingScreenBox.paddingTop}px`,
+              paddingBottom: `${editingScreenBox.paddingBottom}px`,
+              paddingLeft: `${editingScreenBox.paddingX}px`,
+              paddingRight: `${editingScreenBox.paddingX}px`,
+              borderRadius: `${editingScreenBox.borderRadius}px`,
+            }}
+            className="resize-none border-2 border-brand bg-white/95 shadow-xl outline-none focus:ring-2 focus:ring-brand/40 transition-all"
+            placeholder="대사를 입력하세요"
+          />
+
+          {/* 하단 단축키 힌트 배지 */}
+          <div className="absolute -bottom-6.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-medium text-white shadow pointer-events-none">
+            줄바꿈: Enter · 완료: Ctrl+Enter 또는 바깥 클릭
+          </div>
+        </div>
+      )}
 
       {view.zoom > 1 && (
         <button
@@ -382,10 +567,12 @@ function VectorNode({
   layer,
   common,
   register,
+  isEditing,
 }: {
   layer: VectorTextLayer;
   common: CommonProps;
   register: (id: string, node: Konva.Node | null) => void;
+  isEditing?: boolean;
 }) {
   const body = bodyConfig(layer);
   const tail = tailConfigs(layer);
@@ -400,7 +587,12 @@ function VectorNode({
         </>
       )}
       {tail?.kind === "bubbles" && tail.circles.map((c, i) => <Circle key={i} {...c} />)}
-      <Text {...textConfig(layer)} {...common} ref={(node) => register(layer.id, node)} />
+      <Text
+        {...textConfig(layer)}
+        {...common}
+        opacity={isEditing ? 0 : (layer.opacity ?? 1)}
+        ref={(node) => register(layer.id, node)}
+      />
     </>
   );
 }

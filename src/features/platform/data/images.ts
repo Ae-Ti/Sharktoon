@@ -60,8 +60,11 @@ export async function resolveImages(
   const out = new Map<string, string>();
   const paths: string[] = [];
   for (const ref of refs) {
-    if (ref.startsWith("data:")) out.set(ref, ref);
-    else paths.push(ref);
+    if (ref.startsWith("data:") || ref.startsWith("http://") || ref.startsWith("https://") || ref.startsWith("/")) {
+      out.set(ref, ref);
+    } else {
+      paths.push(ref);
+    }
   }
   if (paths.length > 0 && dataSource() !== "mock") {
     for (const [path, url] of await signedUrls(bucket, ownerId, paths)) out.set(path, url);

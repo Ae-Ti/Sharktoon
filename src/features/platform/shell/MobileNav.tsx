@@ -16,9 +16,9 @@ export function MobileNav({ seriesHref, streak = 0 }: MobileNavProps) {
   const ITEMS = [
     { href: "/home", label: "홈", icon: Home, match: undefined as string | undefined },
     ...(seriesHref
-      ? [{ href: seriesHref, label: "시리즈", icon: BookOpen, match: "/series" }]
+      ? [{ href: seriesHref, label: "작품", icon: BookOpen, match: "/series" }]
       : []),
-    { href: "/assets", label: "에셋", icon: Sparkles, match: undefined },
+    { href: "/assets", label: "소재", icon: Sparkles, match: undefined },
     { href: "/settings", label: "마이페이지", icon: User, match: undefined },
   ];
 
